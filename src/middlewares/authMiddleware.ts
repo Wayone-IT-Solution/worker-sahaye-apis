@@ -63,7 +63,6 @@ const checkRole =
     if (!user) {
       return res.status(401).json({ message: "Unauthorized. User not found." });
     }
-    // console.log(`Checking role: ${user.role}, Required role: ${requiredRole}`);
     if (user.role !== requiredRole) {
       return res.status(403).json({
         status: false,

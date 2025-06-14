@@ -2,15 +2,15 @@ import "colors";
 import path from "path";
 import cors from "cors";
 import colors from "colors";
-import dotenv from "dotenv";
 import helmet from "helmet";
 import express from "express";
-import router from "./routes";
+import adminRouter from "./routes";
+import router from "./public/index";
 import { logger } from "./config/logger";
 import { corsOptions } from "./middlewares/corsMiddleware";
+import { activityLogger } from "./middlewares/activityLogger";
 import { notFoundHandler } from "./middlewares/notFounHandler";
 import { globalErrorHandler } from "./middlewares/errorHandler";
-import { activityLogger } from "./middlewares/activityLogger";
 
 const app = express();
 
@@ -53,8 +53,11 @@ app.use(
 // Handle activity logger
 app.use(activityLogger);
 
-// Handle API Routes
+// Handle Public API Routes
 app.use("/api", router);
+
+// Handle Admin API Routes
+app.use("/api/admin", adminRouter);
 
 // Handle Get Images
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

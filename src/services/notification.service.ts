@@ -2,12 +2,11 @@ import {
   UserRole,
   Notification,
   NotificationType,
-} from "../modals/notificationModel";
+} from "../modals/notification.model";
 import admin from "../utils/firebase";
+import User from "../modals/user.model";
 import mongoose, { Types } from "mongoose";
-import Driver from "../modals/driverModal";
 import ApiResponse from "../utils/ApiResponse";
-import Passenger from "../modals/passengerModal";
 import { paginationResult } from "../utils/helper";
 import { Request, Response, NextFunction } from "express";
 
@@ -41,17 +40,17 @@ export const NotificationService = {
     let fcmToken: string | null = null;
 
     try {
-      if (toRole === "passenger") {
-        const passenger = await Passenger.findById(toUserId);
-        if (!passenger)
-          throw new Error(`Passenger not found with ID: ${toUserId}`);
+      if (toRole === "user") {
+        const user = await User.findById(toUserId);
+        if (!user) throw new Error(`User not found with ID: ${toUserId}`);
 
-        fcmToken = passenger.fcmToken || null;
-      } else if (toRole === "driver") {
-        const driver = await Driver.findById(toUserId);
-        if (!driver) throw new Error(`Driver not found with ID: ${toUserId}`);
-
-        fcmToken = driver.fcmToken || null;
+        if (!user.fcmToken)
+          throw new Error(`User with ID ${toUserId} has no FCM token.`);
+        if (user?.preferences?.notifications?.push === false)
+          throw new Error(
+            `User with ID ${toUserId} has push notifications disabled.`
+          );
+        fcmToken = user.fcmToken || null;
       } else throw new Error(`Invalid role: ${toRole}`);
     } catch (error) {
       console.log(
@@ -86,7 +85,7 @@ export const getAllNotifications = async (
 
     if (user) {
       _id = user;
-      role = "passenger";
+      role = "user";
     }
 
     const matchStage: any =
@@ -104,13 +103,12 @@ export const getAllNotifications = async (
       { $sort: { createdAt: -1 } },
       { $skip: (pageNumber - 1) * limitNumber },
       { $limit: limitNumber },
-      // Lookup 'to' user
       {
         $lookup: {
-          from: "passengers",
+          from: "users",
           localField: "to.user",
           foreignField: "_id",
-          as: "toPassenger",
+          as: "toUser",
           pipeline: [{ $project: { name: 1, phone: 1 } }],
         },
       },
@@ -133,7 +131,7 @@ export const getAllNotifications = async (
               {
                 $cond: [
                   { $eq: ["$to.role", "passenger"] },
-                  { $arrayElemAt: ["$toPassenger", 0] },
+                  { $arrayElemAt: ["$toUser", 0] },
                   { $arrayElemAt: ["$toDriver", 0] },
                 ],
               },
@@ -197,7 +195,7 @@ export const getAllNotifications = async (
           toDriver: 0,
           updatedAt: 0,
           fromDriver: 0,
-          toPassenger: 0,
+          toUser: 0,
           fromPassenger: 0,
         },
       },

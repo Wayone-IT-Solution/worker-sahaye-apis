@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import Otp from "../../modals/OtpModel";
+import Otp from "../../modals/otp.model";
 import { Request, Response, NextFunction } from "express";
 import User, { UserStatus } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";

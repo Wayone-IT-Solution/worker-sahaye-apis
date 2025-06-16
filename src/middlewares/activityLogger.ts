@@ -1,5 +1,5 @@
+import ActivityLog from "../modals/activitylog.model";
 import { Request, Response, NextFunction } from "express";
-import ActivityLog from "../modals/ActivityLog";
 
 // Utility to safely stringify large objects or remove sensitive fields
 const sanitize = (data: any) => {

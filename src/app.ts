@@ -4,9 +4,11 @@ import cors from "cors";
 import colors from "colors";
 import helmet from "helmet";
 import express from "express";
-import adminRouter from "./routes";
 import router from "./public/index";
+import adminRouter from "./admin/index";
 import { logger } from "./config/logger";
+import { config } from "./config/config";
+import { limiter } from "./middlewares/limiter";
 import { corsOptions } from "./middlewares/corsMiddleware";
 import { activityLogger } from "./middlewares/activityLogger";
 import { notFoundHandler } from "./middlewares/notFounHandler";
@@ -16,7 +18,13 @@ const app = express();
 
 // Middleware
 app.use(helmet());
-app.use(cors(corsOptions));
+if (config.cors.enabled) app.use(cors(corsOptions));
+else console.log("⚠️  CORS is disabled by config");
+
+if (config.security.rateLimitEnabled) {
+  app.use(limiter);
+  console.log("✅ Rate limiter enabled");
+}
 
 // Middleware for parsing JSON and URL-encoded bodies
 app.use(express.json());

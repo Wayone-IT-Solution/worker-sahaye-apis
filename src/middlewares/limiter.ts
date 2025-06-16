@@ -1,6 +1,6 @@
+import { config } from "../config/config";
 import rateLimit from "express-rate-limit";
 
-// Custom handler for rate limit exceeded
 const onLimitReached = (req: any, res: any, options: any) => {
   console.warn(
     `Rate limit exceeded for IP: ${req.ip}, Route: ${
@@ -16,12 +16,12 @@ const onLimitReached = (req: any, res: any, options: any) => {
 };
 
 export const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute window
-  max: 100, // limit each IP to 100 requests per window
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  windowMs: config.security.rateLimitWindowMs,
+  max: config.security.rateLimitMax,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: "Too many requests, please try again later.",
   statusCode: 429,
-  skipFailedRequests: true, // Don't count failed requests (status >= 400)
-  handler: onLimitReached, // Custom handler when limit is reached
+  skipFailedRequests: true,
+  handler: onLimitReached,
 });

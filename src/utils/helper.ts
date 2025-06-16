@@ -1,5 +1,4 @@
 import { ObjectId } from "mongodb";
-import mongoose from "mongoose";
 
 /**
  * 🟢 Build the MongoDB aggregation pipeline based on query filters
@@ -93,98 +92,118 @@ export const paginationResult = (
   };
 };
 
-const EARTH_RADIUS_KM = 6371; // Radius of Earth in kilometers
-
-const toRadians = (degrees: number): number => {
-  return (degrees * Math.PI) / 180;
+/**
+ * 🟢 Convert a string to a valid MongoDB ObjectId
+ * @param {string} id - The string to convert
+ * @returns {ObjectId | null} - The ObjectId or null if invalid
+ */
+export const convertToObjectId = (id: string): ObjectId | null => {
+  try {
+    return new ObjectId(id);
+  } catch (error) {
+    console.error("Invalid ObjectId:", error);
+    return null;
+  }
 };
 
 /**
- * Calculates the distance in kilometers between two geographic coordinates
- * using the Haversine formula.
- *
- * @param from - Tuple [longitude, latitude] for the starting point.
- * @param to - Tuple [longitude, latitude] for the destination point.
- * @returns Distance in kilometers.
+ * 🟢 Check if a string is a valid MongoDB ObjectId
+ * @param {string} id - The string to check
+ * @returns {boolean} - True if valid, false otherwise
  */
-export const calculateDistance = (
-  from: [number, number],
-  to: [number, number]
-): number => {
-  if (
-    !Array.isArray(from) ||
-    !Array.isArray(to) ||
-    from.length !== 2 ||
-    to.length !== 2
-  ) {
-    throw new Error(
-      "Invalid coordinate format. Expected [longitude, latitude]."
-    );
+export const isValidObjectId = (id: string): boolean => {
+  try {
+    new ObjectId(id);
+    return true;
+  } catch (error) {
+    return false;
   }
-
-  const [lon1, lat1] = from;
-  const [lon2, lat2] = to;
-
-  if (
-    [lon1, lat1, lon2, lat2].some(
-      (val) => typeof val !== "number" || isNaN(val)
-    )
-  ) {
-    throw new Error("Coordinates must be valid numbers.");
-  }
-
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLon / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  const distance = EARTH_RADIUS_KM * c;
-  return Math.round(distance * 1000) / 1000; // Round to 3 decimal places
 };
 
-export const calculateFare = (
-  distanceKm: number,
-  type: "suv" | "sedan" | "bike" | "auto" | "scooter" | "car"
-): number => {
-  let baseFare = 0;
-  let perKmRate = 0;
+/**
+ * 🟢 Check if a string is a valid UUID
+ * @param {string} uuid - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidUUID = (uuid: string): boolean => {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+};
 
-  switch (type) {
-    case "suv":
-      baseFare = 100;
-      perKmRate = 18;
-      break;
-    case "sedan":
-      baseFare = 80;
-      perKmRate = 15;
-      break;
-    case "car": // general car
-      baseFare = 70;
-      perKmRate = 12;
-      break;
-    case "auto":
-      baseFare = 40;
-      perKmRate = 10;
-      break;
-    case "bike":
-      baseFare = 30;
-      perKmRate = 7;
-      break;
-    case "scooter":
-      baseFare = 25;
-      perKmRate = 6;
-      break;
-    default:
-      baseFare = 50;
-      perKmRate = 10;
-      break;
+/**
+ * 🟢 Check if a string is a valid email
+ * @param {string} email - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return emailRegex.test(email);
+};
+
+/**
+ * 🟢 Check if a string is a valid URL
+ * @param {string} url - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidURL = (url: string): boolean => {
+  const urlRegex = /^(https?:\/\/)?([a-zA-Z0-9.-]+)(:[0-9]+)?(\/[^\s]*)?$/;
+  return urlRegex.test(url);
+};
+
+/**
+ * 🟢 Check if a string is a valid phone number
+ * @param {string} phone - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidPhoneNumber = (phone: string): boolean => {
+  const phoneRegex = /^\+?[1-9]\d{1,14}$/; // E.164 format
+  return phoneRegex.test(phone);
+};
+
+/**
+ * 🟢 Check if a string is a valid date
+ * @param {string} date - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidDate = (date: string): boolean => {
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD format
+  if (!dateRegex.test(date)) return false;
+
+  const parsedDate = new Date(date);
+  return !isNaN(parsedDate.getTime());
+};
+
+/**
+ * 🟢 Check if a string is a valid time
+ * @param {string} time - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidTime = (time: string): boolean => {
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
+  return timeRegex.test(time);
+};
+
+/**
+ * 🟢 Check if a string is a valid datetime
+ * @param {string} datetime - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidDateTime = (datetime: string): boolean => {
+  const datetimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/; // ISO 8601 format
+  return datetimeRegex.test(datetime);
+};
+
+/**
+ * 🟢 Check if a string is a valid JSON
+ * @param {string} jsonString - The string to check
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const isValidJSON = (jsonString: string): boolean => {
+  try {
+    JSON.parse(jsonString);
+    return true;
+  } catch (error) {
+    return false;
   }
-
-  return Math.round(baseFare + distanceKm * perKmRate);
 };

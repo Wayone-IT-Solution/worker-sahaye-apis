@@ -23,9 +23,10 @@ interface ILocation {
 }
 
 export interface IUser extends Document {
-  fullName: string;
   mobile: string;
   email?: string;
+  fullName: string;
+  fcmToken?: string;
   dateOfBirth?: Date;
   userType: UserType;
   status: UserStatus;
@@ -118,6 +119,18 @@ const userSchema = new Schema<IUser>(
       validate: {
         validator: validateMobile,
         message: "Invalid Indian mobile number",
+      },
+    },
+    fcmToken: {
+      type: String,
+      required: false,
+      unique: true,
+      sparse: true, // Allows multiple users to have no FCM token
+      validate: {
+        validator: (val: string) => {
+          return !val || validator.isLength(val, { min: 10, max: 400 });
+        },
+        message: "FCM token must be between 10 and 400 characters",
       },
     },
     email: {

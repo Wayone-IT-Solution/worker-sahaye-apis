@@ -1,29 +1,33 @@
 import "colors";
 import figlet from "figlet";
-import { config } from "dotenv";
 import mongoose from "mongoose";
 import { logger } from "./logger";
+import { config } from "./config";
+import { config as envConfig } from "dotenv";
 
-config();
+envConfig();
 
 const connectDB = async () => {
   try {
-    if (!process.env.DB_URL || !process.env.DB_NAME) {
-      throw new Error(
-        "Database connection details are missing in environment variables.",
-      );
+    const dbURL = config.db.url;
+    const dbName = config.db.name;
+
+    if (!dbURL || !dbName) {
+      throw new Error("❌ Missing DB_URL or DB_NAME in configuration.");
     }
-    await mongoose.connect(`${process.env.DB_URL}/${process.env.DB_NAME}`);
-    figlet("Connected!", (err: any, data: any) => {
+
+    await mongoose.connect(`${dbURL}/${dbName}`);
+    figlet("Connected!", (err, data: any) => {
       if (err) {
-        logger.error("Something went wrong with figlet...");
+        logger.warn("⚠️ Figlet rendering failed.");
         return;
       }
       logger.info(`\n${data.yellow}`);
+      logger.info(`✅ MongoDB connected to ${dbName}`.green);
     });
   } catch (err: any) {
-    logger.error(`Database connection failed: ${err.message}`);
-    process.exit(1); // Exit the process with failure
+    logger.error(`❌ Database connection failed: ${err.message}`.red);
+    process.exit(1);
   }
 };
 

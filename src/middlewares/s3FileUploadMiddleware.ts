@@ -2,47 +2,38 @@ import multer from "multer";
 import { uploadToS3 } from "../config/s3Uploader";
 import { Request, Response, NextFunction } from "express";
 
-const upload = multer({ storage: multer.memoryStorage() }).fields([
-  { name: "avatar", maxCount: 1 },
-  { name: "license", maxCount: 1 },
-  { name: "insurance", maxCount: 1 },
-  { name: "registration", maxCount: 1 },
-]);
+const memoryStorage = multer.memoryStorage();
 
-export const s3FileUploadMiddleware = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  upload(req, res, async function (err) {
-    if (err) return next(err);
+export const dynamicUpload = (fields: { name: string; maxCount?: number }[]) =>
+  multer({ storage: memoryStorage }).fields(fields);
 
-    const fileGroups = ["avatar", "license", "registration", "insurance"];
-
+export const s3UploaderMiddleware = (folder: string) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      for (const group of fileGroups) {
-        if (req.files && (req.files as any)[group]) {
-          const uploaded = await Promise.all(
-            (req.files as any)[group].map(async (file: Express.Multer.File) => {
-              const url = await uploadToS3(
-                file.buffer,
-                file.originalname,
-                "riders"
-              );
-              return {
-                url,
-                size: file.size,
-                mimetype: file.mimetype,
-                originalname: file.originalname,
-              };
-            })
-          );
-          (req.files as any)[group] = uploaded;
-        }
+      const files = req.files as Record<string, Express.Multer.File[]>;
+
+      for (const fieldName in files) {
+        const uploads = await Promise.all(
+          files[fieldName].map(async (file) => {
+            const url = await uploadToS3(
+              file.buffer,
+              file.originalname,
+              folder
+            );
+            return {
+              url,
+              size: file.size,
+              mimetype: file.mimetype,
+              originalname: file.originalname,
+            };
+          })
+        );
+        req.body[fieldName] = uploads;
       }
+
       next();
-    } catch (uploadError) {
-      next(uploadError);
+    } catch (error) {
+      next(error);
     }
-  });
+  };
 };

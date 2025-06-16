@@ -1,8 +1,7 @@
 import jwt from "jsonwebtoken";
 import { NextFunction } from "express";
-import Admin from "../modals/userModal";
-import Driver from "../modals/driverModal";
-import Passenger from "../modals/passengerModal";
+import Admin from "../modals/admin.model";
+import User from "../modals/user.model";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
 
@@ -43,10 +42,8 @@ const getModelByRole = (role: string) => {
   switch (role) {
     case "admin":
       return Admin;
-    case "driver":
-      return Driver;
-    case "passenger":
-      return Passenger;
+    case "user":
+      return User;
     default:
       return null;
   }
@@ -56,7 +53,7 @@ const capitalize = (text: string): string =>
   text && text.charAt(0).toUpperCase() + text.slice(1);
 
 const checkRole =
-  (requiredRole: "admin" | "driver" | "passenger") =>
+  (requiredRole: "admin" | "user") =>
   async (req: AuthenticatedRequest, res: any, next: NextFunction) => {
     const { user } = req;
 
@@ -95,6 +92,5 @@ const checkRole =
   };
 
 // Export role-specific middlewares
+export const isUser: any = checkRole("user");
 export const isAdmin: any = checkRole("admin");
-export const isDriver: any = checkRole("driver");
-export const isPassenger: any = checkRole("passenger");

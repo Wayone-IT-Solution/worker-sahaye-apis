@@ -5,11 +5,13 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Read arguments
 const moduleName = process.argv[2];
+const target = process.argv[3]; // "admin" or "public"
 
-if (!moduleName) {
+if (!moduleName || !target || !["admin", "public"].includes(target)) {
   console.error(
-    "❌ Please provide a module name.\nUsage: node dist/generateModule.js <moduleName>"
+    `❌ Please provide a module name and target (admin/public).\nUsage: node dist/generateModule.js <moduleName> <admin|public>`
   );
   process.exit(1);
 }
@@ -17,24 +19,20 @@ if (!moduleName) {
 const lowerName = moduleName.toLowerCase();
 const capitalName = lowerName.charAt(0).toUpperCase() + lowerName.slice(1);
 
-const basePath = join(__dirname);
+// Paths
+const targetBase = join(__dirname, target, lowerName); // admin/user or public/user
+const modelPath = join(__dirname, "modals");
+const modelFile = join(modelPath, `${lowerName}.model.ts`);
 
-const folders = {
-  controller: join(basePath, "controllers"),
-  model: join(basePath, "modals"),
-  route: join(basePath, "routes"),
-};
+const controllerFile = join(targetBase, `${lowerName}.controller.ts`);
+const routeFile = join(targetBase, `${lowerName}.route.ts`);
 
-for (const folder of Object.values(folders)) {
-  if (!fs.existsSync(folder)) {
-    fs.mkdirSync(folder, { recursive: true });
-  }
-}
+// Create folders if not exists
+fs.mkdirSync(targetBase, { recursive: true });
+fs.mkdirSync(modelPath, { recursive: true });
 
-const files = {
-  controller: {
-    name: `${lowerName}.controller.ts`,
-    content: `// ${capitalName} Controller
+// Controller content
+const controllerContent = `// ${capitalName} Controller
 import { Request, Response } from 'express';
 
 export const create${capitalName} = (req: Request, res: Response) => {
@@ -55,21 +53,11 @@ export const update${capitalName}ById = (req: Request, res: Response) => {
 
 export const delete${capitalName}ById = (req: Request, res: Response) => {
   res.send('Delete ${lowerName} by ID');
-};`,
-  },
+};
+`;
 
-  model: {
-    name: `${lowerName}.model.ts`,
-    content: `// ${capitalName} Model
-export interface ${capitalName} {
-  id: string;
-  name: string;
-}`,
-  },
-
-  route: {
-    name: `${lowerName}.route.ts`,
-    content: `// ${capitalName} Route
+// Route content
+const routeContent = `// ${capitalName} Routes
 import express from "express";
 import {
   create${capitalName},
@@ -77,20 +65,34 @@ import {
   get${capitalName}ById,
   update${capitalName}ById,
   delete${capitalName}ById,
-} from "../controllers/${lowerName}.controller";
+} from "./${lowerName}.controller";
 
-export default express
-  .Router()
+const router = express.Router();
+
+router
   .post("/", create${capitalName})
   .get("/", getAll${capitalName}s)
   .get("/:id", get${capitalName}ById)
   .put("/:id", update${capitalName}ById)
-  .delete("/:id", delete${capitalName}ById);`,
-  },
-};
+  .delete("/:id", delete${capitalName}ById);
 
-for (const [type, fileData] of Object.entries(files)) {
-  const filePath = join(folders[type], fileData.name);
-  fs.writeFileSync(filePath, fileData.content, "utf-8");
-  console.log(`✅ Created: ${filePath}`);
+export default router;
+`;
+
+// Model content
+const modelContent = `// ${capitalName} Model
+export interface ${capitalName} {
+  id: string;
+  name: string;
 }
+`;
+
+// Write files
+fs.writeFileSync(controllerFile, controllerContent, "utf-8");
+console.log(`✅ Created: ${controllerFile}`);
+
+fs.writeFileSync(routeFile, routeContent, "utf-8");
+console.log(`✅ Created: ${routeFile}`);
+
+fs.writeFileSync(modelFile, modelContent, "utf-8");
+console.log(`✅ Created: ${modelFile}`);

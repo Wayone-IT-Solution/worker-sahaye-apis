@@ -4,8 +4,7 @@ import cors from "cors";
 import colors from "colors";
 import helmet from "helmet";
 import express from "express";
-import router from "./public/index";
-import adminRouter from "./admin/index";
+import routes from "./routes";
 import { logger } from "./config/logger";
 import { config } from "./config/config";
 import { limiter } from "./middlewares/limiter";
@@ -62,10 +61,7 @@ app.use(
 app.use(activityLogger);
 
 // Handle Public API Routes
-app.use("/api", router);
-
-// Handle Admin API Routes
-app.use("/api/admin", adminRouter);
+app.use("/api", routes);
 
 // Handle Get Images
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { Router } from "express";
-import { config } from "../config/config"; // Optional env-based logging
+import { config } from "../config/config";
 
 const router = Router();
 
@@ -42,12 +42,10 @@ const registerRoutesRecursively = (baseDir: string) => {
           const routePath = getRoutePath(baseDir, fullPath);
           router.use(routePath, routeExport);
 
-          if (config.env === "development") {
+          if (config.env === "development")
             console.info(`✅ Mounted /api${routePath} → ${entry.name}`);
-          }
-        } else {
+        } else
           console.warn(`⚠️ Skipped ${entry.name}: No valid default export`);
-        }
       } catch (err) {
         console.error(`❌ Failed to register ${entry.name}:`, err);
       }

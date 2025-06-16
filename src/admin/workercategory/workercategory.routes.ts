@@ -1,20 +1,22 @@
-// Workercategory Routes
 import express from "express";
-import {
+import { asyncHandler } from "../../utils/asyncHandler";
+import { WorkercategoryController } from "./workercategory.controller";
+
+const {
   createWorkercategory,
   getAllWorkercategorys,
   getWorkercategoryById,
   updateWorkercategoryById,
   deleteWorkercategoryById,
-} from "./workercategory.controller";
+} = WorkercategoryController;
 
 const router = express.Router();
 
 router
-  .post("/", createWorkercategory)
-  .get("/", getAllWorkercategorys)
-  .get("/:id", getWorkercategoryById)
-  .put("/:id", updateWorkercategoryById)
-  .delete("/:id", deleteWorkercategoryById);
+  .post("/", asyncHandler(createWorkercategory))
+  .get("/", asyncHandler(getAllWorkercategorys))
+  .get("/:id", asyncHandler(getWorkercategoryById))
+  .put("/:id", asyncHandler(updateWorkercategoryById))
+  .delete("/:id", asyncHandler(deleteWorkercategoryById));
 
 export default router;

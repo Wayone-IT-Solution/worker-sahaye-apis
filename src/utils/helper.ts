@@ -5,7 +5,7 @@ import { ObjectId } from "mongodb";
  * @param {Record<string, any>} query - The query parameters to build the pipeline from
  * @returns {Object} - The constructed pipeline and matching stage
  */
-export const getPipeline = (query: any): any => {
+export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   const {
     user,
     type,
@@ -62,6 +62,8 @@ export const getPipeline = (query: any): any => {
   // Pagination
   pipeline.push({ $skip: (pageNumber - 1) * limitNumber });
   pipeline.push({ $limit: limitNumber });
+
+  if (optionsToBeExtract) pipeline.push(optionsToBeExtract);
 
   const options = { collation: { locale: "en", strength: 2 } };
   return { pipeline, matchStage, options };

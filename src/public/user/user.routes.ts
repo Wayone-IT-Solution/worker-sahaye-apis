@@ -18,7 +18,7 @@ userRouter.get(
 );
 
 // Protect all routes below this middleware
-userRouter.use(authenticateToken);
+// userRouter.use(authenticateToken);
 
 userRouter
   .route("/:id")

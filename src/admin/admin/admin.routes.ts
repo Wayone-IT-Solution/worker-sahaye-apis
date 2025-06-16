@@ -15,7 +15,7 @@ userRouter.get(
 );
 
 // Routes with authentication & admin check
-userRouter.use(authenticateToken, isAdmin);
+// userRouter.use(authenticateToken, isAdmin);
 
 userRouter.route("/").get(asyncHandler(AdminController.getAllAdmins)); // GET / (list users)
 

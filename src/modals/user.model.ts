@@ -47,6 +47,7 @@ export interface IUser extends Document {
   gender?: "male" | "female" | "other" | "prefer_not_to_say";
   profile: {
     // Worker
+    shortDescription?: string;
     skills?: Array<{
       name: string;
       yearsOfExperience: number;
@@ -68,6 +69,21 @@ export interface IUser extends Document {
     availability?: {
       status: "available" | "busy" | "not_available";
       preferredWorkType: "remote" | "onsite" | "hybrid";
+    };
+    employmentPreferences?: {
+      jobRole: string;
+      preferredLocations: Array<{
+        city: string;
+        state?: string;
+      }>;
+      expectedSalaryRange: {
+        min: number;
+        max: number;
+        currency: string;
+      };
+      jobScheduleType: "shift" | "regular";
+      jobPaymentType: "daily-wage" | "contract";
+      jobType: "full-time" | "contractual" | "part-time" | "freelance";
     };
 
     // Employer

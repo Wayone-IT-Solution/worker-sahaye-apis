@@ -25,7 +25,7 @@ const modelPath = join(__dirname, "modals");
 const modelFile = join(modelPath, `${lowerName}.model.ts`);
 
 const controllerFile = join(targetBase, `${lowerName}.controller.ts`);
-const routeFile = join(targetBase, `${lowerName}.route.ts`);
+const routeFile = join(targetBase, `${lowerName}.routes.ts`);
 
 // Create folders if not exists
 fs.mkdirSync(targetBase, { recursive: true });

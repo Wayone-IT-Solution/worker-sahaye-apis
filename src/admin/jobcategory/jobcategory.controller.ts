@@ -1,23 +1,23 @@
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
+import JobCategory from "../../modals/jobcategory.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import WorkerCategory from "../../modals/workercategory.model";
 
-const workerCategoryService = new CommonService(WorkerCategory);
+const jobCategoryService = new CommonService(JobCategory);
 
-export class WorkercategoryController {
-  static async createWorkercategory(
+export class JobcategoryController {
+  static async createJobcategory(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.create(req.body);
+      const result = await jobCategoryService.create(req.body);
       if (!result)
         return res
           .status(400)
-          .json(new ApiError(400, "Failed to create worker category"));
+          .json(new ApiError(400, "Failed to create job category"));
       return res
         .status(201)
         .json(new ApiResponse(201, result, "Created successfully"));
@@ -26,13 +26,13 @@ export class WorkercategoryController {
     }
   }
 
-  static async getAllWorkercategorys(
+  static async getAllJobcategorys(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.getAll(req.query);
+      const result = await jobCategoryService.getAll(req.query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -41,17 +41,17 @@ export class WorkercategoryController {
     }
   }
 
-  static async getWorkercategoryById(
+  static async getJobcategoryById(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.getById(req.params.id);
+      const result = await jobCategoryService.getById(req.params.id);
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Worker category not found"));
+          .json(new ApiError(404, "Job category not found"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -60,20 +60,20 @@ export class WorkercategoryController {
     }
   }
 
-  static async updateWorkercategoryById(
+  static async updateJobcategoryById(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.updateById(
+      const result = await jobCategoryService.updateById(
         req.params.id,
         req.body
       );
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to update worker category"));
+          .json(new ApiError(404, "Failed to update job category"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Updated successfully"));
@@ -82,17 +82,17 @@ export class WorkercategoryController {
     }
   }
 
-  static async deleteWorkercategoryById(
+  static async deleteJobcategoryById(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.deleteById(req.params.id);
+      const result = await jobCategoryService.deleteById(req.params.id);
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to delete worker category"));
+          .json(new ApiError(404, "Failed to delete job category"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));

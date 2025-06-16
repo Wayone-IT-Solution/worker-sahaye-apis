@@ -30,9 +30,12 @@ export interface IUser extends Document {
   dateOfBirth?: Date;
   userType: UserType;
   status: UserStatus;
+  natureOfWork?: string;
   agreedToTerms: boolean;
   isMobileVerified: boolean;
   privacyPolicyAccepted: boolean;
+  category: Schema.Types.ObjectId;
+  preferredJobCategories?: string[];
   preferences: {
     jobAlerts: boolean;
     notifications: {
@@ -90,10 +93,12 @@ export interface IUser extends Document {
     company?: {
       name: string;
       industry: string;
+      gstNumber: string;
+      designation: string;
       description: string;
       hiringNeeds: string[];
-      locations: ILocation[];
       totalEmployees: number;
+      locations: ILocation[];
     };
 
     // Contractor
@@ -101,6 +106,12 @@ export interface IUser extends Document {
       name: string;
       type: string;
       description: string;
+      hiringCapability: number;
+      hiringFrequency: string[];
+      yearsOfExperience: number;
+      gstHolderCompany: boolean;
+      operationalArea: ILocation[];
+      numberOfCompaniesWorkingWith: number;
       servicesOffered: Array<{
         service: string;
         pricing: {
@@ -137,6 +148,20 @@ const userSchema = new Schema<IUser>(
         message: "Invalid Indian mobile number",
       },
     },
+    natureOfWork: {
+      type: Schema.Types.ObjectId,
+      ref: "JobCategory",
+    },
+    category: {
+      type: Schema.Types.ObjectId,
+      ref: "WorkerCategory",
+    },
+    preferredJobCategories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "JobCategory",
+      },
+    ],
     fcmToken: {
       type: String,
       required: false,

@@ -2,19 +2,19 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IOtp extends Document {
   otp: string;
+  mobile: string;
   expiresAt: Date;
   verified: boolean;
-  phoneNumber: string;
 }
 
 const otpSchema = new Schema<IOtp>(
   {
     otp: { type: String, required: true },
+    mobile: { type: String, required: true },
     expiresAt: { type: Date, required: true },
     verified: { type: Boolean, default: false },
-    phoneNumber: { type: String, required: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 // TTL index to auto-delete documents 5 minutes after the 'expiresAt' time

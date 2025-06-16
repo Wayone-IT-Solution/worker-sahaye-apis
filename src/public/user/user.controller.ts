@@ -3,12 +3,13 @@ import Otp from "../../modals/otp.model";
 import { Request, Response, NextFunction } from "express";
 import User, { UserStatus } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";
+import ApiResponse from "../../utils/ApiResponse";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
 const userService = new CommonService(User);
 
 export class UserController {
-  static async createUser(req: Request, _: Response, next: NextFunction) {
+  static async createUser(req: Request, res: Response, next: NextFunction) {
     try {
       const {
         email,
@@ -26,30 +27,30 @@ export class UserController {
         agreedToTerms,
         privacyPolicyAccepted,
       };
-      await userService.create(data);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  static async getUserById(
-    req: Request,
-    _: Response,
-    next: NextFunction
-  ): Promise<any> {
-    try {
-      await userService.getById(req.params.id);
+      const result = await userService.create(data);
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            result,
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
+            } created successfully`
+          )
+        );
     } catch (error) {
       next(error);
     }
   }
 
   static async updateUser(
-    req: Request,
-    _: Response,
+    req: Request | any,
+    res: Response,
     next: NextFunction
   ): Promise<any> {
     try {
+      const { id } = req.user;
       const {
         city,
         state,
@@ -74,7 +75,19 @@ export class UserController {
         primaryLocation: { city, state, pincode, address, country },
       };
 
-      await userService.updateById(req.params.id, data);
+      const result = await userService.updateById(id, data);
+      const { userType } = result;
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            result,
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
+            } updated successfully`
+          )
+        );
     } catch (error) {
       next(error);
     }
@@ -86,16 +99,16 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
-      const { phoneNumber } = req.body;
+      const { mobile } = req.body;
 
-      if (!phoneNumber) {
+      if (!mobile) {
         return res.status(400).json({
           success: false,
           message: "Phone number is required",
         });
       }
 
-      const user = await User.findOne({ phoneNumber });
+      const user = await User.findOne({ mobile });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -108,10 +121,10 @@ export class UserController {
 
       // Save or update OTP
       await Otp.findOneAndUpdate(
-        { phoneNumber },
+        { mobile },
         {
           expiresAt,
-          phoneNumber,
+          mobile,
           otp: otpCode,
           verified: false,
         },
@@ -119,7 +132,7 @@ export class UserController {
       );
 
       // TODO: Integrate real SMS service like Twilio or Fast2SMS
-      console.log(`OTP sent to ${phoneNumber}: ${otpCode}`);
+      console.log(`OTP sent to ${mobile}: ${otpCode}`);
 
       return res.status(200).json({
         success: true,
@@ -136,16 +149,16 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
-      const { phoneNumber, otp } = req.body;
+      const { mobile, otp } = req.body;
 
-      if (!phoneNumber || !otp) {
+      if (!mobile || !otp) {
         return res.status(400).json({
           success: false,
           message: "Phone number and OTP are required",
         });
       }
 
-      const otpDoc = await Otp.findOne({ phoneNumber, otp });
+      const otpDoc = await Otp.findOne({ mobile, otp });
 
       if (!otpDoc || otpDoc.expiresAt < new Date()) {
         return res.status(400).json({
@@ -164,7 +177,7 @@ export class UserController {
       otpDoc.verified = true;
       await otpDoc.save();
 
-      const user: any = await User.findOne({ phoneNumber });
+      const user: any = await User.findOne({ mobile });
 
       if (!user) {
         return res.status(404).json({
@@ -192,7 +205,7 @@ export class UserController {
       await user.save();
 
       const token = jwt.sign(
-        { _id: user._id, phoneNumber: user.phoneNumber, role: user.userType },
+        { _id: user._id, mobile: user.mobile, role: user.userType },
         JWT_SECRET,
         { expiresIn: "7d" }
       );
@@ -210,12 +223,24 @@ export class UserController {
 
   static async getCurrentUser(
     req: Request,
-    _: Response,
+    res: Response,
     next: NextFunction
-  ): Promise<void> {
+  ): Promise<any> {
     try {
       const userId = (req as any).user.id;
-      await userService.getById(userId);
+      const result = await userService.getById(userId);
+      const { userType } = result;
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            result,
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
+            } updated successfully`
+          )
+        );
     } catch (error) {
       next(error); // Pass errors to the error handling middleware
     }

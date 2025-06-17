@@ -11,6 +11,9 @@ const s3 =
     secretAccessKey: config.s3.secretAccessKey,
   });
 
+/**
+ * Upload a file buffer to AWS S3 and return the public URL
+ */
 export const uploadToS3 = async (
   fileBuffer: Buffer,
   originalname: string,
@@ -20,23 +23,27 @@ export const uploadToS3 = async (
     throw new Error("S3 is disabled or not configured correctly.");
   }
 
-  const ext = path.extname(originalname).toLowerCase();
+  const ext = path.extname(originalname).toLowerCase() || ".bin";
+  const contentType = getContentType(ext);
   const key = `${folder}/${uuid()}${ext}`;
 
-  const contentType = getContentType(ext);
-
-  const params = {
-    Bucket: config.s3.bucket,
+  const params: AWS.S3.PutObjectRequest = {
     Key: key,
     Body: fileBuffer,
-    ACL: "public-read",
+    Bucket: config.s3.bucket,
     ContentType: contentType,
   };
 
   const { Location } = await s3.upload(params).promise();
+
+  if (process.env.NODE_ENV !== "production")
+    console.log(`✅ Uploaded to S3 → ${Location}`);
   return Location;
 };
 
+/**
+ * Map file extension to content type
+ */
 const getContentType = (ext: string): string => {
   const map: Record<string, string> = {
     ".png": "image/png",
@@ -53,4 +60,12 @@ const getContentType = (ext: string): string => {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   };
   return map[ext] || "application/octet-stream";
+};
+
+export const deleteFromS3 = async (key: string): Promise<void> => {
+  if (!config.s3.enabled || !s3) {
+    throw new Error("S3 is disabled or not configured.");
+  }
+  const params = { Bucket: config.s3.bucket, Key: key };
+  await s3.deleteObject(params).promise();
 };

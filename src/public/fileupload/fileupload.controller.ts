@@ -1,91 +1,72 @@
-import ApiError from "../../utils/ApiError";
-import ApiResponse from "../../utils/ApiResponse";
+import { Request, Response } from "express";
 import FileUpload from "../../modals/fileupload.model";
-import { NextFunction, Request, Response } from "express";
-import { CommonService } from "../../services/common.services";
+import { deleteFromS3 } from "../../config/s3Uploader";
 
-const fileUploadService = new CommonService(FileUpload);
-
-export class FileUploadController {
-  static async createFileUpload(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+export const FileUploadController = {
+  createFileUpload: async (req: Request, res: Response) => {
     try {
-      const result = await fileUploadService.create(req.body);
-      if (!result) throw new ApiError(400, "Failed to create worker category");
-      return res
-        .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
-    } catch (err) {
-      next(err);
-    }
-  }
+      const files = req.body.files;
+      const userId = (req as any).user?.id;
 
-  static async getAllFileUploads(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
-    try {
-      const result = await fileUploadService.getAll(req.query);
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
-    } catch (err) {
-      next(err);
-    }
-  }
+      if (!Array.isArray(files) || files.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "No files uploaded." });
+      }
 
-  static async getFileUploadById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
-    try {
-      const result = await fileUploadService.getById(req.params.id);
-      if (!result) throw new ApiError(404, "Worker category not found");
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  static async updateFileUploadById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
-    try {
-      const result = await fileUploadService.updateById(
-        req.params.id,
-        req.body
+      const uploads = await Promise.all(
+        files.map((file: any) => {
+          const s3Key = file.url.split(".com/")[1];
+          return FileUpload.create({
+            s3Key,
+            userId,
+            url: file.url,
+            sizeInBytes: file.size,
+            mimeType: file.mimetype,
+            tag: file.tags || "other",
+            originalName: file.originalname,
+          });
+        })
       );
-      if (!result) throw new ApiError(404, "Failed to update worker category");
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Updated successfully"));
-    } catch (err) {
-      next(err);
+      res.status(201).json({ success: true, data: uploads });
+    } catch (error) {
+      console.error("Upload Save Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to save file metadata.",
+        error: (error as Error).message,
+      });
     }
-  }
+  },
 
-  static async deleteFileUploadById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  getAllFileUploads: async (_req: Request, res: Response) => {
+    const { id: user } = (_req as any).user;
+    const uploads = await FileUpload.find(
+      { userId: user },
+      { _id: 1, tag: 1, s3Key: 1, url: 1 }
+    );
+    res.json({ success: true, data: uploads });
+  },
+
+  deleteFileUploadById: async (req: Request, res: Response) => {
     try {
-      const result = await fileUploadService.deleteById(req.params.id);
-      if (!result) throw new ApiError(404, "Failed to delete worker category");
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Deleted successfully"));
-    } catch (err) {
-      next(err);
+      const { key } = req.body;
+      const userId = (req as any).user?.id;
+
+      const file = await FileUpload.findOne({ s3Key: key, userId: userId });
+      if (!file)
+        return res
+          .status(404)
+          .json({ success: false, message: "File not found" });
+
+      await deleteFromS3(file.s3Key);
+      await file.deleteOne();
+      res.json({ success: true, message: "File deleted from DB and S3" });
+    } catch (error) {
+      console.error("Delete Error:", error);
+      res
+        .status(500)
+        .json({ success: false, message: "Deletion failed", error });
     }
-  }
-}
+  },
+};

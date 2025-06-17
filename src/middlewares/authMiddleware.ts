@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { NextFunction } from "express";
-import Admin from "../modals/admin.model";
 import User from "../modals/user.model";
+import Admin from "../modals/admin.model";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
 
@@ -34,7 +34,7 @@ interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email?: string;
-    role: "admin" | "driver" | "passenger";
+    role: "admin" | "user" | "worker" | "employer" | "contractor";
   };
 }
 
@@ -42,10 +42,8 @@ const getModelByRole = (role: string) => {
   switch (role) {
     case "admin":
       return Admin;
-    case "user":
-      return User;
     default:
-      return null;
+      return User;
   }
 };
 
@@ -53,7 +51,7 @@ const capitalize = (text: string): string =>
   text && text.charAt(0).toUpperCase() + text.slice(1);
 
 const checkRole =
-  (requiredRole: "admin" | "user") =>
+  (requiredRole: "admin" | "user" | "worker" | "employer" | "contractor") =>
   async (req: AuthenticatedRequest, res: any, next: NextFunction) => {
     const { user } = req;
 
@@ -94,3 +92,6 @@ const checkRole =
 // Export role-specific middlewares
 export const isUser: any = checkRole("user");
 export const isAdmin: any = checkRole("admin");
+export const isWorker: any = checkRole("worker");
+export const isEmployer: any = checkRole("employer");
+export const isContractor: any = checkRole("contractor");

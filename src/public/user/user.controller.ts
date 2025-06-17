@@ -1,11 +1,12 @@
-import jwt from "jsonwebtoken";
 import Otp from "../../modals/otp.model";
-import { Request, Response, NextFunction } from "express";
-import User, { UserStatus } from "../../modals/user.model";
-import { CommonService } from "../../services/common.services";
+import { config } from "../../config/config";
+import jwt, { SignOptions } from "jsonwebtoken";
 import ApiResponse from "../../utils/ApiResponse";
+import { Request, Response, NextFunction } from "express";
+import { CommonService } from "../../services/common.services";
+import User, { UserStatus, UserType } from "../../modals/user.model";
+import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
 const userService = new CommonService(User);
 
 export class UserController {
@@ -204,11 +205,15 @@ export class UserController {
       user.status = UserStatus.ACTIVE;
       await user.save();
 
-      const token = jwt.sign(
-        { _id: user._id, mobile: user.mobile, role: user.userType },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      const payload = {
+        _id: user._id,
+        mobile: user.mobile,
+        role: user.userType,
+      };
+      const secret = config.jwt.secret as string;
+      const expiresIn = config.jwt.expiresIn as SignOptions["expiresIn"];
+
+      const token = jwt.sign(payload, secret, { expiresIn });
 
       return res.status(200).json({
         success: true,
@@ -227,18 +232,25 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
-      const userId = (req as any).user.id;
+      let enrollmentCourses: any;
+      const { id: userId, role } = (req as any).user;
       const result = await userService.getById(userId);
-      const { userType } = result;
+      if (role === UserType.WORKER) {
+        enrollmentCourses = await Enrollment.find(
+          {
+            user: userId,
+            status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
+          },
+          { _id: 1, course: 1 }
+        );
+      }
       return res
         .status(200)
         .json(
           new ApiResponse(
             200,
-            result,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
-            } updated successfully`
+            { user: result, enrollmentCourses },
+            `User fetched successfully`
           )
         );
     } catch (error) {

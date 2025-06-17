@@ -1,0 +1,222 @@
+import ApiError from "../../utils/ApiError";
+import ApiResponse from "../../utils/ApiResponse";
+import { Request, Response, NextFunction } from "express";
+import {
+  EnrolledPlan,
+  PlanPaymentStatus,
+  PlanPaymentGateway,
+  PlanEnrollmentStatus,
+} from "../../modals/enrollplan.model";
+import { CommonService } from "../../services/common.services";
+import {
+  SubscriptionPlan,
+  calculateExpiryDate,
+} from "../../modals/subscriptionplan.model";
+
+const enrollPlanService = new CommonService(EnrolledPlan);
+
+export class EnrollPlanController {
+  static async createEnrollPlan(req: any, res: Response, next: NextFunction) {
+    try {
+      const { plan } = req.body;
+      const { id: user, role } = req.user;
+
+      const exists = await EnrolledPlan.findOne({ user, plan });
+      if (exists) {
+        return res
+          .status(409)
+          .json(new ApiError(409, "Already enrolled in this plan"));
+      }
+
+      const planDetails = await SubscriptionPlan.findById(plan);
+      if (!planDetails)
+        return res
+          .status(404)
+          .json(new ApiError(404, "Plan not found or unavailable"));
+
+      if (planDetails?.userType !== role) {
+        return res
+          .status(403)
+          .json(
+            new ApiError(403, `This plan is not available for ${role} users.`)
+          );
+      }
+
+      const isFree = planDetails.basePrice === 0;
+      const data: any = {
+        user,
+        plan,
+        totalAmount: planDetails.basePrice,
+        finalAmount: planDetails.basePrice,
+        status: isFree
+          ? PlanEnrollmentStatus.ACTIVE
+          : PlanEnrollmentStatus.PENDING,
+      };
+
+      if (isFree) {
+        data.paymentDetails = {
+          amount: 0,
+          currency: "INR",
+          paidAt: new Date(),
+          status: PlanPaymentStatus.SUCCESS,
+          gateway: PlanPaymentGateway.FREE,
+        };
+      }
+      const result = await enrollPlanService.create(data);
+      if (result && planDetails.billingCycle) {
+        const expiredAt = calculateExpiryDate(
+          result.enrolledAt,
+          planDetails.billingCycle
+        );
+        result.expiredAt = expiredAt;
+        await result.save();
+      }
+      if (!result)
+        return res
+          .status(400)
+          .json(new ApiError(400, "Enrollment creation failed"));
+
+      return res
+        .status(201)
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            isFree
+              ? "Enrolled successfully in free plan"
+              : "Enrollment initiated, awaiting payment"
+          )
+        );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllEnrollPlans(req: any, res: Response, next: NextFunction) {
+    try {
+      const { id: user } = req.user;
+      const result = await enrollPlanService.getAll({ ...req.query, user });
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Enrollments fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getEnrollPlanById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await enrollPlanService.getById(req.params.id);
+      if (!result)
+        return res.status(404).json(new ApiError(404, "Enrollment not found"));
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Enrollment fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async refundEnrollPlan(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      const enrollment = await EnrolledPlan.findById(id);
+      if (!enrollment)
+        return res.status(404).json(new ApiError(404, "Enrollment not found"));
+
+      if (enrollment.status === PlanEnrollmentStatus.REFUNDED)
+        return res.status(400).json(new ApiError(400, "Already refunded"));
+
+      enrollment.status = PlanEnrollmentStatus.REFUNDED;
+      enrollment.refundReason = reason;
+      enrollment.refundedAt = new Date();
+
+      await enrollment.save();
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(200, enrollment, "Enrollment refunded successfully")
+        );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async updatePaymentStatus(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { enrollmentId, status, gateway, paymentId } = req.body;
+
+      const enrollment = await EnrolledPlan.findById(enrollmentId);
+      if (!enrollment)
+        return res.status(404).json(new ApiError(404, "Enrollment not found"));
+
+      if (
+        [PlanEnrollmentStatus.ACTIVE, PlanEnrollmentStatus.REFUNDED].includes(
+          enrollment.status
+        )
+      )
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              `Cannot update payment, current status is: ${enrollment.status}`
+            )
+          );
+
+      enrollment.paymentDetails = {
+        paymentId,
+        currency: "INR",
+        paidAt: new Date(),
+        amount: enrollment.finalAmount,
+        status,
+        gateway,
+      };
+
+      switch (status) {
+        case PlanPaymentStatus.SUCCESS:
+          enrollment.status = PlanEnrollmentStatus.ACTIVE;
+          break;
+        case PlanPaymentStatus.REFUNDED:
+          enrollment.status = PlanEnrollmentStatus.REFUNDED;
+          enrollment.refundedAt = new Date();
+          break;
+        case PlanPaymentStatus.FAILED:
+          enrollment.status = PlanEnrollmentStatus.FAILED;
+          break;
+        default:
+          enrollment.status = PlanEnrollmentStatus.PENDING;
+      }
+
+      await enrollment.save();
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            enrollment,
+            "Payment status updated successfully"
+          )
+        );
+    } catch (err) {
+      next(err);
+    }
+  }
+}

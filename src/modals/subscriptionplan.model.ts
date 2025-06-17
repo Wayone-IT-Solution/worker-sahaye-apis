@@ -23,6 +23,36 @@ export enum BillingCycle {
   PAY_AS_YOU_GO = "pay_as_you_go",
 }
 
+export const calculateExpiryDate = (
+  startDate: Date,
+  cycle: BillingCycle
+): Date => {
+  const date = new Date(startDate);
+  switch (cycle) {
+    case BillingCycle.MONTHLY:
+      date.setMonth(date.getMonth() + 1);
+      break;
+    case BillingCycle.QUARTERLY:
+      date.setMonth(date.getMonth() + 3);
+      break;
+    case BillingCycle.SEMI_ANNUALLY:
+      date.setMonth(date.getMonth() + 6);
+      break;
+    case BillingCycle.ANNUALLY:
+      date.setFullYear(date.getFullYear() + 1);
+      break;
+    case BillingCycle.LIFETIME:
+      date.setFullYear(date.getFullYear() + 100);
+      break;
+    case BillingCycle.PAY_AS_YOU_GO:
+      date.setDate(date.getDate() + 1); // or undefined if no expiry
+      break;
+    default:
+      throw new Error("Invalid billing cycle");
+  }
+  return date;
+};
+
 export enum Currency {
   INR = "INR",
 }

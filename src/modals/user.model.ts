@@ -154,7 +154,7 @@ const userSchema = new Schema<IUser>(
     },
     category: {
       type: Schema.Types.ObjectId,
-      ref: "WorkerCategory",
+      ref: "JobCategory",
     },
     preferredJobCategories: [
       {

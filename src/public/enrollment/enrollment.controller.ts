@@ -31,12 +31,25 @@ export class EnrollmentController {
           .status(404)
           .json(new ApiError(404, "Course doesn't exist or was not found"));
 
-      const data = {
+      const isFree = courseDetails.isFree;
+      const data: any = {
         user,
         course,
         totalAmount: courseDetails.amount,
         finalAmount: courseDetails.amount,
+        status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
       };
+
+      // Add instant payment success if free
+      if (isFree) {
+        data.paymentDetails = {
+          amount: 0,
+          currency: "INR",
+          paidAt: new Date(),
+          status: PaymentStatus.SUCCESS,
+          gateway: PaymentGateway.FREE,
+        };
+      }
 
       const result = await enrollmentService.create(data);
       if (!result)
@@ -46,7 +59,15 @@ export class EnrollmentController {
 
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Enrollment created successfully"));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            isFree
+              ? "Enrolled successfully in free course"
+              : "Enrollment created, pending payment"
+          )
+        );
     } catch (err) {
       next(err);
     }

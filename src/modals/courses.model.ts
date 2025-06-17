@@ -38,6 +38,7 @@ export interface ICourse extends Document {
   amount: number;
   createdAt: Date;
   updatedAt: Date;
+  isFree: boolean;
   type: CourseType;
   startDate?: Date;
   _id: Types.ObjectId;
@@ -45,7 +46,6 @@ export interface ICourse extends Document {
   status: CourseStatus;
   priority: PriorityLevel;
   category: Schema.Types.ObjectId;
-  // 👇 New fields for offline support
   locationDetails?: {
     address?: string;
     locationName?: string;
@@ -96,6 +96,10 @@ const CourseSchema = new Schema<ICourse>(
     category: {
       type: Schema.Types.ObjectId,
       ref: "WorkerCategory",
+    },
+    isFree: {
+      type: Boolean,
+      default: false,
     },
     amount: {
       type: Number,

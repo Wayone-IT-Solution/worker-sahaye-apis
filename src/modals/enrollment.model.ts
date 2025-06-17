@@ -3,12 +3,14 @@ import { Schema, model, Types, Document } from "mongoose";
 export enum EnrollmentStatus {
   ACTIVE = "active",
   FAILED = "failed",
+  PENDING = "pending",
   REFUNDED = "refunded",
   CANCELLED = "cancelled",
   COMPLETED = "completed",
 }
 
 export enum PaymentGateway {
+  FREE = "free",
   RAZORPAY = "razorpay",
 }
 
@@ -68,7 +70,7 @@ const EnrollmentSchema = new Schema<IEnrollment>(
     course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
     status: {
       type: String,
-      default: EnrollmentStatus.ACTIVE,
+      default: EnrollmentStatus.PENDING,
       enum: Object.values(EnrollmentStatus),
     },
   },

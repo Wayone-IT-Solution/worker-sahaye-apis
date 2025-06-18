@@ -34,14 +34,9 @@ export enum MemberRole {
 
 export interface ICommunityStats {
   totalPosts: number;
-  engagement: number;
-  lastActivity: Date;
   totalMembers: number;
-  weeklyGrowth: number;
   totalComments: number;
   activeMembers: number;
-  monthlyGrowth: number;
-  pendingJoinRequest: number;
 }
 
 export interface ICommunityLocation {
@@ -65,7 +60,6 @@ export interface ICommunity extends Document {
   shortDescription?: string;
   privacy: CommunityPrivacy;
   categories: Types.ObjectId;
-  updateStats(): Promise<void>;
   location?: ICommunityLocation;
 }
 
@@ -121,14 +115,9 @@ const CommunitySchema = new Schema<ICommunity>(
     profileImage: { type: String },
     stats: {
       totalPosts: { type: Number, default: 0 },
-      engagement: { type: Number, default: 0 },
       totalMembers: { type: Number, default: 0 },
-      weeklyGrowth: { type: Number, default: 0 },
       totalComments: { type: Number, default: 0 },
       activeMembers: { type: Number, default: 0 },
-      monthlyGrowth: { type: Number, default: 0 },
-      pendingJoinRequest: { type: Number, default: 0 },
-      lastActivity: { type: Date, default: Date.now },
     },
     tags: [
       {

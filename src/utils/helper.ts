@@ -13,6 +13,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     endDate,
     assignee,
     page = 1,
+    createdBy,
     startDate,
     searchkey,
     limit = 10,
@@ -31,6 +32,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   if (status) matchStage.status = status;
   if (user) matchStage.user = new ObjectId(user);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
+  if (createdBy) matchStage.createdBy = new ObjectId(createdBy);
 
   if (startDate || endDate) {
     matchStage.createdAt = {};

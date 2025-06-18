@@ -24,6 +24,7 @@ export enum PaymentStatus {
 export interface IEnrollment extends Document {
   enrolledAt: Date;
   refundedAt?: Date;
+  progress?: number;
   totalAmount: number;
   finalAmount: number;
   refundReason?: string;
@@ -62,6 +63,7 @@ const EnrollmentSchema = new Schema<IEnrollment>(
     appliedCoupon: {},
     refundedAt: { type: Date },
     refundReason: { type: String },
+    progress: { type: Number, default: 0 },
     enrolledAt: { type: Date, default: Date.now },
     totalAmount: { type: Number, required: true },
     finalAmount: { type: Number, required: true },

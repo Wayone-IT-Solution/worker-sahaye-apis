@@ -19,6 +19,12 @@ export enum CourseType {
   OFFLINE = "offline",
 }
 
+export enum TimeEntryStatus {
+  COMPLETED = "completed",
+  IN_PROGRESS = "in_progress",
+  NOT_STARTED = "not_started",
+}
+
 export interface ILesson extends Document {
   title: string;
   order: number;
@@ -29,6 +35,18 @@ export interface ILesson extends Document {
   description?: string;
   estimatedTime: number;
   course: Types.ObjectId;
+}
+
+export interface ITimeEntry extends Document {
+  createdAt: Date;
+  updatedAt: Date;
+  startedAt?: Date;
+  timeSpent?: number;
+  completedAt?: Date;
+  user: Types.ObjectId;
+  course: Types.ObjectId;
+  lesson: Types.ObjectId;
+  status: TimeEntryStatus;
 }
 
 export interface ICourse extends Document {
@@ -56,6 +74,23 @@ export interface ICourse extends Document {
 
   calculateProgress(): Promise<number>;
 }
+
+const TimeEntrySchema = new Schema<ITimeEntry>(
+  {
+    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
+    lesson: { type: Schema.Types.ObjectId, ref: "Lesson", required: true },
+    status: {
+      type: String,
+      enum: Object.values(TimeEntryStatus),
+      default: TimeEntryStatus.NOT_STARTED,
+    },
+    startedAt: { type: Date },
+    completedAt: { type: Date },
+    timeSpent: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
 
 // Lesson Schema
 const LessonSchema = new Schema<ILesson>(
@@ -139,40 +174,12 @@ CourseSchema.pre("validate", function (next) {
   next();
 });
 
-// Methods
-// CourseSchema.methods.calculateProgress = async function () {
-//   const Lesson = mongoose.model<ILesson>("Lesson");
-//   const lessons = await Lesson.find({ course: this._id });
-//   const total = lessons.length;
-//   if (total === 0) {
-//     this.progress = 0;
-//     await this.save();
-//     return 0;
-//   }
-
-//   const completedLessons = await Promise.all(
-//     lessons.map(async (lesson) => {
-//       const count = await TimeEntry.countDocuments({
-//         lesson: lesson._id,
-//         course: this._id,
-//       });
-//       return count > 0 ? 1 : 0; // mark as completed if user has logged time
-//     })
-//   );
-
-//   const completed = completedLessons.reduce((sum, val): any => sum + val, 0);
-//   const progress = Math.round((completed / total) * 100);
-
-//   this.progress = progress;
-//   await this.save();
-//   return progress;
-// };
-
-// Indexes
 CourseSchema.index({ tags: 1 });
 CourseSchema.index({ enrolledUsers: 1 });
 LessonSchema.index({ course: 1, order: 1 });
 CourseSchema.index({ createdBy: 1, status: 1 });
-// Exports
+TimeEntrySchema.index({ user: 1, course: 1, lesson: 1 }, { unique: true });
+
 export const Lesson = mongoose.model<ILesson>("Lesson", LessonSchema);
 export const Course = mongoose.model<ICourse>("Course", CourseSchema);
+export const TimeEntry = mongoose.model<ITimeEntry>("TimeEntry", TimeEntrySchema);

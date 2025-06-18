@@ -15,6 +15,7 @@ const {
 const {
   createLesson,
   getAllLesson,
+  markAsStarted,
   getLessonById,
   markAsCompleted,
   updateLessonById,
@@ -40,6 +41,11 @@ router.delete("/lesson/:id", asyncHandler(deleteLessonById));
 
 // Optional: Get lessons for a specific course
 router.get("/:id/lesson", asyncHandler(getLessonsByCourseId));
+router.patch(
+  "/mark-as-started",
+  authenticateToken,
+  asyncHandler(markAsStarted)
+);
 router.patch(
   "/mark-as-completed",
   authenticateToken,

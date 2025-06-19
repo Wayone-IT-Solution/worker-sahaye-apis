@@ -6,6 +6,10 @@ import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import User, { UserStatus, UserType } from "../../modals/user.model";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
+import {
+  EnrolledPlan,
+  PlanEnrollmentStatus,
+} from "../../modals/enrollplan.model";
 
 const userService = new CommonService(User);
 
@@ -233,6 +237,7 @@ export class UserController {
   ): Promise<any> {
     try {
       let enrollmentCourses: any;
+      let enrollSubscriptionPlans: any;
       const { id: userId, role } = (req as any).user;
       const result = await userService.getById(userId);
       if (role === UserType.WORKER) {
@@ -243,13 +248,22 @@ export class UserController {
           },
           { _id: 1, course: 1 }
         );
+        enrollSubscriptionPlans = await EnrolledPlan.find(
+          {
+            user: userId,
+            status: {
+              $in: [PlanEnrollmentStatus.ACTIVE],
+            },
+          },
+          { _id: 1, plan: 1 }
+        );
       }
       return res
         .status(200)
         .json(
           new ApiResponse(
             200,
-            { user: result, enrollmentCourses },
+            { user: result, enrollmentCourses, enrollSubscriptionPlans },
             `User fetched successfully`
           )
         );

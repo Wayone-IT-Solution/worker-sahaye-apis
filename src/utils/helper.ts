@@ -18,6 +18,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     searchkey,
     limit = 10,
     search = "",
+    applicantId,
     sortDir = "desc",
     sortKey = "createdAt",
   } = query;
@@ -33,6 +34,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   if (user) matchStage.user = new ObjectId(user);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
   if (createdBy) matchStage.createdBy = new ObjectId(createdBy);
+  if (applicantId) matchStage.applicant = new ObjectId(applicantId);
 
   if (startDate || endDate) {
     matchStage.createdAt = {};

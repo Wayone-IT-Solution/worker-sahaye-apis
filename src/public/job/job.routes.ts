@@ -3,8 +3,14 @@ import { JobController } from "./job.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { authenticateToken } from "../../middlewares/authMiddleware";
 
-const { createJob, getAllJobs, getJobById, updateJobById, deleteJobById } =
-  JobController;
+const {
+  createJob,
+  getAllJobs,
+  getJobById,
+  updateJobById,
+  deleteJobById,
+  updateJobStatus,
+} = JobController;
 
 const router = express.Router();
 
@@ -13,6 +19,7 @@ router
   .post("/", authenticateToken, asyncHandler(createJob))
   .get("/:id", authenticateToken, asyncHandler(getJobById))
   .put("/:id", authenticateToken, asyncHandler(updateJobById))
-  .delete("/:id", authenticateToken, asyncHandler(deleteJobById));
+  .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
+  .put("/update-status/:id", authenticateToken, asyncHandler(updateJobStatus));
 
 export default router;

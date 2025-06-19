@@ -1,0 +1,27 @@
+import express from "express";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { JobSaveController } from "./jobsaved.controller";
+import { authenticateToken, isWorker } from "../../middlewares/authMiddleware";
+
+const router = express.Router();
+
+router.post(
+  "/:id",
+  authenticateToken,
+  isWorker,
+  asyncHandler(JobSaveController.saveJob)
+);
+router.get(
+  "/",
+  authenticateToken,
+  isWorker,
+  asyncHandler(JobSaveController.getSavedJobs)
+);
+router.delete(
+  "/:jobId",
+  authenticateToken,
+  isWorker,
+  asyncHandler(JobSaveController.unsaveJob)
+);
+
+export default router;

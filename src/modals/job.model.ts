@@ -235,12 +235,6 @@ export interface IJob extends Document {
   applicationProcess: IApplicationProcess;
   applicationDeadline?: Date;
   maxApplications?: number;
-  applicationQuestions?: Array<{
-    question: string;
-    type: "text" | "multiple_choice" | "boolean";
-    required: boolean;
-    options?: string[];
-  }>;
 
   // Dates & Expiry
   expiresAt?: Date;
@@ -474,17 +468,6 @@ const JobSchema = new Schema<IJob>(
     },
     maxApplications: Number,
     applicationDeadline: Date,
-    applicationQuestions: [
-      {
-        question: String,
-        type: {
-          type: String,
-          enum: ["text", "multiple_choice", "boolean"],
-        },
-        required: Boolean,
-        options: [String],
-      },
-    ],
 
     // Dates & Expiry
     lastBoostedAt: { type: Date, default: new Date() },

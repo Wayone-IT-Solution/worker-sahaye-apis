@@ -81,4 +81,27 @@ export class JobController {
       next(err);
     }
   }
+
+  static async updateJobStatus(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { status } = req.body;
+      if (!status)
+        return res.status(400).json(new ApiError(400, "Status is required"));
+
+      const result = await JobService.updateById(req.params.id, { status });
+      if (!result)
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to update job status"));
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Job status updated successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
 }

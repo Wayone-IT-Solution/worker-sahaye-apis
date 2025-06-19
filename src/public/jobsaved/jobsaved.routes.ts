@@ -23,5 +23,11 @@ router.delete(
   isWorker,
   asyncHandler(JobSaveController.unsaveJob)
 );
+router.get(
+  "/recommendations",
+  authenticateToken,
+  isWorker,
+  asyncHandler(JobSaveController.getJobRecommendations)
+);
 
 export default router;

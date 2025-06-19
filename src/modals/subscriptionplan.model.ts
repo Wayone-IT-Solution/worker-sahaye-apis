@@ -62,14 +62,11 @@ export enum PlanStatus {
   INACTIVE = "inactive",
 }
 
-export interface IFeature {
-  key: string;
-  name: string;
-  description?: string;
-}
-
 export interface ISubscriptionPlan extends Document {
   name: string;
+  features: any[];
+  createdAt: Date;
+  updatedAt: Date;
   priority: number;
   tagline?: string;
   basePrice: number;
@@ -80,11 +77,8 @@ export interface ISubscriptionPlan extends Document {
   isPopular: boolean;
   displayName: string;
   description: string;
-  features: IFeature[];
   isRecommended: boolean;
   billingCycle: BillingCycle;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -131,21 +125,15 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
     currency: {
       type: String,
       required: true,
-      enum: Object.values(Currency),
       default: Currency.INR,
+      enum: Object.values(Currency),
     },
     billingCycle: {
       type: String,
       required: true,
       enum: Object.values(BillingCycle),
     },
-    features: [
-      {
-        key: { type: String, required: true, index: true },
-        name: { type: String, required: true },
-        description: { type: String },
-      },
-    ],
+    features: [{ type: Schema.Types.ObjectId, ref: "Feature" }],
     status: {
       type: String,
       enum: Object.values(PlanStatus),
@@ -167,9 +155,7 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       index: true,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 export const SubscriptionPlan = mongoose.model<ISubscriptionPlan>(

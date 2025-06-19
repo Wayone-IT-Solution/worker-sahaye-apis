@@ -1,17 +1,18 @@
-import ApiError from "../../utils/ApiError";
-import ApiResponse from "../../utils/ApiResponse";
-import { Request, Response, NextFunction } from "express";
 import {
   EnrolledPlan,
   PlanPaymentStatus,
   PlanPaymentGateway,
   PlanEnrollmentStatus,
 } from "../../modals/enrollplan.model";
-import { CommonService } from "../../services/common.services";
 import {
   SubscriptionPlan,
   calculateExpiryDate,
 } from "../../modals/subscriptionplan.model";
+import ApiError from "../../utils/ApiError";
+import ApiResponse from "../../utils/ApiResponse";
+import { Request, Response, NextFunction } from "express";
+import { CommonService } from "../../services/common.services";
+import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
 
 const enrollPlanService = new CommonService(EnrolledPlan);
 
@@ -62,6 +63,39 @@ export class EnrollPlanController {
           gateway: PlanPaymentGateway.FREE,
         };
       }
+
+      if (isFree) {
+        const planFeatures = await SubscriptionPlan.findById(plan).populate(
+          "features"
+        );
+        if (!planFeatures || !planFeatures.features) {
+          return res
+            .status(404)
+            .json(new ApiError(404, "Plan features not found"));
+        }
+        for (const feature of planFeatures.features) {
+          if (feature.badgeKey) {
+            const existingBadge = await CandidateBrandingBadge.findOne({
+              user: user,
+              badge: feature.badgeKey,
+            });
+            if (existingBadge) {
+              existingBadge.status = "active";
+              existingBadge.assignedAt = new Date();
+              await existingBadge.save();
+            } else {
+              await CandidateBrandingBadge.create({
+                user: user,
+                status: "active",
+                assignedAt: new Date(),
+                badge: feature.badgeKey,
+                earnedBy: "subscription",
+              });
+            }
+          }
+        }
+      }
+
       const result = await enrollPlanService.create(data);
       if (result && planDetails.billingCycle) {
         const expiredAt = calculateExpiryDate(
@@ -160,6 +194,7 @@ export class EnrollPlanController {
     next: NextFunction
   ) {
     try {
+      const { id: user } = (req as any).user;
       const { enrollmentId, status, gateway, paymentId } = req.body;
 
       const enrollment = await EnrolledPlan.findById(enrollmentId);
@@ -202,6 +237,38 @@ export class EnrollPlanController {
           break;
         default:
           enrollment.status = PlanEnrollmentStatus.PENDING;
+      }
+
+      if (status === PlanPaymentStatus.SUCCESS) {
+        const planDetails = await SubscriptionPlan.findById(
+          enrollment.plan
+        ).populate("features");
+        if (!planDetails)
+          return res
+            .status(404)
+            .json(new ApiError(404, "Plan not found or unavailable"));
+
+        for (const feature of planDetails.features) {
+          if (feature.badgeKey) {
+            const existingBadge = await CandidateBrandingBadge.findOne({
+              user: user,
+              badge: feature.badgeKey,
+            });
+            if (existingBadge) {
+              existingBadge.status = "active";
+              existingBadge.assignedAt = new Date();
+              await existingBadge.save();
+            } else {
+              await CandidateBrandingBadge.create({
+                user: user,
+                status: "active",
+                assignedAt: new Date(),
+                badge: feature.badgeKey,
+                earnedBy: "subscription",
+              });
+            }
+          }
+        }
       }
 
       await enrollment.save();

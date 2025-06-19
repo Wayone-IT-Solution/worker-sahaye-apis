@@ -140,6 +140,7 @@ export class UserController {
       console.log(`OTP sent to ${mobile}: ${otpCode}`);
 
       return res.status(200).json({
+        otp: otpCode,
         success: true,
         message: "OTP has been sent successfully",
       });

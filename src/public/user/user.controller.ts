@@ -98,6 +98,21 @@ export class UserController {
     }
   }
 
+  static async getAllUsers(
+    req: Request | any,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const result = await userService.getAll(req.query);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async generateOtp(
     req: Request,
     res: Response,

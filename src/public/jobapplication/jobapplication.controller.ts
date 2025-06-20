@@ -125,6 +125,36 @@ export const getUserApplications = async (
   }
 };
 
+export const getAllUserApplications = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const pipeline = {
+      $project: {
+        job: 1,
+        status: 1,
+        history: 1,
+        resumeUrl: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        applicant: 1,
+        coverLetter: 1,
+        availability: 1,
+        expectedSalary: 1,
+        applicantSnapshot: 1,
+      },
+    };
+    const apps = await JobApplicationService.getAll(req.query, pipeline);
+    return res
+      .status(200)
+      .json(new ApiResponse(200, apps, "Applications fetched"));
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getApplicationById = async (
   req: Request,
   res: Response,

@@ -13,12 +13,18 @@ import {
   handleInterviewMode,
   handleOfferAccepted,
   updateStatusByEmployer,
+  getAllUserApplications,
 } from "./jobapplication.controller";
 
 const router = express.Router();
 
 router.post("/", authenticateToken, isWorker, asyncHandler(applyToJob));
 router.get("/", authenticateToken, isWorker, asyncHandler(getUserApplications));
+router.get(
+  "/all/applications",
+  authenticateToken,
+  asyncHandler(getAllUserApplications)
+);
 router.get(
   "/:id",
   authenticateToken,

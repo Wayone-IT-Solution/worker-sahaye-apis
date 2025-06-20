@@ -11,6 +11,11 @@ userRouter.post("/send-otp", asyncHandler(UserController.generateOtp));
 userRouter.post("/verify-otp", asyncHandler(UserController.verifyOtp));
 userRouter.put("/", authenticateToken, asyncHandler(UserController.updateUser));
 userRouter.get(
+  "/all",
+  authenticateToken,
+  asyncHandler(UserController.getAllUsers)
+);
+userRouter.get(
   "/",
   authenticateToken,
   asyncHandler(UserController.getCurrentUser)

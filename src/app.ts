@@ -21,7 +21,7 @@ if (config.cors.enabled) app.use(cors(corsOptions));
 else console.log("⚠️  CORS is disabled by config");
 
 if (config.security.rateLimitEnabled) {
-  app.set("trust proxy", true);
+  app.set("trust proxy", 1);
   app.use(limiter);
   console.log("✅ Rate limiter enabled");
 }

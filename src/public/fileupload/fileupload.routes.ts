@@ -7,8 +7,12 @@ import {
 } from "../../middlewares/s3FileUploadMiddleware";
 import { authenticateToken } from "../../middlewares/authMiddleware";
 
-const { createFileUpload, getAllFileUploads, deleteFileUploadById } =
-  FileUploadController;
+const {
+  createFileUpload,
+  getAllFileUploads,
+  deleteFileUploadById,
+  getAllAdminFileUploads,
+} = FileUploadController;
 
 const router = express.Router();
 
@@ -27,5 +31,6 @@ router.post(
 
 router.get("/", authenticateToken, asyncHandler(getAllFileUploads));
 router.delete("/", authenticateToken, asyncHandler(deleteFileUploadById));
+router.get("/all", authenticateToken, asyncHandler(getAllAdminFileUploads));
 
 export default router;

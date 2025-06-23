@@ -1,6 +1,10 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import FileUpload from "../../modals/fileupload.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
+import { CommonService } from "../../services/common.services";
+import ApiResponse from "../../utils/ApiResponse";
+
+const fileUploadService = new CommonService(FileUpload);
 
 export const FileUploadController = {
   createFileUpload: async (req: Request, res: Response) => {
@@ -46,6 +50,48 @@ export const FileUploadController = {
       { _id: 1, tag: 1, s3Key: 1, url: 1 }
     );
     res.json({ success: true, data: uploads });
+  },
+
+  getAllAdminFileUploads: async (
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "userId",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $project: {
+            _id: 1,
+            tag: 1,
+            url: 1,
+            s3Key: 1,
+            mimeType: 1,
+            uploadedAt: 1,
+            sizeInBytes: 1,
+            originalName: 1,
+            paymentDetails: 1,
+            "userDetails.email": 1,
+            "userDetails.mobile": 1,
+            "userDetails.fullName": 1,
+          },
+        },
+      ];
+      const result = await fileUploadService.getAll(_req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
   },
 
   deleteFileUploadById: async (req: Request, res: Response) => {

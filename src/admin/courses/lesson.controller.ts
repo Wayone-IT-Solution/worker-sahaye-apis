@@ -27,7 +27,35 @@ export class LessonController {
 
   static async getAllLesson(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await lessonService.getAll(req.query);
+      const pipeline = [
+        {
+          $lookup: {
+            from: "courses",
+            localField: "course",
+            foreignField: "_id",
+            as: "courseDetails",
+          },
+        },
+        { $unwind: "$courseDetails" },
+        {
+          $project: {
+            _id: 1,
+            order: 1,
+            title: 1,
+            videoUrl: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            description: 1,
+            estimatedTime: 1,
+            actualTimeSpent: 1,
+            "courseDetails.name": 1,
+            "courseDetails.type": 1,
+            "courseDetails.status": 1,
+            "courseDetails.priority": 1,
+          },
+        },
+      ];
+      const result = await lessonService.getAll(req.query, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -109,12 +137,14 @@ export class LessonController {
       const { courseId, lessonId } = req.body;
 
       if (role !== UserType.WORKER) {
-        return res.status(403).json(
-          new ApiError(
-            403,
-            "Access denied. Courses are only accessible to users with the 'WORKER' role."
-          )
-        );
+        return res
+          .status(403)
+          .json(
+            new ApiError(
+              403,
+              "Access denied. Courses are only accessible to users with the 'WORKER' role."
+            )
+          );
       }
 
       if (
@@ -132,14 +162,21 @@ export class LessonController {
           .status(404)
           .json(new ApiResponse(404, null, "Lesson not found."));
 
-
       // Check if the user is enrolled in the course
-      const enrollment = await Enrollment.findOne({ user: userId, course: courseId });
+      const enrollment = await Enrollment.findOne({
+        user: userId,
+        course: courseId,
+      });
       if (!enrollment)
         return res
           .status(404)
-          .json(new ApiResponse(404, null, "Enrollment not found for this user and course."));
-
+          .json(
+            new ApiResponse(
+              404,
+              null,
+              "Enrollment not found for this user and course."
+            )
+          );
 
       // Check if already completed
       const existingEntry = await TimeEntry.findOne({
@@ -152,7 +189,13 @@ export class LessonController {
       if (existingEntry) {
         return res
           .status(409)
-          .json(new ApiResponse(409, existingEntry, "Lesson already marked as completed."));
+          .json(
+            new ApiResponse(
+              409,
+              existingEntry,
+              "Lesson already marked as completed."
+            )
+          );
       }
 
       // Fetch or create the entry

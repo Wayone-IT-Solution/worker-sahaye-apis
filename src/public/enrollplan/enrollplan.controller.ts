@@ -138,6 +138,58 @@ export class EnrollPlanController {
     }
   }
 
+  static async getAllEnrolled(req: any, res: Response, next: NextFunction) {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "subscriptionplans",
+            localField: "plan",
+            foreignField: "_id",
+            as: "planDetails",
+          },
+        },
+        { $unwind: "$planDetails" },
+        {
+          $project: {
+            _id: 1,
+            status: 1,
+            expiredAt: 1,
+            enrolledAt: 1,
+            totalAmount: 1,
+            finalAmount: 1,
+            "userDetails.email": 1,
+            "userDetails.mobile": 1,
+            "userDetails.fullName": 1,
+            "planDetails.planType": 1,
+            "planDetails.userType": 1,
+            "planDetails.basePrice": 1,
+            "paymentDetails.status": 1,
+            "paymentDetails.paidAt": 1,
+            "paymentDetails.gateway": 1,
+            "planDetails.displayName": 1,
+            "planDetails.billingCycle": 1,
+          },
+        },
+      ];
+      const result = await enrollPlanService.getAll(req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Enrollments fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getEnrollPlanById(
     req: Request,
     res: Response,

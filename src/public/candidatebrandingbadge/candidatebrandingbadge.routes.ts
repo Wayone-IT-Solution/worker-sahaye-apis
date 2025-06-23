@@ -1,20 +1,31 @@
-// Candidatebrandingbadge Routes
 import express from "express";
-import {
-  createCandidatebrandingbadge,
-  getAllCandidatebrandingbadges,
-  getCandidatebrandingbadgeById,
-  updateCandidatebrandingbadgeById,
-  deleteCandidatebrandingbadgeById,
-} from "./candidatebrandingbadge.controller";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { authenticateToken } from "../../middlewares/authMiddleware";
+import { CandidateBrandingBadgeController } from "./candidatebrandingbadge.controller";
+
+const {
+  createCandidateBrandingBadge,
+  getAllCandidateBrandingBadges,
+  getCandidateBrandingBadgeById,
+  updateCandidateBrandingBadgeById,
+  deleteCandidateBrandingBadgeById,
+} = CandidateBrandingBadgeController;
 
 const router = express.Router();
 
 router
-  .post("/", createCandidatebrandingbadge)
-  .get("/", getAllCandidatebrandingbadges)
-  .get("/:id", getCandidatebrandingbadgeById)
-  .put("/:id", updateCandidatebrandingbadgeById)
-  .delete("/:id", deleteCandidatebrandingbadgeById);
+  .post("/", authenticateToken, asyncHandler(createCandidateBrandingBadge))
+  .get("/", authenticateToken, asyncHandler(getAllCandidateBrandingBadges))
+  .get("/:id", authenticateToken, asyncHandler(getCandidateBrandingBadgeById))
+  .put(
+    "/:id",
+    authenticateToken,
+    asyncHandler(updateCandidateBrandingBadgeById)
+  )
+  .delete(
+    "/:id",
+    authenticateToken,
+    asyncHandler(deleteCandidateBrandingBadgeById)
+  );
 
 export default router;

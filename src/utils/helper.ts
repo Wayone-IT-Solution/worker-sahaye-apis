@@ -15,6 +15,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     page = 1,
     createdBy,
     startDate,
+    community,
     searchkey,
     limit = 10,
     search = "",
@@ -33,6 +34,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   if (status) matchStage.status = status;
   if (user) matchStage.user = new ObjectId(user);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
+  if (community) matchStage.createdBy = new ObjectId(community);
   if (createdBy) matchStage.createdBy = new ObjectId(createdBy);
   if (applicantId) matchStage.applicant = new ObjectId(applicantId);
 
@@ -67,7 +69,12 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   pipeline.push({ $skip: (pageNumber - 1) * limitNumber });
   pipeline.push({ $limit: limitNumber });
 
-  if (optionsToBeExtract) pipeline.push(optionsToBeExtract);
+  if (Array.isArray(optionsToBeExtract)) pipeline.push(...optionsToBeExtract);
+  else if (
+    typeof optionsToBeExtract === "object" &&
+    optionsToBeExtract !== null
+  )
+    pipeline.push(optionsToBeExtract);
 
   const options = { collation: { locale: "en", strength: 2 } };
   return { pipeline, matchStage, options };

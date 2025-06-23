@@ -13,7 +13,7 @@ const {
 
 const router = express.Router();
 
-router.get("/", asyncHandler(getAllFeatures));
+router.get("/", authenticateToken, asyncHandler(getAllFeatures));
 router.post("/", authenticateToken, asyncHandler(createFeature));
 router.get("/:id", authenticateToken, asyncHandler(getFeatureById));
 router.put("/:id", authenticateToken, asyncHandler(updateFeatureById));

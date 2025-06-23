@@ -5,7 +5,10 @@ import { deleteFromS3 } from "../../config/s3Uploader";
 import { ForumPost } from "../../modals/forumpost.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import { CommunityMember } from "../../modals/communitymember.model";
+import {
+  CommunityMember,
+  MemberStatus,
+} from "../../modals/communitymember.model";
 import { resetStats } from "../communitymember/communitymember.controller";
 
 const ForumPostService = new CommonService(ForumPost);
@@ -93,6 +96,7 @@ export class ForumPostController {
       const communityMember = await CommunityMember.findOne({
         community: req.params.id,
         user: (req as any).user.id,
+        status: MemberStatus.JOINED,
         userType: (req as any).user.role,
       });
       if (!communityMember)
@@ -100,10 +104,77 @@ export class ForumPostController {
           .status(400)
           .json(new ApiError(400, "User is not a member of the community"));
 
-      const result = await ForumPostService.getAll({
-        ...req.query,
-        community: req.params.id,
-      });
+      const pipeline = [
+        {
+          $lookup: {
+            from: "communitymembers",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "creatorMemberDetails",
+          },
+        },
+        { $unwind: "$creatorMemberDetails" },
+        {
+          $lookup: {
+            from: "users",
+            localField: "creatorMemberDetails.user",
+            foreignField: "_id",
+            as: "creatorUserDetails",
+          },
+        },
+        { $unwind: "$creatorUserDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$creatorMemberDetails.user" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            tags: 1,
+            likes: 1,
+            shares: 1,
+            status: 1,
+            content: 1,
+            createdAt: 1,
+            attachments: 1,
+            commentsCount: 1,
+            profilePicUrl: "$profilePicFile.url",
+            creatorName: "$creatorUserDetails.fullName",
+          },
+        },
+      ];
+
+      const result = await ForumPostService.getAll(
+        {
+          ...req.query,
+          community: req.params.id,
+        },
+        pipeline
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

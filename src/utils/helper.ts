@@ -7,6 +7,7 @@ import { ObjectId } from "mongodb";
  */
 export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   const {
+    _id,
     user,
     type,
     status,
@@ -32,6 +33,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
 
   if (type) matchStage.type = type;
   if (status) matchStage.status = status;
+  if (_id) matchStage._id = new ObjectId(_id);
   if (user) matchStage.user = new ObjectId(user);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
   if (community) matchStage.community = new ObjectId(community);

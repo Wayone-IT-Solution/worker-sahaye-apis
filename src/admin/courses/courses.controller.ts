@@ -1,6 +1,7 @@
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { Course } from "../../modals/courses.model";
+import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { getReviewStats } from "../../public/coursereview/coursereview.controller";
@@ -10,7 +11,11 @@ const courseService = new CommonService(Course);
 export class CourseController {
   static async createCourse(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await courseService.create(req.body);
+      const data = {
+        ...req.body,
+        imageUrl: req?.body?.imageUrl[0]?.url,
+      };
+      const result = await courseService.create(data);
       if (!result)
         return res
           .status(400)
@@ -80,7 +85,36 @@ export class CourseController {
     next: NextFunction
   ) {
     try {
-      const result = await courseService.updateById(req.params.id, req.body);
+      const extractImageUrl = async (input: any, existing: string) => {
+        if (!input || (Array.isArray(input) && input.length === 0))
+          return existing || "";
+        if (Array.isArray(input) && input.length > 0) {
+          const newUrl = input[0]?.url;
+          if (existing && existing !== newUrl) {
+            const s3Key = existing.split(".com/")[1];
+            await deleteFromS3(s3Key);
+          }
+          return newUrl || "";
+        }
+        if (typeof input === "string") return input;
+        return existing || "";
+      };
+
+      const existingCourse: any = await courseService.getById(req.params.id);
+      if (!existingCourse)
+        return res.status(404).json(new ApiError(404, "Course not found"));
+
+      const normalizedData = {
+        ...req.body,
+        bannerImage: await extractImageUrl(
+          req.body.imageUrl,
+          existingCourse?.imageUrl
+        ),
+      };
+      const result = await courseService.updateById(
+        req.params.id,
+        normalizedData
+      );
       if (!result)
         return res
           .status(404)

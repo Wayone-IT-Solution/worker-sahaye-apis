@@ -129,8 +129,11 @@ export class CourseReviewController {
     next: NextFunction
   ) {
     try {
-      const { id: user } = (req as any).user;
-      const result = await CourseReviewService.getAll({ ...req.query, user });
+      const { id: user, role } = (req as any).user;
+      const result = await CourseReviewService.getAll({
+        ...req.query,
+        user: role === "worker" ? user : "",
+      });
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

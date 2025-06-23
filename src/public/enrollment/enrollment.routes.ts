@@ -9,6 +9,7 @@ const {
   getAllEnrollments,
   getEnrollmentById,
   updatePaymentStatus,
+  getAllAdminEnrollments,
 } = EnrollmentController;
 
 const router = express.Router();
@@ -16,6 +17,7 @@ const router = express.Router();
 router
   .post("/", authenticateToken, isWorker, asyncHandler(createEnrollment)) // Enroll in course
   .get("/", authenticateToken, isWorker, asyncHandler(getAllEnrollments)) // Get all enrollments
+  .get("/all", authenticateToken, asyncHandler(getAllAdminEnrollments)) // Get all enrollments till now
   .get("/:id", authenticateToken, isWorker, asyncHandler(getEnrollmentById)) // Get specific enrollment
   .post(
     "/update-payment",

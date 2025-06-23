@@ -85,6 +85,62 @@ export class EnrollmentController {
     }
   }
 
+  static async getAllAdminEnrollments(
+    req: any,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "courses",
+            localField: "course",
+            foreignField: "_id",
+            as: "courseDetails",
+          },
+        },
+        { $unwind: "$courseDetails" },
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $project: {
+            _id: 1,
+            status: 1,
+            progress: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            enrolledAt: 1,
+            totalAmount: 1,
+            finalAmount: 1,
+            paymentDetails: 1,
+            "userDetails.email": 1,
+            "userDetails.mobile": 1,
+            "courseDetails.name": 1,
+            "courseDetails.type": 1,
+            "courseDetails.isFree": 1,
+            "courseDetails.amount": 1,
+            "userDetails.fullName": 1,
+          },
+        },
+      ];
+
+      const result = await enrollmentService.getAll({ ...req.query }, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Enrollments fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getEnrollmentById(
     req: Request,
     res: Response,

@@ -102,7 +102,7 @@ export class ForumPostController {
 
       const result = await ForumPostService.getAll({
         ...req.query,
-        community: communityMember._id,
+        community: req.params.id,
       });
       return res
         .status(200)

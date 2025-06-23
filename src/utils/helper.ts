@@ -34,7 +34,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   if (status) matchStage.status = status;
   if (user) matchStage.user = new ObjectId(user);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
-  if (community) matchStage.createdBy = new ObjectId(community);
+  if (community) matchStage.community = new ObjectId(community);
   if (createdBy) matchStage.createdBy = new ObjectId(createdBy);
   if (applicantId) matchStage.applicant = new ObjectId(applicantId);
 

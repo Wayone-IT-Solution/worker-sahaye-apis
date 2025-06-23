@@ -59,6 +59,7 @@ export interface ICourse extends Document {
   isFree: boolean;
   type: CourseType;
   startDate?: Date;
+  imageUrl?: string;
   _id: Types.ObjectId;
   description?: string;
   status: CourseStatus;
@@ -108,6 +109,7 @@ const LessonSchema = new Schema<ILesson>(
 // Course Schema
 const CourseSchema = new Schema<ICourse>(
   {
+    imageUrl: String,
     description: String,
     name: { type: String, required: true },
     status: {
@@ -182,4 +184,7 @@ TimeEntrySchema.index({ user: 1, course: 1, lesson: 1 }, { unique: true });
 
 export const Lesson = mongoose.model<ILesson>("Lesson", LessonSchema);
 export const Course = mongoose.model<ICourse>("Course", CourseSchema);
-export const TimeEntry = mongoose.model<ITimeEntry>("TimeEntry", TimeEntrySchema);
+export const TimeEntry = mongoose.model<ITimeEntry>(
+  "TimeEntry",
+  TimeEntrySchema
+);

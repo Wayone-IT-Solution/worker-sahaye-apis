@@ -56,6 +56,10 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     pipeline.push({ $addFields: { idStr: { $toString: "$_id" } } });
     pipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
     pipeline.push({ $project: { idStr: 0 } });
+  } else if (search && searchkey === "category") {
+    pipeline.push({ $addFields: { idStr: { $toString: "$category" } } });
+    pipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
+    pipeline.push({ $project: { idStr: 0 } });
   } else if (search && searchkey) {
     pipeline.push({
       $match: { [searchkey]: { $regex: search, $options: "i" } },

@@ -7,6 +7,7 @@ import express from "express";
 import routes from "./routes";
 import { logger } from "./config/logger";
 import { config } from "./config/config";
+import { ipBlocker } from "./config/ipBlocker";
 import { limiter } from "./middlewares/limiter";
 import { corsOptions } from "./middlewares/corsMiddleware";
 import { activityLogger } from "./middlewares/activityLogger";
@@ -14,6 +15,8 @@ import { notFoundHandler } from "./middlewares/notFounHandler";
 import { globalErrorHandler } from "./middlewares/errorHandler";
 
 const app = express();
+
+app.use(ipBlocker);
 
 // Middleware
 app.use(helmet());

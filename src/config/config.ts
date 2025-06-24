@@ -77,8 +77,9 @@ export const config = {
   },
 
   security: {
-    rateLimitEnabled: toBool(process.env.RATE_LIMIT_ENABLED),
+    ips: process.env.BLOCKED_IPS?.split(",") || [],
     rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 100),
+    rateLimitEnabled: toBool(process.env.RATE_LIMIT_ENABLED),
     rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60000),
   },
 };

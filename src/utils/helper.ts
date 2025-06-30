@@ -11,6 +11,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     user,
     type,
     status,
+    userId,
     endDate,
     assignee,
     page = 1,
@@ -35,6 +36,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   if (status) matchStage.status = status;
   if (_id) matchStage._id = new ObjectId(_id);
   if (user) matchStage.user = new ObjectId(user);
+  if (userId) matchStage.userId = new ObjectId(userId);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
   if (community) matchStage.community = new ObjectId(community);
   if (createdBy) matchStage.createdBy = new ObjectId(createdBy);

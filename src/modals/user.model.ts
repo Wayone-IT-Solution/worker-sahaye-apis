@@ -254,6 +254,4 @@ const userSchema = new Schema<IUser>(
 userSchema.index({ mobile: 1 });
 userSchema.index({ userType: 1, status: 1 });
 
-const User = mongoose.model<IUser>("User", userSchema);
-
-export default User;
+export const User = mongoose.model<IUser>("User", userSchema);

@@ -24,9 +24,81 @@ export class EnrollPlanController {
 
       const exists = await EnrolledPlan.findOne({ user, plan });
       if (exists) {
-        return res
-          .status(409)
-          .json(new ApiError(409, "Already enrolled in this plan"));
+        switch (exists.status) {
+          case PlanEnrollmentStatus.ACTIVE:
+            return res
+              .status(409)
+              .json(new ApiError(409, "Already enrolled in this plan"));
+
+          case PlanEnrollmentStatus.FAILED:
+            // update or retry logic here
+            exists.status = PlanEnrollmentStatus.PENDING;
+            await exists.save();
+            return res
+              .status(200)
+              .json(
+                new ApiResponse(
+                  200,
+                  exists,
+                  "Enrollment re-initiated after failure"
+                )
+              );
+
+          case PlanEnrollmentStatus.EXPIRED:
+            exists.status = PlanEnrollmentStatus.PENDING;
+            await exists.save();
+            return res
+              .status(200)
+              .json(
+                new ApiResponse(
+                  200,
+                  exists,
+                  "Re-enrollment initiated for expired plan"
+                )
+              );
+
+          case PlanEnrollmentStatus.PENDING:
+            return res
+              .status(202)
+              .json(
+                new ApiResponse(
+                  202,
+                  exists,
+                  "Enrollment is already in progress"
+                )
+              );
+
+          case PlanEnrollmentStatus.REFUNDED:
+            exists.status = PlanEnrollmentStatus.PENDING;
+            await exists.save();
+            return res
+              .status(200)
+              .json(
+                new ApiResponse(
+                  200,
+                  exists,
+                  "Re-enrollment initiated after refund"
+                )
+              );
+
+          case PlanEnrollmentStatus.CANCELLED:
+            exists.status = PlanEnrollmentStatus.PENDING;
+            await exists.save();
+            return res
+              .status(200)
+              .json(
+                new ApiResponse(
+                  200,
+                  exists,
+                  "Re-enrollment initiated after cancellation"
+                )
+              );
+
+          default:
+            return res
+              .status(400)
+              .json(new ApiError(400, "Unhandled enrollment status"));
+        }
       }
 
       const planDetails = await SubscriptionPlan.findById(plan);

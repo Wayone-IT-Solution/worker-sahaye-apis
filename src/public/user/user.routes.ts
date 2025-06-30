@@ -20,5 +20,10 @@ userRouter.get(
   authenticateToken,
   asyncHandler(UserController.getCurrentUser)
 );
+userRouter.get(
+  "/:id",
+  authenticateToken,
+  asyncHandler(UserController.getUserById)
+);
 
 export default userRouter;

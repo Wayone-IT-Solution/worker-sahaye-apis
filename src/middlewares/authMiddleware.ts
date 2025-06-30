@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { NextFunction } from "express";
-import User from "../modals/user.model";
 import Admin from "../modals/admin.model";
+import { User } from "../modals/user.model";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
 

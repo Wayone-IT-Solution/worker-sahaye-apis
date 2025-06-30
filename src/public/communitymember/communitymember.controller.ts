@@ -7,7 +7,7 @@ import {
   MemberStatus,
   CommunityMember,
 } from "../../modals/communitymember.model";
-import User from "../../modals/user.model";
+import { User } from "../../modals/user.model";
 import { ForumPost } from "../../modals/forumpost.model";
 import { ForumComment } from "../../modals/forumcomment.model";
 import { Community, CommunityPrivacy } from "../../modals/community.model";

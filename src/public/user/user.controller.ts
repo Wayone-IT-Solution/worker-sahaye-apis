@@ -4,12 +4,20 @@ import jwt, { SignOptions } from "jsonwebtoken";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
-import User, { UserStatus, UserType } from "../../modals/user.model";
+import { UserStatus, UserType, User } from "../../modals/user.model";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
 import {
   EnrolledPlan,
   PlanEnrollmentStatus,
 } from "../../modals/enrollplan.model";
+import FileUpload from "../../modals/fileupload.model";
+import { LexRuntimeV2 } from "aws-sdk";
+import ApiError from "../../utils/ApiError";
+import {
+  ConnectionModel,
+  ConnectionStatus,
+} from "../../modals/connection.model";
+import mongoose from "mongoose";
 
 const userService = new CommonService(User);
 
@@ -241,6 +249,121 @@ export class UserController {
         token,
         user,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getUserById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const userId = req.params.id;
+      const { id: requestedUser } = (req as any).user;
+
+      // Step 1: Fetch accepted connections of both users
+      const [userConnections, requesterConnections] = await Promise.all([
+        ConnectionModel.find({
+          status: ConnectionStatus.ACCEPTED,
+          $or: [{ requester: userId }, { recipient: userId }],
+        }),
+        ConnectionModel.find({
+          status: ConnectionStatus.ACCEPTED,
+          $or: [{ requester: requestedUser }, { recipient: requestedUser }],
+        }),
+      ]);
+
+      // Step 2: Extract connected friend IDs
+      const getFriendIds = (connections: any[], selfId: string) =>
+        connections.map((conn) =>
+          conn.requester.toString() === selfId
+            ? conn.recipient.toString()
+            : conn.requester.toString()
+        );
+
+      const userFriendIds = getFriendIds(userConnections, userId);
+      const requesterFriendIds = getFriendIds(
+        requesterConnections,
+        requestedUser
+      );
+
+      // Step 3: Find mutual friend IDs
+      const mutualFriendIds = userFriendIds.filter((id) =>
+        requesterFriendIds.includes(id)
+      );
+      const mutualFriendCount = mutualFriendIds.length;
+
+      // Step 4: Fetch up to 3 mutual friend profiles
+      const mutualProfiles = await User.aggregate([
+        {
+          $match: {
+            _id: {
+              $in: mutualFriendIds
+                .slice(0, 3)
+                .map((id) => new mongoose.Types.ObjectId(id)),
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePic",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePic",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            email: 1,
+            fullName: 1,
+            profilePicUrl: "$profilePic.url",
+          },
+        },
+      ]);
+
+      const data = { mutualFriendCount, mutualFriends: mutualProfiles };
+
+      const user = await userService.getById(userId);
+      if (!user) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+      const profilePic = await FileUpload.findOne({
+        userId,
+        tag: "profilePic",
+      }).sort({ createdAt: -1 });
+
+      const responseData: any = {
+        ...data,
+        ...user.toObject(),
+        profilePicUrl: profilePic?.url || null,
+      };
+
+      delete responseData?.preferences;
+      return res
+        .status(200)
+        .json(new ApiResponse(200, responseData, "User fetched successfully"));
     } catch (error) {
       next(error);
     }

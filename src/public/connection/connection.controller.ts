@@ -7,7 +7,7 @@ import {
   ConnectionModel,
   ConnectionStatus,
 } from "../../modals/connection.model";
-import User from "../../modals/user.model";
+import { User } from "../../modals/user.model";
 import FileUpload from "../../modals/fileupload.model";
 
 // Create a new connection

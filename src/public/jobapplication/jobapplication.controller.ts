@@ -6,7 +6,7 @@ import {
   JobApplication,
   ApplicationStatus,
 } from "../../modals/jobapplication.model";
-import User from "../../modals/user.model";
+import { User } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";
 
 const JobApplicationService = new CommonService(JobApplication);

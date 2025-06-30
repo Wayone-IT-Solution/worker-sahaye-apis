@@ -20,9 +20,50 @@ export class EnrollmentController {
 
       const exists = await Enrollment.findOne({ user, course });
       if (exists) {
-        return res
-          .status(409)
-          .json(new ApiError(409, "Already enrolled in this course"));
+        switch (exists.status) {
+          case EnrollmentStatus.ACTIVE:
+            return res
+              .status(409)
+              .json(new ApiError(409, "Already enrolled in this course"));
+
+          case EnrollmentStatus.PENDING:
+            return res
+              .status(202)
+              .json(
+                new ApiResponse(
+                  202,
+                  exists,
+                  "Enrollment is already in progress"
+                )
+              );
+
+          case EnrollmentStatus.COMPLETED:
+            return res
+              .status(409)
+              .json(
+                new ApiError(409, "You have already completed this course")
+              );
+
+          case EnrollmentStatus.FAILED:
+          case EnrollmentStatus.REFUNDED:
+          case EnrollmentStatus.CANCELLED:
+            exists.status = EnrollmentStatus.PENDING;
+            await exists.save();
+            return res
+              .status(200)
+              .json(
+                new ApiResponse(
+                  200,
+                  exists,
+                  "Re-enrollment initiated after previous failure/refund/cancellation"
+                )
+              );
+
+          default:
+            return res
+              .status(400)
+              .json(new ApiError(400, "Unknown enrollment status"));
+        }
       }
 
       const courseDetails = await Course.findById(course);

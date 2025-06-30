@@ -12,6 +12,7 @@ const {
   getForumPostById,
   getAllForumPosts,
   removeForumPostById,
+  getAllGeneralForumPosts,
 } = ForumPostController;
 
 const router = express.Router();
@@ -25,6 +26,7 @@ router
     asyncHandler(createForumPost)
   )
   .get("/:postId", authenticateToken, asyncHandler(getForumPostById))
+  .patch("/", authenticateToken, asyncHandler(getAllGeneralForumPosts))
   .get("/community/:id", authenticateToken, asyncHandler(getAllForumPosts))
   .delete("/:postId", authenticateToken, asyncHandler(removeForumPostById));
 

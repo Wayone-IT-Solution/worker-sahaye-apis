@@ -4,8 +4,8 @@ import {
   NotificationType,
 } from "../modals/notification.model";
 import admin from "../utils/firebase";
-import User from "../modals/user.model";
 import mongoose, { Types } from "mongoose";
+import { User } from "../modals/user.model";
 import ApiResponse from "../utils/ApiResponse";
 import { paginationResult } from "../utils/helper";
 import { Request, Response, NextFunction } from "express";

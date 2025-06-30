@@ -4,10 +4,10 @@ import {
   MEDIUM_PRIORITY_TAGS,
   CRITICAL_PRIORITY_TAGS,
 } from "../../modals/ticket.model";
-import User from "../../modals/user.model";
 import ApiError from "../../utils/ApiError";
 import Agent from "../../modals/agent.model";
 import Admin from "../../modals/admin.model";
+import { User } from "../../modals/user.model";
 import Ticket from "../../modals/ticket.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";

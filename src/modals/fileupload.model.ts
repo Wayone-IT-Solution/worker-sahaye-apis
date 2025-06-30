@@ -11,6 +11,7 @@ export enum FileTag {
   CONTRACT = "contract",
   CERTIFICATE = "certificate",
   PROFILE_PICTURE = "profilePic",
+  PERSONALRESUME = "personalResume",
 }
 
 /**

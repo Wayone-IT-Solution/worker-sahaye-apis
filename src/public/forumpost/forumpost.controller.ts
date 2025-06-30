@@ -183,6 +183,117 @@ export class ForumPostController {
     }
   }
 
+  static async getAllGeneralForumPosts(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const now = new Date();
+      const { id: user } = (req as any).user;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit + 1;
+
+      const joinedCommunityIds = await CommunityMember.distinct("community", {
+        user,
+      });
+
+      const pipeline: any = [
+        {
+          $match: {
+            community: { $in: joinedCommunityIds },
+            status: "active",
+            createdAt: { $lte: now },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "communitymembers",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "creatorMemberDetails",
+          },
+        },
+        { $unwind: "$creatorMemberDetails" },
+        {
+          $lookup: {
+            from: "users",
+            localField: "creatorMemberDetails.user",
+            foreignField: "_id",
+            as: "creatorUserDetails",
+          },
+        },
+        { $unwind: "$creatorUserDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$creatorMemberDetails.user" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            tags: 1,
+            likes: 1,
+            shares: 1,
+            status: 1,
+            content: 1,
+            createdAt: 1,
+            attachments: 1,
+            commentsCount: 1,
+            profilePicUrl: "$profilePicFile.url",
+            creatorName: "$creatorUserDetails.fullName",
+          },
+        },
+      ];
+      const posts = await ForumPost.aggregate(pipeline);
+      const total = await ForumPost.countDocuments({
+        community: { $in: joinedCommunityIds },
+        status: "active",
+        createdAt: { $lte: new Date() },
+      });
+      return res.status(200).json(
+        new ApiResponse(200, {
+          result: posts,
+          pagination: {
+            currentPage: page,
+            itemsPerPage: limit,
+            totalItems: total > 0 ? total - 1 : 0,
+            totalPages: Math.ceil((total - 1) / limit),
+          },
+        })
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getForumPostById(
     req: Request,
     res: Response,

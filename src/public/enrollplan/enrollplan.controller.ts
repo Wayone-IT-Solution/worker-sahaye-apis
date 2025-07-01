@@ -28,7 +28,7 @@ export class EnrollPlanController {
           case PlanEnrollmentStatus.ACTIVE:
             return res
               .status(409)
-              .json(new ApiError(409, "Already enrolled in this plan"));
+              .json(new ApiError(409, "Already enrolled in this plan", exists));
 
           case PlanEnrollmentStatus.FAILED:
             // update or retry logic here

@@ -24,7 +24,7 @@ export class EnrollmentController {
           case EnrollmentStatus.ACTIVE:
             return res
               .status(409)
-              .json(new ApiError(409, "Already enrolled in this course"));
+              .json(new ApiError(409, "Already enrolled in this course", exists));
 
           case EnrollmentStatus.PENDING:
             return res

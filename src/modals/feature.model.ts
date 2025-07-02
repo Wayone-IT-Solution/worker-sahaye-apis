@@ -21,7 +21,7 @@ export interface IFeature extends Document {
   badgeKey?: string;
   description?: string;
   status: FeatureStatus;
-  visibleTo: FeatureTarget[];
+  visibleTo: FeatureTarget;
 }
 
 const FeatureSchema = new Schema<IFeature>(
@@ -53,8 +53,8 @@ const FeatureSchema = new Schema<IFeature>(
     },
     visibleTo: {
       required: true,
-      type: [String],
-      default: [FeatureTarget.WORKER],
+      type: String,
+      default: FeatureTarget.WORKER,
       enum: Object.values(FeatureTarget),
     },
     status: {

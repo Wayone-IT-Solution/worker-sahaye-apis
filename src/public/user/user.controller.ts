@@ -4,20 +4,19 @@ import jwt, { SignOptions } from "jsonwebtoken";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
-import { UserStatus, UserType, User } from "../../modals/user.model";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
+import { UserStatus, UserType, User, generateReferralCode } from "../../modals/user.model";
 import {
   EnrolledPlan,
   PlanEnrollmentStatus,
 } from "../../modals/enrollplan.model";
-import FileUpload from "../../modals/fileupload.model";
-import { LexRuntimeV2 } from "aws-sdk";
+import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
+import FileUpload from "../../modals/fileupload.model";
 import {
   ConnectionModel,
   ConnectionStatus,
 } from "../../modals/connection.model";
-import mongoose from "mongoose";
 
 const userService = new CommonService(User);
 
@@ -29,10 +28,17 @@ export class UserController {
         mobile,
         fullName,
         userType,
+        referralCode,
         agreedToTerms,
         privacyPolicyAccepted,
       } = req.body;
-      const data = {
+
+      // 1. Validation (basic example)
+      if (!email || !mobile || !fullName || !userType) {
+        return res.status(400).json(new ApiError(400, "Missing required fields"));
+      }
+
+      const userData: any = {
         email,
         mobile,
         fullName,
@@ -40,18 +46,28 @@ export class UserController {
         agreedToTerms,
         privacyPolicyAccepted,
       };
-      const result = await userService.create(data);
-      return res
-        .status(200)
-        .json(
-          new ApiResponse(
-            200,
-            result,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
-            } created successfully`
-          )
-        );
+
+      // 2. Handle referral (if any) before creating referralCode
+      if (referralCode) {
+        const referrer = await User.findOne({ referralCode });
+        if (!referrer)
+          return res.status(400).json(new ApiError(400, "Invalid referral code"));
+        userData.referredBy = referrer._id;
+        userData.referredCode = referralCode;
+        await referrer.updateOne({ $inc: { pointsEarned: 50 } });
+      }
+
+      const newUser: any = await userService.create(userData);
+      newUser.referralCode = generateReferralCode(newUser._id);
+      await newUser.save();
+
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          newUser,
+          `${userType.charAt(0).toUpperCase() + userType.slice(1)} created successfully`
+        )
+      );
     } catch (error) {
       next(error);
     }
@@ -96,8 +112,7 @@ export class UserController {
           new ApiResponse(
             200,
             result,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${userType.charAt(0).toUpperCase() + userType.slice(1)
             } updated successfully`
           )
         );

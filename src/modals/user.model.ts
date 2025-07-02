@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import validator from "validator";
 import mongoose, { Schema, Document } from "mongoose";
 
@@ -31,11 +32,15 @@ export interface IUser extends Document {
   userType: UserType;
   status: UserStatus;
   natureOfWork?: string;
+  referralCode?: string;
+  referredCode?: string;
+  pointsEarned?: number;
   agreedToTerms: boolean;
   isMobileVerified: boolean;
   privacyPolicyAccepted: boolean;
   category: Schema.Types.ObjectId;
   preferredJobCategories?: string[];
+  referredBy?: Schema.Types.ObjectId;
   preferences: {
     jobAlerts: boolean;
     notifications: {
@@ -246,12 +251,24 @@ const userSchema = new Schema<IUser>(
       type: Schema.Types.Mixed,
       default: {},
     },
+    pointsEarned: { type: Number, default: 0 },
+    referralCode: { type: String, unique: true },
+    referredCode: { type: String, unique: true },
+    referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
 
+export const generateReferralCode = (userId: string) => {
+  const prefix = "REF";
+  const randomPart = crypto.randomBytes(2).toString("hex");
+  const userPart = userId.toString().slice(-4);
+  return `${prefix}-${randomPart}-${userPart}`.toUpperCase();
+};
+
 // Indexes
 userSchema.index({ mobile: 1 });
+userSchema.index({ referralCode: 1 });
 userSchema.index({ userType: 1, status: 1 });
 
 export const User = mongoose.model<IUser>("User", userSchema);

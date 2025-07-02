@@ -56,6 +56,54 @@ export class CommunityController {
     }
   }
 
+  static async getAllCommunitySuggestions(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id: userId } = (req as any).user;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
+      // Step 1: Get all joined community IDs for the user
+      const joinedCommunities = await CommunityMember.find({
+        user: new mongoose.Types.ObjectId(userId),
+      }).select("community");
+
+      const joinedCommunityIds = joinedCommunities.map(
+        (cm) => cm.community
+      );
+
+      // Step 2: Query communities excluding the above
+      const query: any = {
+        _id: { $nin: joinedCommunityIds },
+        status: "active",
+      };
+
+      const totalCount = await Community.countDocuments(query);
+      const result = await Community.find(query)
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 });
+
+      return res.status(200).json(
+        new ApiResponse(200, {
+          result,
+          pagination: {
+            currentPage: page,
+            itemsPerPage: limit,
+            totalItems: totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+          },
+        }, "Community suggestions fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getAllMyCommunities(
     req: Request,
     res: Response,

@@ -14,6 +14,7 @@ const {
   getAllMyCommunities,
   updateCommunityById,
   deleteCommunityById,
+  getAllCommunitySuggestions,
 } = CommunityController;
 
 const router = express.Router();
@@ -32,6 +33,7 @@ router
   .get("/", authenticateToken, asyncHandler(getAllCommunitys))
   .get("/:id", authenticateToken, asyncHandler(getCommunityById))
   .get("/list/all", authenticateToken, asyncHandler(getAllMyCommunities))
+  .get("/suggestions/all", authenticateToken, asyncHandler(getAllCommunitySuggestions))
   .put(
     "/:id",
     authenticateToken,

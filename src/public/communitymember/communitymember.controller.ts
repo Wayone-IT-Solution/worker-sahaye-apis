@@ -173,4 +173,77 @@ export class CommunityMemberController {
       next(err);
     }
   }
+
+  static async getMembersByCommunityId(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { communityId } = req.params;
+
+      const communityExists = await Community.findById(communityId);
+      if (!communityExists)
+        return res.status(404).json(new ApiError(404, "Community not found"));
+
+
+      const pipeline = [{
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      { $unwind: "$userDetails" },
+      {
+        $lookup: {
+          from: "fileuploads",
+          let: { userId: "$userDetails._id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$userId", "$$userId"] },
+                    { $eq: ["$tag", "profilePic"] },
+                  ],
+                },
+              },
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: "profilePicFile",
+        },
+      },
+      {
+        $unwind: {
+          path: "$profilePicFile",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          status: 1,
+          userType: 1,
+          joinedAt: 1,
+          invitedAt: 1,
+          joinSource: 1,
+          userEmail: "$userDetails.email",
+          userName: "$userDetails.fullName",
+          userMobile: "$userDetails.mobile",
+          profilePicUrl: "$profilePicFile.url",
+        },
+      },]
+
+      const members = await CommunityMemberService.getAll({ ...req.query, status: req.query.status ?? "joined", community: communityId }, pipeline);
+      return res.status(200).json(
+        new ApiResponse(200, members, "Community members fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
 }

@@ -5,6 +5,7 @@ import { deleteFromS3 } from "../../config/s3Uploader";
 import { Community } from "../../modals/community.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import { CommunityMember } from "../../modals/communitymember.model";
 
 const communityService = new CommonService(Community);
 
@@ -50,6 +51,66 @@ export class CommunityController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllMyCommunities(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id: userId } = (req as any).user;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
+      const matchStage = {
+        user: new mongoose.Types.ObjectId(userId),
+        status: "joined",
+      };
+      const pipeline = [
+        { $match: matchStage },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "communities",
+            localField: "community",
+            foreignField: "_id",
+            as: "communityDetails",
+          },
+        },
+        { $unwind: "$communityDetails" },
+        {
+          $project: {
+            _id: 1,
+            communityId: "$communityDetails._id",
+            communityName: "$communityDetails.name",
+            communityStats: "$communityDetails.stats",
+            communityLogo: "$communityDetails.profileImage",
+            communityBanner: "$communityDetails.bannerImage",
+            communityDescription: "$communityDetails.shortDescription",
+          },
+        },
+      ];
+
+      const totalCount = await CommunityMember.countDocuments(matchStage);
+      const data = await CommunityMember.aggregate(pipeline);
+
+      return res.status(200).json(
+        new ApiResponse(200, {
+          result: data,
+          pagination: {
+            currentPage: page,
+            itemsPerPage: limit,
+            totalItems: totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+          },
+        }, "Communities fetched successfully")
+      );
     } catch (err) {
       next(err);
     }

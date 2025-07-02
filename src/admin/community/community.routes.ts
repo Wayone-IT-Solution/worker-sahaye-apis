@@ -11,6 +11,7 @@ const {
   createCommunity,
   getAllCommunitys,
   getCommunityById,
+  getAllMyCommunities,
   updateCommunityById,
   deleteCommunityById,
 } = CommunityController;
@@ -20,6 +21,7 @@ const router = express.Router();
 router
   .post(
     "/",
+    authenticateToken,
     dynamicUpload([
       { name: "profileImage", maxCount: 1 },
       { name: "bannerImage", maxCount: 1 },
@@ -27,10 +29,12 @@ router
     s3UploaderMiddleware("community"),
     asyncHandler(createCommunity)
   )
-  .get("/", asyncHandler(getAllCommunitys))
-  .get("/:id", asyncHandler(getCommunityById))
+  .get("/", authenticateToken, asyncHandler(getAllCommunitys))
+  .get("/:id", authenticateToken, asyncHandler(getCommunityById))
+  .get("/list/all", authenticateToken, asyncHandler(getAllMyCommunities))
   .put(
     "/:id",
+    authenticateToken,
     dynamicUpload([
       { name: "profileImage", maxCount: 1 },
       { name: "bannerImage", maxCount: 1 },
@@ -38,6 +42,6 @@ router
     s3UploaderMiddleware("community"),
     asyncHandler(updateCommunityById)
   )
-  .delete("/:id", asyncHandler(deleteCommunityById));
+  .delete("/:id", authenticateToken, asyncHandler(deleteCommunityById));
 
 export default router;

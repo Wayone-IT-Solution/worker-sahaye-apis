@@ -183,6 +183,7 @@ export class JobController {
             shortDescription: 1,
             applicationProcess: 1,
             applicationDeadline: 1,
+            creatorID: "$userDetails._id",
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
           },

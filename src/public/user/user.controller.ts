@@ -17,6 +17,7 @@ import {
   ConnectionModel,
   ConnectionStatus,
 } from "../../modals/connection.model";
+import { Endorsement } from "../../modals/endorsement.model";
 
 const userService = new CommonService(User);
 
@@ -369,10 +370,27 @@ export class UserController {
         tag: "profilePic",
       }).sort({ createdAt: -1 });
 
+      const endorsement: any = await Endorsement.findOne({
+        $or: [
+          { endorsedBy: userId, endorsedTo: requestedUser },
+          { endorsedBy: requestedUser, endorsedTo: userId },
+        ],
+      });
+
+      let role;
+      if (endorsement) {
+        role =
+          endorsement.endorsedBy.toString() === userId
+            ? "sender"
+            : "receiver";
+      }
+
       const responseData: any = {
         ...data,
         ...user.toObject(),
+        endorsementRole: role,
         profilePicUrl: profilePic?.url || null,
+        ...(endorsement ? endorsement.toObject() : {}),
       };
 
       delete responseData?.preferences;

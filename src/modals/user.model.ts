@@ -55,6 +55,7 @@ export interface IUser extends Document {
   gender?: "male" | "female" | "other" | "prefer_not_to_say";
   profile: {
     // Worker
+    designation?: string;
     shortDescription?: string;
     skills?: Array<{
       name: string;

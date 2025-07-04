@@ -8,6 +8,7 @@ import {
 } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
+  getAllPosts,
   createForumPost,
   getForumPostById,
   getAllForumPosts,
@@ -25,6 +26,7 @@ router
     authenticateToken,
     asyncHandler(createForumPost)
   )
+  .get("/", authenticateToken, asyncHandler(getAllPosts))
   .get("/:postId", authenticateToken, asyncHandler(getForumPostById))
   .patch("/", authenticateToken, asyncHandler(getAllGeneralForumPosts))
   .get("/community/:id", authenticateToken, asyncHandler(getAllForumPosts))

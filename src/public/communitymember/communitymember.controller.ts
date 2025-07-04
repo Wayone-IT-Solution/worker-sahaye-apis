@@ -129,6 +129,78 @@ export class CommunityMemberController {
     }
   }
 
+  static async getAllCommunityMembers(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$user" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$refId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "userByProfile",
+          },
+        },
+        {
+          $lookup: {
+            from: "communities",
+            localField: "community",
+            foreignField: "_id",
+            as: "communityDetails",
+          },
+        },
+        { $unwind: "$communityDetails" },
+        {
+          $project: {
+            _id: 1,
+            status: 1,
+            userType: 1,
+            joinedAt: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            joinSource: 1,
+            "userDetails.email": 1,
+            "userDetails.mobile": 1,
+            "userDetails.fullName": 1,
+            "communityDetails.name": 1,
+            "communityDetails.profileImage": 1,
+            "userByProfile": { $arrayElemAt: ["$userByProfile.url", 0] },
+          },
+        },
+      ];
+      const result = await CommunityMemberService.getAll(req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async removeCommunityMemberById(
     req: Request,
     res: Response,

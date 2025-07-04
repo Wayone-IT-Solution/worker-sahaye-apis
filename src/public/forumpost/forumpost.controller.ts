@@ -311,6 +311,68 @@ export class ForumPostController {
     }
   }
 
+  static async getAllPosts(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "communitymembers",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "users",
+            localField: "userDetails.user",
+            foreignField: "_id",
+            as: "userData",
+          },
+        },
+        { $unwind: "$userData" },
+        {
+          $lookup: {
+            from: "communities",
+            localField: "community",
+            foreignField: "_id",
+            as: "communityDetails",
+          },
+        },
+        { $unwind: "$communityDetails" },
+        {
+          $project: {
+            _id: 1,
+            tags: 1,
+            likes: 1,
+            title: 1,
+            shares: 1,
+            status: 1,
+            content: 1,
+            createdAt: 1,
+            attachments: 1,
+            commentsCount: 1,
+            "userData.email": 1,
+            "userData.mobile": 1,
+            "userData.fullName": 1,
+            "communityDetails.name": 1,
+          },
+        },
+      ];
+      const result = await ForumPostService.getAll(req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async removeForumPostById(
     req: Request,
     res: Response,

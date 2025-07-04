@@ -9,6 +9,9 @@ import {
 } from "../../modals/connection.model";
 import { User } from "../../modals/user.model";
 import FileUpload from "../../modals/fileupload.model";
+import { CommonService } from "../../services/common.services";
+
+const connectionService = new CommonService(ConnectionModel);
 
 // Create a new connection
 export const createConnection = async (
@@ -103,6 +106,97 @@ export const createConnection = async (
     return res.status(400).json(new ApiError(400, "Something went wrong."));
   }
 };
+
+export const getAllAdminConnections = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const pipeline = [
+      {
+        $lookup: {
+          from: "users",
+          localField: "requester",
+          foreignField: "_id",
+          as: "requesterDetails",
+        },
+      },
+      { $unwind: "$requesterDetails" },
+      {
+        $lookup: {
+          from: "fileuploads",
+          let: { userId: "$requester" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$refId", "$$userId"] },
+                    { $eq: ["$tag", "profilePic"] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "requesterByProfile",
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "recipient",
+          foreignField: "_id",
+          as: "recipientDetails",
+        },
+      },
+      { $unwind: "$recipientDetails" },
+      {
+        $lookup: {
+          from: "fileuploads",
+          let: { userId: "$recipient" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$refId", "$$userId"] },
+                    { $eq: ["$tag", "profilePic"] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "recipientByProfile",
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          status: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          "requesterDetails.email": 1,
+          "requesterDetails.mobile": 1,
+          "requesterDetails.fullName": 1,
+          "requesterByProfile": { $arrayElemAt: ["$requesterByProfile.url", 0] },
+          "recipientDetails.email": 1,
+          "recipientDetails.mobile": 1,
+          "recipientDetails.fullName": 1,
+          "recipientByProfile": { $arrayElemAt: ["$recipientByProfile.url", 0] },
+        },
+      },
+    ];
+    const result = await connectionService.getAll(req.query, pipeline);
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
+  } catch (err) {
+    next(err);
+  }
+}
 
 // Retrieve all connections (with optional filters)
 export const getAllConnections = async (

@@ -7,6 +7,7 @@ import {
   getSuggestedUsers,
   updateConnectionById,
   removeConnectionById,
+  getAllAdminConnections,
 } from "./connection.controller";
 import { authenticateToken } from "../../middlewares/authMiddleware";
 
@@ -18,6 +19,7 @@ router
   .get("/:id", authenticateToken, asyncHandler(getConnectionById))
   .put("/:id", authenticateToken, asyncHandler(updateConnectionById))
   .delete("/:id", authenticateToken, asyncHandler(removeConnectionById))
+  .get("/list/all", authenticateToken, asyncHandler(getAllAdminConnections))
   .get("/suggestions/all", authenticateToken, asyncHandler(getSuggestedUsers));
 
 export default router;

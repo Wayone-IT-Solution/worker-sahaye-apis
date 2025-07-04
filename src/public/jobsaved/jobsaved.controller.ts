@@ -3,6 +3,9 @@ import { Job } from "../../modals/job.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { JobSave } from "../../modals/jobsaved.model";
 import { Request, Response, NextFunction } from "express";
+import { CommonService } from "../../services/common.services";
+
+const jobSavedService = new CommonService(JobSave);
 
 export const getRecommendedJobsByTags = async (userId: string, limit = 10) => {
   const savedJobs = await JobSave.find(
@@ -50,6 +53,90 @@ export const JobSaveController = {
       return res
         .status(201)
         .json(new ApiResponse(201, saved, "Job saved successfully"));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getAllSavedJobs(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$user" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$refId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "userByProfile",
+          },
+        },
+        {
+          $lookup: {
+            from: "jobs",
+            localField: "job",
+            foreignField: "_id",
+            as: "jobDetails",
+          },
+        },
+        { $unwind: "$jobDetails" },
+        {
+          $lookup: {
+            from: "users",
+            localField: "jobDetails.postedBy",
+            foreignField: "_id",
+            as: "postedByUserDetails",
+          },
+        },
+        { $unwind: "$postedByUserDetails" },
+        {
+          $project: {
+            _id: 1,
+            tags: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            "jobDetails.title": 1,
+            "jobDetails.status": 1,
+            "userDetails.email": 1,
+            "jobDetails.jobType": 1,
+            "userDetails.mobile": 1,
+            "jobDetails.workMode": 1,
+            "userDetails.fullName": 1,
+            "postedByUserDetails.email": 1,
+            "jobDetails.experienceLevel": 1,
+            "postedByUserDetails.mobile": 1,
+            "postedByUserDetails.fullName": 1,
+            "userByProfile": { $arrayElemAt: ["$userByProfile.url", 0] },
+          },
+        },
+      ];
+      const result = await jobSavedService.getAll(req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
     } catch (err) {
       next(err);
     }

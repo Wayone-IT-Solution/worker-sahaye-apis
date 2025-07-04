@@ -17,6 +17,11 @@ router.get(
   isWorker,
   asyncHandler(JobSaveController.getSavedJobs)
 );
+router.get(
+  "/list/all",
+  authenticateToken,
+  asyncHandler(JobSaveController.getAllSavedJobs)
+);
 router.delete(
   "/:jobId",
   authenticateToken,

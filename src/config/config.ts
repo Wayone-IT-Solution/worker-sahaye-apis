@@ -8,7 +8,7 @@ dotenv.config({
 const toBool = (value: string | undefined): boolean => value === "true";
 
 export const config = {
-  env: process.env.NODE_ENV || "development",
+  env: process.env.NODE_ENV || "production",
   port: Number(process.env.PORT) || 8080,
   baseUrl: process.env.APP_BASE_URL!,
   frontendUrl: process.env.FRONTEND_URL!,

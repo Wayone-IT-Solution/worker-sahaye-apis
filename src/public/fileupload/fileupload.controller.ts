@@ -34,7 +34,7 @@ export const FileUploadController = {
       );
       res.status(201).json({ success: true, data: uploads });
     } catch (error) {
-      console.error("Upload Save Error:", error);
+      console.log("Upload Save Error:", error);
       res.status(500).json({
         success: false,
         message: "Failed to save file metadata.",
@@ -109,7 +109,7 @@ export const FileUploadController = {
       await file.deleteOne();
       res.json({ success: true, message: "File deleted from DB and S3" });
     } catch (error) {
-      console.error("Delete Error:", error);
+      console.log("Delete Error:", error);
       res
         .status(500)
         .json({ success: false, message: "Deletion failed", error });

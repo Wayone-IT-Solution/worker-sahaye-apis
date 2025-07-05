@@ -55,7 +55,7 @@ export const s3UploaderMiddleware = (folder: string) => {
 
       next();
     } catch (error) {
-      console.error("S3 Upload Error:", error);
+      console.log("S3 Upload Error:", error);
       res
         .status(500)
         .json({ success: false, message: "S3 Upload failed", error });

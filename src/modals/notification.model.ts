@@ -1,54 +1,72 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-export type UserRole = "user";
+export enum UserType {
+  WORKER = "worker",
+  EMPLOYER = "employer",
+  CONTRACTOR = "contractor",
+}
+
 export type NotificationType =
-  | "trip-requested"
-  | "trip-accepted"
-  | "trip-started"
-  | "trip-rejected"
-  | "driver-reached"
-  | "trip-cancelled"
-  | "trip-completed";
+  | "job-posted"
+  | "job-applied"
+  | "job-expiring"
+  | "course-added"
+  | "reply-on-post"
+  | "admin-message"
+  | "general-alert"
+  | "course-enrolled"
+  | "new-community-post"
+  | "subscription-renewal"
+  | "subscription-expiring";
+
+/** Read/Delivery status */
+export type NotificationStatus = "unread" | "read" | "deleted";
+
+/** Notification Document Interface */
 export interface INotification extends Document {
   title: string;
   message: string;
   type: NotificationType;
+  status: NotificationStatus;
   from?: {
+    role: UserType;
     user: Types.ObjectId;
-    role: UserRole;
   };
   to: {
+    role: UserType;
     user: Types.ObjectId;
-    role: UserRole;
   };
+  readAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
+/** Notification Schema */
 const NotificationSchema = new Schema<INotification>(
   {
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    message: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    title: { type: String, required: true, trim: true },
+    message: { type: String, required: true, trim: true },
     type: {
       type: String,
       enum: [
-        "trip-requested",
-        "trip-accepted",
-        "trip-started",
-        "trip-rejected",
-        "driver-reached",
-        "trip-cancelled",
-        "trip-completed",
+        "job-posted",
+        "job-applied",
+        "job-expiring",
+        "course-added",
+        "course-enrolled",
+        "subscription-renewal",
+        "subscription-expiring",
+        "new-community-post",
+        "reply-on-post",
+        "admin-message",
+        "general-alert",
       ],
       required: true,
+    },
+    status: {
+      type: String,
+      enum: ["unread", "read", "deleted"],
+      default: "unread",
     },
     from: {
       user: {
@@ -57,7 +75,7 @@ const NotificationSchema = new Schema<INotification>(
       },
       role: {
         type: String,
-        enum: ["passenger", "driver"],
+        enum: Object.values(UserType),
       },
     },
     to: {
@@ -68,14 +86,16 @@ const NotificationSchema = new Schema<INotification>(
       },
       role: {
         type: String,
+        enum: Object.values(UserType),
         required: true,
-        enum: ["passenger", "driver"],
       },
     },
+    readAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true, }
 );
 
+NotificationSchema.index({ "to.user": 1, status: 1, createdAt: -1 });
 export const Notification = mongoose.model<INotification>(
   "Notification",
   NotificationSchema

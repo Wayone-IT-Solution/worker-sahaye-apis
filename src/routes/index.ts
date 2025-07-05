@@ -45,9 +45,9 @@ const registerRoutesRecursively = (baseDir: string) => {
           if (config.env === "development")
             console.info(`✅ Mounted /api${routePath} → ${entry.name}`);
         } else
-          console.warn(`⚠️ Skipped ${entry.name}: No valid default export`);
+          console.log(`⚠️ Skipped ${entry.name}: No valid default export`);
       } catch (err) {
-        console.error(`❌ Failed to register ${entry.name}:`, err);
+        console.log(`❌ Failed to register ${entry.name}:`, err);
       }
     }
   });

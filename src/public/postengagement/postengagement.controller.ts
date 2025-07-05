@@ -31,7 +31,7 @@ export const updatePostStatsById = async (postId: string) => {
     );
     return updatedPost;
   } catch (error) {
-    console.error("Failed to update post stats:", error);
+    console.log("Failed to update post stats:", error);
     throw error;
   }
 };

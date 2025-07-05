@@ -57,7 +57,7 @@ export const getReviewStats = async (courseId: string) => {
       ratingsBreakdown,
     };
   } catch (error) {
-    console.error("Failed to generate review stats:", error);
+    console.log("Failed to generate review stats:", error);
     return {
       totalReviews: 0,
       averageRating: 0,

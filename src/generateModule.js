@@ -10,7 +10,7 @@ const moduleName = process.argv[2];
 const target = process.argv[3]; // "admin" or "public"
 
 if (!moduleName || !target || !["admin", "public"].includes(target)) {
-  console.error(
+  console.log(
     `❌ Please provide a module name and target (admin/public).\nUsage: node dist/generateModule.js <moduleName> <admin|public>`
   );
   process.exit(1);

@@ -14,6 +14,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     userId,
     endDate,
     assignee,
+    postedBy,
     page = 1,
     createdBy,
     startDate,
@@ -37,6 +38,7 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
   if (_id) matchStage._id = new ObjectId(_id);
   if (user) matchStage.user = new ObjectId(user);
   if (userId) matchStage.userId = new ObjectId(userId);
+  if (postedBy) matchStage.postedBy = new ObjectId(postedBy);
   if (assignee) matchStage.assignee = new ObjectId(assignee);
   if (community) matchStage.community = new ObjectId(community);
   if (createdBy) matchStage.createdBy = new ObjectId(createdBy);
@@ -122,7 +124,7 @@ export const convertToObjectId = (id: string): ObjectId | null => {
   try {
     return new ObjectId(id);
   } catch (error) {
-    console.error("Invalid ObjectId:", error);
+    console.log("Invalid ObjectId:", error);
     return null;
   }
 };

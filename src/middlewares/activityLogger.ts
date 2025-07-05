@@ -37,7 +37,7 @@ export const activityLogger = async (
     });
 
     log.save().catch((err: any) => {
-      console.error("Failed to log activity:", err);
+      console.log("Failed to log activity:", err);
     });
     return originalSend.call(this, body);
   };

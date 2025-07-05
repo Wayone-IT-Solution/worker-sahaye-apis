@@ -14,7 +14,7 @@ export const corsOptions: CorsOptions = {
     if (config.cors.allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
-      console.warn(`[CORS BLOCKED] Origin: ${origin}`);
+      console.log(`[CORS BLOCKED] Origin: ${origin}`);
       return callback(
         new Error(`CORS policy: Origin ${origin} is not allowed.`)
       );

@@ -47,7 +47,7 @@ export const configureSocket = async (
         addUser(userId, socket.id);
         io.emit("getUsers", users);
       } else {
-        console.error("Invalid userId on addUser event");
+        console.log("Invalid userId on addUser event");
       }
     });
 
@@ -72,7 +72,7 @@ export const configureSocket = async (
             text: text || "",
           });
         } else {
-          console.warn(`User ${receiverId} not connected, message not sent`);
+          console.log(`User ${receiverId} not connected, message not sent`);
         }
       },
     );
@@ -84,7 +84,7 @@ export const configureSocket = async (
         if (user) {
           io.to(user.socketId).emit("messagesRead", { receiverId });
         } else {
-          console.warn(
+          console.log(
             `User ${senderId} not connected, cannot mark messages as read`,
           );
         }
@@ -96,7 +96,7 @@ export const configureSocket = async (
       if (user) {
         io.to(user.socketId).emit("user-typing", senderId);
       } else {
-        console.warn(
+        console.log(
           `User ${receiverId} not connected, typing status not sent`,
         );
       }
@@ -110,6 +110,6 @@ export const configureSocket = async (
   });
 
   io.on("error", (error: Error) => {
-    console.error("Socket.IO error:", error);
+    console.log("Socket.IO error:", error);
   });
 };

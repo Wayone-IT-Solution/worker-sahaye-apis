@@ -2,7 +2,7 @@ import { config } from "../config/config";
 import rateLimit from "express-rate-limit";
 
 const onLimitReached = (req: any, res: any, options: any) => {
-  console.warn(
+  console.log(
     `Rate limit exceeded for IP: ${req.ip}, Route: ${
       req.originalUrl
     }, Time: ${new Date().toISOString()}`

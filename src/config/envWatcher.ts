@@ -6,7 +6,7 @@ let currentEnv: NodeJS.ProcessEnv = process.env;
 export const loadEnv = () => {
   const result = dotenv.config();
   if (result.error) {
-    console.error("Failed to load .env:", result.error);
+    console.log("Failed to load .env:", result.error);
     return;
   }
   console.log("✅ .env reloaded at", new Date().toLocaleTimeString());
@@ -16,7 +16,7 @@ export const loadEnv = () => {
 export const watchEnvFile = () => {
   const envPath = ".env";
   if (!fs.existsSync(envPath)) {
-    console.warn(".env file not found.");
+    console.log(".env file not found.");
     return;
   }
 

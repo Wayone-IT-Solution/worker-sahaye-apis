@@ -5,7 +5,7 @@ export const asyncHandler = (
 ) => {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch((err) => {
-      console.error("Async Error:", {
+      console.log("Async Error:", {
         stack: err.stack,
         method: req.method,
         message: err.message,

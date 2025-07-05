@@ -50,7 +50,7 @@ export class MessageController {
         message: "Message sent successfully!",
       });
     } catch (error) {
-      console.error("Error creating message:", error);
+      console.log("Error creating message:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -75,7 +75,7 @@ export class MessageController {
       }
       return res.status(200).json({ success: true, message });
     } catch (error) {
-      console.error("Error fetching message:", error);
+      console.log("Error fetching message:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -186,7 +186,7 @@ export class MessageController {
 
       return res.status(200).json({ success: true, data: messages });
     } catch (error) {
-      console.error("Error fetching chat messages:", error);
+      console.log("Error fetching chat messages:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -226,7 +226,7 @@ export class MessageController {
         message: `${updateResult.modifiedCount} messages marked as read.`,
       });
     } catch (error) {
-      console.error("Error marking messages as read:", error);
+      console.log("Error marking messages as read:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -360,7 +360,7 @@ export const getUniqueConversations = async (
 
     return res.status(200).json({ success: true, conversations });
   } catch (error) {
-    console.error("Error fetching unique conversations", error);
+    console.log("Error fetching unique conversations", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch conversations",

@@ -58,7 +58,7 @@ const sendEmail = (
 
   transporter.sendMail(mailOptions, (error: any, info: SentMessageInfo) => {
     if (error) {
-      console.error("Error while sending email:", error);
+      console.log("Error while sending email:", error);
       return;
     }
     console.log("Email sent successfully:", info.response);

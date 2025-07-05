@@ -16,14 +16,14 @@ export const ipBlocker: RequestHandler = (req, res, next) => {
   const ip = getClientIp(req);
   if (config.security.ips.includes(ip)) {
     const msg = `[IP BLOCKED] Access denied for IP: ${ip}`;
-    console.warn(msg.red.bold);
+    console.log(msg.red.bold);
     res.status(403).json({
       statusCode: 403,
       success: false,
       ip,
       message: "Access denied from this IP address.",
     });
-    console.warn(`[WARNING] IP blocked but in warn mode: ${ip}`.yellow);
+    console.log(`[WARNING] IP blocked but in warn mode: ${ip}`.yellow);
     return;
   }
   next();

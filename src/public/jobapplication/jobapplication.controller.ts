@@ -8,6 +8,7 @@ import {
 } from "../../modals/jobapplication.model";
 import { User } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";
+import mongoose from "mongoose";
 
 const JobApplicationService = new CommonService(JobApplication);
 
@@ -94,34 +95,128 @@ export const getUserApplications = async (
   next: NextFunction
 ) => {
   try {
-    const applicantId = (req as any).user.id;
-    const pipeline = {
-      $project: {
-        job: 1,
-        status: 1,
-        history: 1,
-        resumeUrl: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        applicant: 1,
-        coverLetter: 1,
-        availability: 1,
-        expectedSalary: 1,
-        applicantSnapshot: 1,
-      },
+    const applicantId = (req as any)?.user?.id;
+
+    if (!applicantId || !mongoose.Types.ObjectId.isValid(applicantId)) {
+      throw new ApiError(400, "Invalid or missing user ID.");
+    }
+
+    const matchStage: Record<string, any> = {
+      applicant: new mongoose.Types.ObjectId(applicantId),
     };
-    const apps = await JobApplicationService.getAll(
+
+    if (req.query.status) {
+      matchStage.status = req.query.status;
+    }
+
+    // Pagination
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const sortBy: any = req.query.sortBy || "createdAt";
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+    const pipeline: any[] = [
+      { $match: matchStage },
       {
-        ...req.query,
-        applicantId,
+        $lookup: {
+          from: "jobs",
+          localField: "job",
+          foreignField: "_id",
+          as: "jobDetails",
+        },
       },
-      pipeline
+      { $unwind: "$jobDetails" },
+      {
+        $lookup: {
+          from: "users",
+          localField: "jobDetails.postedBy",
+          foreignField: "_id",
+          as: "posterDetails",
+        },
+      },
+      { $unwind: "$posterDetails" },
+      {
+        $lookup: {
+          from: "fileuploads",
+          let: { userId: "$posterDetails._id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$userId", "$$userId"] },
+                    { $eq: ["$tag", "profilePic"] },
+                  ],
+                },
+              },
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: "profilePicFile",
+        },
+      },
+      {
+        $unwind: {
+          path: "$profilePicFile",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          status: 1,
+          history: 1,
+          resumeUrl: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          coverLetter: 1,
+          availability: 1,
+          expectedSalary: 1,
+          applicantSnapshot: 1,
+          jobId: "$jobDetails._id",
+          jobTitle: "$jobDetails.title",
+          jobType: "$jobDetails.jobType",
+          industry: "$jobDetails.industry",
+          priority: "$jobDetails.priority",
+          workMode: "$jobDetails.workMode",
+          jobCategory: "$jobDetails.category",
+          jobLocation: "$jobDetails.location",
+          profilePicUrl: "$profilePicFile.url",
+          description: "$jobDetails.description",
+          creatorName: "$posterDetails.fullName",
+          skillsRequired: "$jobDetails.skillsRequired",
+          experienceLevel: "$jobDetails.experienceLevel",
+        },
+      },
+      { $sort: { [sortBy]: sortOrder } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const applications = await JobApplication.aggregate(pipeline);
+    const total = await JobApplication.countDocuments(matchStage);
+
+    return res.status(200).json(
+      new ApiResponse(200, {
+        result: applications,
+        pagination: {
+          totalItems: total,
+          currentPage: page,
+          itemsPerPage: limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      }, "Applications fetched")
     );
-    return res
-      .status(200)
-      .json(new ApiResponse(200, apps, "Applications fetched"));
   } catch (err) {
-    next(err);
+    console.log("❌ Error in getUserApplications:", err);
+    return next(
+      err instanceof ApiError
+        ? err
+        : new ApiError(500, "Failed to fetch applications")
+    );
   }
 };
 

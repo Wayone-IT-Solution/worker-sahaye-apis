@@ -19,6 +19,7 @@ import {
 } from "../../modals/connection.model";
 import { Endorsement } from "../../modals/endorsement.model";
 
+const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
 
 export class UserController {
@@ -71,6 +72,25 @@ export class UserController {
       );
     } catch (error) {
       next(error);
+    }
+  }
+
+  static async deleteUserById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await userService.deleteById(req.params.id);
+      if (!result)
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to delete city"));
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Deleted successfully"));
+    } catch (err) {
+      next(err);
     }
   }
 
@@ -134,6 +154,21 @@ export class UserController {
         .json(new ApiResponse(200, result, "Data fetched successfully"));
     } catch (error) {
       next(error);
+    }
+  }
+
+  static async getAllOtps(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await otpService.getAll(req.query);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
     }
   }
 

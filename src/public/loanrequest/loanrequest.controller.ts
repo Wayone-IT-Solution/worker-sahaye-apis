@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { CommonService } from "../../services/common.services";
@@ -60,3 +60,69 @@ export const getAllLoanRequests = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Could not fetch loan requests" });
   }
 };
+
+export const getAllRequests = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const pipeline = [
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      { $unwind: "$userDetails" },
+      {
+        $lookup: {
+          from: "fileuploads",
+          let: { userId: "$user" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$refId", "$$userId"] },
+                    { $eq: ["$tag", "profilePic"] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "userByProfile",
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          status: 1,
+          emailId: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          isHighRisk: 1,
+          companyName: 1,
+          mobileNumber: 1,
+          loanNeedDate: 1,
+          loanCategory: 1,
+          currentSalary: 1,
+          "userDetails.email": 1,
+          "userDetails.mobile": 1,
+          "userDetails.fullName": 1,
+          estimatedLoanEligibility: 1,
+          "userByProfile": { $arrayElemAt: ["$userByProfile.url", 0] },
+        },
+      },
+    ];
+    const result = await loanRequestService.getAll(req.query, pipeline);
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
+  } catch (err) {
+    next(err);
+  }
+}

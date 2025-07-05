@@ -36,6 +36,8 @@ export class UserPreferenceController {
           $project: {
             _id: 1,
             jobType: 1,
+            updatedAt: 1,
+            createdAt: 1,
             workModes: 1,
             experienceLevel: 1,
             preferredLocations: 1,

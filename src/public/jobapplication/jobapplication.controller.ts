@@ -6,9 +6,11 @@ import {
   JobApplication,
   ApplicationStatus,
 } from "../../modals/jobapplication.model";
-import { User } from "../../modals/user.model";
-import { CommonService } from "../../services/common.services";
 import mongoose from "mongoose";
+import { User } from "../../modals/user.model";
+import { UserType } from "../../modals/notification.model";
+import { CommonService } from "../../services/common.services";
+import { sendDualNotification } from "../../services/notification.service";
 
 const JobApplicationService = new CommonService(JobApplication);
 
@@ -35,9 +37,18 @@ export const applyToJob = async (
     }
 
     const [jobDoc, userDoc]: any = await Promise.all([
-      Job.findById(job).select("status"),
+      Job.findById(job).select("status title postedBy"),
       User.findById(applicantId).select("fullName email mobile"),
     ]);
+
+    let receiver: any;
+    if (jobDoc?.postedBy) {
+      receiver = await User.findById(jobDoc.postedBy).select("_id userType");
+      if (!receiver)
+        return res
+          .status(404)
+          .json(new ApiError(404, "Posted Job User not found"));
+    }
 
     if (!jobDoc || jobDoc.status !== JobStatus.OPEN) {
       return res
@@ -74,6 +85,34 @@ export const applyToJob = async (
       },
       history: [{ status: ApplicationStatus.APPLIED }],
     });
+
+    if (jobDoc && receiver._id)
+      await sendDualNotification({
+        type: "job-applied",
+        context: {
+          jobTitle: jobDoc?.title,
+          applicantName: "Rishabh",
+        },
+        senderId: applicantId,
+        senderRole: UserType.WORKER,
+        receiverId: receiver._id,
+        receiverRole: receiver.userType,
+      });
+
+    // await sendSingleNotification({
+    //   type: "job-expiring",
+    //   context: {
+    //     jobTitle: "Electrician Opening",
+    //     expiryDate: "2025-07-08",
+    //   },
+    //   toUserId: "664baaa7d9ff1bca3a7f112a",
+    //   toRole: "worker",
+    //   fromUser: {
+    //     id: "664bbcc97b7aa1bcddaa1100",
+    //     role: "employer",
+    //   },
+    //   direction: "receiver",
+    // });
 
     return res
       .status(201)
@@ -200,15 +239,19 @@ export const getUserApplications = async (
     const total = await JobApplication.countDocuments(matchStage);
 
     return res.status(200).json(
-      new ApiResponse(200, {
-        result: applications,
-        pagination: {
-          totalItems: total,
-          currentPage: page,
-          itemsPerPage: limit,
-          totalPages: Math.ceil(total / limit),
+      new ApiResponse(
+        200,
+        {
+          result: applications,
+          pagination: {
+            totalItems: total,
+            currentPage: page,
+            itemsPerPage: limit,
+            totalPages: Math.ceil(total / limit),
+          },
         },
-      }, "Applications fetched")
+        "Applications fetched"
+      )
     );
   } catch (err) {
     console.log("❌ Error in getUserApplications:", err);

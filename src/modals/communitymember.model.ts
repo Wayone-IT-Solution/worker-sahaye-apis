@@ -53,6 +53,10 @@ const CommunityMemberSchema = new Schema<ICommunityMember>(
 
 CommunityMemberSchema.index({ community: 1, user: 1 }, { unique: true });
 CommunityMemberSchema.index({ community: 1, status: 1 });
+CommunityMemberSchema.index({ user: 1, status: 1 });
+CommunityMemberSchema.index({ community: 1, userType: 1, status: 1 });
+CommunityMemberSchema.index({ invitedBy: 1 });
+CommunityMemberSchema.index({ joinedAt: -1 });
 
 export const CommunityMember = mongoose.model<ICommunityMember>(
   "CommunityMember",

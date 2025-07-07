@@ -95,7 +95,24 @@ const NotificationSchema = new Schema<INotification>(
   { timestamps: true, }
 );
 
+// 🔍 Quickly find notifications by recipient user + status (already present, good)
 NotificationSchema.index({ "to.user": 1, status: 1, createdAt: -1 });
+
+// 📬 Optimize lookups by recipient user only (inbox)
+NotificationSchema.index({ "to.user": 1 });
+
+// 📩 Optimize notifications sent from a specific user
+NotificationSchema.index({ "from.user": 1 });
+
+// 📆 Efficient pagination by creation time
+NotificationSchema.index({ createdAt: -1 });
+
+// 🧾 Filter by notification type quickly
+NotificationSchema.index({ type: 1 });
+
+// 📌 Filter by role (useful in multi-role systems)
+NotificationSchema.index({ "to.role": 1 });
+
 export const Notification = mongoose.model<INotification>(
   "Notification",
   NotificationSchema

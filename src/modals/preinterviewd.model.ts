@@ -50,6 +50,21 @@ PreInterviewedSchema.pre("save", function (next) {
   next();
 });
 
+// To uniquely identify user-level pre-interviews (already ensured)
+PreInterviewedSchema.index({ user: 1 }, { unique: true });
+
+// For quick filtering by status (e.g., pending, approved)
+PreInterviewedSchema.index({ status: 1 });
+
+// For analytics/dashboards or filtering recent verifications
+PreInterviewedSchema.index({ verifiedAt: -1 });
+
+// For filtering or sorting by interview date
+PreInterviewedSchema.index({ interviewedAt: -1 });
+
+// For combined queries (e.g., show all approved candidates sorted by interview date)
+PreInterviewedSchema.index({ status: 1, interviewedAt: -1 });
+
 export const PreInterviewed = mongoose.model<IPreInterviewed>(
   "PreInterviewed",
   PreInterviewedSchema

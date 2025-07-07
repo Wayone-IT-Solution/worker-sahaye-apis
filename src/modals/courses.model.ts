@@ -176,11 +176,24 @@ CourseSchema.pre("validate", function (next) {
   next();
 });
 
+// Course indexes
 CourseSchema.index({ tags: 1 });
-CourseSchema.index({ enrolledUsers: 1 });
-LessonSchema.index({ course: 1, order: 1 });
 CourseSchema.index({ createdBy: 1, status: 1 });
+CourseSchema.index({ category: 1, status: 1 });
+CourseSchema.index({ type: 1, status: 1 });
+CourseSchema.index({ isFree: 1, amount: 1 });
+CourseSchema.index({ startDate: -1 });
+CourseSchema.index({ priority: 1 });
+CourseSchema.index({ name: "text", description: "text" });
+
+// Lesson indexes
+LessonSchema.index({ course: 1, order: 1 });
+LessonSchema.index({ title: "text" });
+
+// TimeEntry indexes
 TimeEntrySchema.index({ user: 1, course: 1, lesson: 1 }, { unique: true });
+TimeEntrySchema.index({ course: 1, lesson: 1 });
+TimeEntrySchema.index({ user: 1, status: 1 });
 
 export const Lesson = mongoose.model<ILesson>("Lesson", LessonSchema);
 export const Course = mongoose.model<ICourse>("Course", CourseSchema);

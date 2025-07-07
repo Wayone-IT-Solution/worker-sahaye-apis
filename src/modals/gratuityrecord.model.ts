@@ -64,6 +64,16 @@ const GratuityRecordSchema: Schema = new Schema<IGratuityRecord>(
   { timestamps: true }
 );
 
+GratuityRecordSchema.index({ userId: 1 });                          // Query by user
+GratuityRecordSchema.index({ employeeName: 1 });                   // Search/filter by employee name
+GratuityRecordSchema.index({ designation: 1 });                    // Filter by designation
+GratuityRecordSchema.index({ department: 1 });                     // Filter by department
+GratuityRecordSchema.index({ dateOfExit: -1 });                    // Sorting/filtering by exit date (latest first)
+GratuityRecordSchema.index({ dateOfJoining: -1 });                 // Sorting/filtering by joining date
+GratuityRecordSchema.index({ department: 1, designation: 1 });     // Compound filter (e.g., HR Managers)
+GratuityRecordSchema.index({ userId: 1, dateOfExit: -1 });         // For user-based exit date queries
+GratuityRecordSchema.index({ employeeName: "text" });              // Full-text search on employee name
+
 export const GratuityRecord = mongoose.model<IGratuityRecord>(
   "GratuityRecord",
   GratuityRecordSchema

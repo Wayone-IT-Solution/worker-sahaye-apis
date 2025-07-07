@@ -189,6 +189,20 @@ TicketSchema.virtual("timeToResolve").get(function (this: ITicket) {
     : null;
 });
 
+// Basic filters & access
+TicketSchema.index({ requester: 1 });      // Fetch tickets by user
+TicketSchema.index({ assignee: 1 });       // Fetch tickets assigned to an agent
+TicketSchema.index({ status: 1 });         // Filter by status
+TicketSchema.index({ priority: 1 });       // Filter by priority
+TicketSchema.index({ tags: 1 });           // Filter/search by tag
+TicketSchema.index({ dueDate: 1 });        // Find overdue or due-soon tickets
+TicketSchema.index({ resolutionDate: 1 }); // For SLA/metrics
+TicketSchema.index({ createdAt: -1 });     // Sorting or recent tickets
+
+// Compound indexes (frequently queried together)
+TicketSchema.index({ assignee: 1, status: 1 });
+TicketSchema.index({ requester: 1, createdAt: -1 });
+
 /** Export Model */
 const Ticket = model<ITicket>("Ticket", TicketSchema);
 export default Ticket;

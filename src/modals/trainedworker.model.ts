@@ -47,6 +47,23 @@ TrainedWorkerSchema.pre("save", function (next) {
   next();
 });
 
+// Index for finding a user's training status
+TrainedWorkerSchema.index({ user: 1 });
+
+// Index for verifying if a specific course enrollment exists
+TrainedWorkerSchema.index({ courseEnrollmentId: 1 });
+
+// Index for status filtering (pending/approved/rejected)
+TrainedWorkerSchema.index({ status: 1 });
+
+// Indexes for date-based sorting or range queries
+TrainedWorkerSchema.index({ verifiedAt: -1 });
+TrainedWorkerSchema.index({ createdAt: -1 });
+TrainedWorkerSchema.index({ updatedAt: -1 });
+
+// Compound index: If often querying a user and course together
+TrainedWorkerSchema.index({ user: 1, courseEnrollmentId: 1 }, { unique: true });
+
 export const TrainedWorker = mongoose.model<ITrainedWorker>(
   "TrainedWorker",
   TrainedWorkerSchema

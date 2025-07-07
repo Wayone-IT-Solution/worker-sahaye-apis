@@ -41,6 +41,15 @@ const JobCategorySchema: Schema<IJobCategory> = new Schema(
   }
 );
 
+// To support filtering by category type (e.g., all 'Technical' jobs)
+JobCategorySchema.index({ type: 1 });
+
+// To filter only active categories
+JobCategorySchema.index({ isActive: 1 });
+
+// For nested category filtering (sub-category/parent relationship)
+JobCategorySchema.index({ parentCategory: 1 });
+
 const JobCategory: Model<IJobCategory> = mongoose.model<IJobCategory>(
   "JobCategory",
   JobCategorySchema

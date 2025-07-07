@@ -36,6 +36,10 @@ const CandidateBrandingBadgeSchema = new Schema<ICandidateBrandingBadge>(
 );
 
 CandidateBrandingBadgeSchema.index({ user: 1, badge: 1 }, { unique: true });
+CandidateBrandingBadgeSchema.index({ user: 1, status: 1 });
+CandidateBrandingBadgeSchema.index({ earnedBy: 1, status: 1 });
+CandidateBrandingBadgeSchema.index({ assignedAt: -1 });
+CandidateBrandingBadgeSchema.index({ badge: 1 });
 
 export const CandidateBrandingBadge = model<ICandidateBrandingBadge>(
   "CandidateBrandingBadge",

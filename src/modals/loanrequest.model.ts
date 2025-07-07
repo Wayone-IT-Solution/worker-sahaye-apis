@@ -2,10 +2,10 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export interface ILoanRequest extends Document {
   loanCategory:
-    | "Car Loan"
-    | "Housing Loan"
-    | "Personal Loan"
-    | "Education Loan";
+  | "Car Loan"
+  | "Housing Loan"
+  | "Personal Loan"
+  | "Education Loan";
   createdAt: Date;
   updatedAt: Date;
   emailId?: string;
@@ -119,6 +119,27 @@ LoanRequestSchema.pre<ILoanRequest>("save", function (next) {
 
   next();
 });
+
+// 🔎 Index for user-specific loan fetch
+LoanRequestSchema.index({ user: 1 });
+
+// 📅 Index for loan need date (useful for filtering upcoming loans)
+LoanRequestSchema.index({ loanNeedDate: 1 });
+
+// 💰 Index for salary slab filtering
+LoanRequestSchema.index({ salarySlab: 1 });
+
+// 🚨 Index for high-risk flag (often used in risk analysis dashboards)
+LoanRequestSchema.index({ isHighRisk: 1 });
+
+// 📊 Index for salary range queries (e.g., for analytics)
+LoanRequestSchema.index({ currentSalary: 1 });
+
+// 📦 Compound index if you often filter by user + loan type
+LoanRequestSchema.index({ user: 1, loanCategory: 1 });
+
+// 📆 Sorting by creation date
+LoanRequestSchema.index({ createdAt: -1 });
 
 export const LoanRequestModel = mongoose.model<ILoanRequest>(
   "LoanRequest",

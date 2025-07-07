@@ -50,6 +50,18 @@ PoliceVerificationSchema.pre("save", function (next) {
   next();
 });
 
+// 🔒 Ensure 1 police verification per user
+PoliceVerificationSchema.index({ user: 1 }, { unique: true });
+
+// 📅 Querying by status (e.g., pending/approved)
+PoliceVerificationSchema.index({ status: 1 });
+
+// 📆 For filtering or sorting by verification date
+PoliceVerificationSchema.index({ verifiedAt: -1 });
+
+// 📅 To improve sort/filter on creation timestamp
+PoliceVerificationSchema.index({ createdAt: -1 });
+
 export const PoliceVerification = mongoose.model<IPoliceVerification>(
   "PoliceVerification",
   PoliceVerificationSchema

@@ -72,6 +72,36 @@ const ConnectionSchema = new Schema<IConnection>(
 // Prevent duplicate connection edges (directional)
 ConnectionSchema.index({ requester: 1, recipient: 1 }, { unique: true });
 
+// 📌 Query mutual or reverse-directional connections
+ConnectionSchema.index(
+  { recipient: 1, requester: 1, status: 1 },
+  { name: "recipient_requester_status_idx" }
+);
+
+// 📌 Filter by status (e.g., pending requests)
+ConnectionSchema.index({ status: 1 }, { name: "status_only_idx" });
+
+// 📌 For efficient retrieval of a user's all connections
+ConnectionSchema.index(
+  { requester: 1, status: 1 },
+  { name: "requester_status_idx" }
+);
+ConnectionSchema.index(
+  { recipient: 1, status: 1 },
+  { name: "recipient_status_idx" }
+);
+
+// 📌 Indexing `history.status` if filtering on nested history (optional)
+ConnectionSchema.index(
+  { "history.status": 1 },
+  { sparse: true, name: "history_status_idx" }
+);
+
+ConnectionSchema.index(
+  { requester: 1, recipient: 1, status: 1 },
+  { name: "full_directional_status_idx" }
+);
+
 /**
  * Pre-save: append to history when status or categories change
  */

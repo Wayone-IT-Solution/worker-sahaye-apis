@@ -41,6 +41,21 @@ SkilledCandidateSchema.pre("save", function (next) {
   next();
 });
 
+// Index to quickly find by user
+SkilledCandidateSchema.index({ user: 1 });
+
+// Index to filter or query by verification status (e.g., pending, approved)
+SkilledCandidateSchema.index({ status: 1 });
+
+// Index to quickly retrieve recently verified candidates
+SkilledCandidateSchema.index({ verifiedAt: -1 });
+
+// Compound index: common query (e.g., get all approved users with document)
+SkilledCandidateSchema.index({ status: 1, user: 1 });
+
+// For sorting by creation time (recent submissions)
+SkilledCandidateSchema.index({ createdAt: -1 });
+
 export const SkilledCandidate = mongoose.model<ISkilledCandidate>(
   "SkilledCandidate",
   SkilledCandidateSchema

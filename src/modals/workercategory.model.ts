@@ -37,6 +37,16 @@ const WorkerCategorySchema: Schema<IWorkerCategory> = new Schema(
   { timestamps: true }
 );
 
+// Index on type for quick lookup (already unique)
+WorkerCategorySchema.index({ type: 1 }, { unique: true });
+
+// Index on isActive for filtering active/inactive categories
+WorkerCategorySchema.index({ isActive: 1 });
+
+// Index on timestamps for sorting/filtering
+WorkerCategorySchema.index({ createdAt: -1 });
+WorkerCategorySchema.index({ updatedAt: -1 });
+
 const WorkerCategory: Model<IWorkerCategory> = mongoose.model<IWorkerCategory>(
   "WorkerCategory",
   WorkerCategorySchema

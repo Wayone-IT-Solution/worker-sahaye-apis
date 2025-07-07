@@ -50,9 +50,7 @@ const AgentSchema: Schema<IAgent> = new Schema(
       },
     ],
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 const Agent: Model<IAgent> = mongoose.model<IAgent>("Agent", AgentSchema);

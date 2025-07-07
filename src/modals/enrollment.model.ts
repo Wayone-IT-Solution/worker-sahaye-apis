@@ -81,4 +81,28 @@ const EnrollmentSchema = new Schema<IEnrollment>(
 
 EnrollmentSchema.index({ user: 1, course: 1 }, { unique: true });
 
+EnrollmentSchema.index({ user: 1, status: 1 });
+// Efficient filtering of enrollments per user (e.g., active, completed, refunded)
+
+EnrollmentSchema.index({ course: 1, status: 1 });
+// Useful for querying enrollments by course status (analytics, dashboards)
+
+EnrollmentSchema.index({ enrolledAt: -1 });
+// Optimized for sorting recent enrollments (e.g., activity feeds)
+
+EnrollmentSchema.index({ "paymentDetails.paymentId": 1 }, { sparse: true });
+// Quick lookup by payment ID (for Razorpay callbacks or verification)
+
+EnrollmentSchema.index({ refundedAt: 1 }, { sparse: true });
+// Helps identify refunded enrollments (for reports, cron jobs, or audits)
+
+EnrollmentSchema.index({ status: 1 });
+// Good for admin dashboards or enrollment overviews by status
+
+EnrollmentSchema.index({ "paymentDetails.status": 1 });
+// Useful if you often filter enrollments by payment status
+
+EnrollmentSchema.index({ "appliedCoupon.code": 1 }, { sparse: true });
+// To analyze coupon usage across enrollments
+
 export const Enrollment = model<IEnrollment>("Enrollment", EnrollmentSchema);

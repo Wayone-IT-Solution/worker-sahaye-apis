@@ -64,6 +64,11 @@ AbuseReportSchema.pre("save", function (next) {
   next();
 });
 
+AbuseReportSchema.index({ reportedBy: 1, createdAt: -1 });
+AbuseReportSchema.index({ severity: 1, status: 1, createdAt: -1 });
+AbuseReportSchema.index({ reviewedAt: -1 });
+AbuseReportSchema.index({ ipAddress: 1 });
+
 export const AbuseReport = mongoose.model<IAbuseReport>(
   "AbuseReport",
   AbuseReportSchema

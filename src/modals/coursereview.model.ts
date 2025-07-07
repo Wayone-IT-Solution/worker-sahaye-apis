@@ -48,7 +48,12 @@ const CourseReviewSchema: Schema<ICourseReview> = new Schema(
   { timestamps: true }
 );
 
-CourseReviewSchema.index({ courseId: 1, userId: 1 }, { unique: true });
+CourseReviewSchema.index({ courseId: 1 });      // To quickly fetch reviews for a specific course
+CourseReviewSchema.index({ userId: 1 });        // To fetch all reviews by a specific user
+CourseReviewSchema.index({ courseId: 1, userId: 1 }, { unique: true }); // Prevents duplicate reviews by the same user for a course
+CourseReviewSchema.index({ rating: 1 });        // Helps in rating-based filtering/sorting (e.g., average rating queries)
+CourseReviewSchema.index({ isVerified: 1 });    // Efficient for filtering verified vs unverified reviews
+CourseReviewSchema.index({ createdAt: -1 });    // Optimized for fetching latest reviews quickly
 
 const CourseReview: Model<ICourseReview> = mongoose.model<ICourseReview>(
   "CourseReview",

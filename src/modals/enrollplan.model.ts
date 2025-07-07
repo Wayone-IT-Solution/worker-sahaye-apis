@@ -86,6 +86,27 @@ const EnrolledPlanSchema = new Schema<IEnrolledPlan>(
 
 EnrolledPlanSchema.index({ user: 1, plan: 1 }, { unique: true });
 
+EnrolledPlanSchema.index({ user: 1, status: 1 });
+// Useful for filtering active/enrolled/cancelled plans per user
+
+EnrolledPlanSchema.index({ plan: 1, status: 1 });
+// Efficient when querying all users under a specific plan & status
+
+EnrolledPlanSchema.index({ "paymentDetails.paymentId": 1 }, { sparse: true });
+// Speeds up lookup by payment ID (Razorpay use case)
+
+EnrolledPlanSchema.index({ enrolledAt: -1 });
+// For sorting or filtering enrollments by date
+
+EnrolledPlanSchema.index({ status: 1 });
+// If you're querying by status often for dashboards/reports
+
+EnrolledPlanSchema.index({ expiredAt: 1 }, { sparse: true });
+// Helps identify expired plans if your app runs cleanup/cron jobs
+
+EnrolledPlanSchema.index({ refundedAt: -1 }, { sparse: true });
+EnrolledPlanSchema.index({ "paymentDetails.status": 1 });
+
 export const EnrolledPlan = model<IEnrolledPlan>(
   "EnrolledPlan",
   EnrolledPlanSchema

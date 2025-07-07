@@ -91,18 +91,18 @@ export interface ISkillRequirement {
 
 export interface IBenefit {
   type:
-    | "pto"
-    | "gym"
-    | "bonus"
-    | "other"
-    | "health"
-    | "dental"
-    | "equity"
-    | "vision"
-    | "flexible"
-    | "learning"
-    | "transport"
-    | "retirement";
+  | "pto"
+  | "gym"
+  | "bonus"
+  | "other"
+  | "health"
+  | "dental"
+  | "equity"
+  | "vision"
+  | "flexible"
+  | "learning"
+  | "transport"
+  | "retirement";
 }
 
 export interface IWorkSchedule {
@@ -119,15 +119,15 @@ export interface IApplicationProcess {
   steps: Array<{
     step: number;
     type:
-      | "screening"
-      | "application"
-      | "technical_test"
-      | "phone_interview"
-      | "video_interview"
-      | "reference_check"
-      | "onsite_interview"
-      | "background_check"
-      | "offer";
+    | "screening"
+    | "application"
+    | "technical_test"
+    | "phone_interview"
+    | "video_interview"
+    | "reference_check"
+    | "onsite_interview"
+    | "background_check"
+    | "offer";
     description: string;
     estimatedDuration?: string;
   }>;
@@ -201,12 +201,12 @@ export interface IJob extends Document {
   qualifications: {
     education?: Array<{
       level:
-        | "high_school"
-        | "associates"
-        | "bachelors"
-        | "masters"
-        | "phd"
-        | "professional";
+      | "high_school"
+      | "associates"
+      | "bachelors"
+      | "masters"
+      | "phd"
+      | "professional";
       field?: string;
       required: boolean;
     }>;
@@ -501,7 +501,7 @@ const JobSchema = new Schema<IJob>(
   { timestamps: true }
 );
 
-// ADVANCED INDEXES FOR OPTIMAL PERFORMANCE
+// 🔍 Full-text Search Index
 JobSchema.index(
   {
     title: "text",
@@ -516,10 +516,11 @@ JobSchema.index(
       tags: 3,
       description: 1,
     },
+    name: "FullTextJobSearchIndex",
   }
 );
 
-// Compound indexes for common query patterns
+// 📌 Compound Indexes for Filters and Listings
 JobSchema.index({
   status: 1,
   jobType: 1,
@@ -527,32 +528,28 @@ JobSchema.index({
   experienceLevel: 1,
   industry: 1,
   publishedAt: -1,
-});
+}, { name: "JobListingQueryIndex" });
 
 JobSchema.index({
   "location.country": 1,
   "location.city": 1,
   jobType: 1,
   experienceLevel: 1,
-});
-
-JobSchema.index({
-  company: 1,
-  status: 1,
-  createdAt: -1,
-});
+}, { name: "LocationJobFilterIndex" });
 
 JobSchema.index({
   postedBy: 1,
   status: 1,
-});
+}, { name: "PostedByStatusIndex" });
 
+// ⏳ TTL Index for Auto-Expired Jobs
 JobSchema.index(
   {
     expiresAt: 1,
     status: 1,
   },
   {
+    name: "AutoExpireJobsIndex",
     expireAfterSeconds: 0,
     partialFilterExpression: {
       expiresAt: { $exists: true },
@@ -561,9 +558,10 @@ JobSchema.index(
   }
 );
 
-JobSchema.index({ "seo.slug": 1 }, { unique: true, sparse: true });
+// 🌐 SEO-friendly Slug Index
+JobSchema.index({ "seo.slug": 1 }, { unique: true, sparse: true, name: "SeoSlugUniqueIndex" });
 
-// Partial index for active jobs only
+// 🚀 Active Job Prioritization Index
 JobSchema.index(
   {
     status: 1,
@@ -571,6 +569,7 @@ JobSchema.index(
     priority: -1,
   },
   {
+    name: "ActiveJobsPriorityIndex",
     partialFilterExpression: {
       status: { $in: [JobStatus.OPEN, JobStatus.PAUSED] },
       deletedAt: { $exists: false },

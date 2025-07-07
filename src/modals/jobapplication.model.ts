@@ -98,6 +98,17 @@ const JobApplicationSchema = new Schema<IJobApplication>(
 );
 
 JobApplicationSchema.index({ job: 1, applicant: 1 }, { unique: true });
+// For filtering by status (e.g., 'under_review', 'hired')
+JobApplicationSchema.index({ status: 1 });
+
+// For filtering all applications of a user by status
+JobApplicationSchema.index({ applicant: 1, status: 1 });
+
+// For filtering by job and status (e.g., dashboard or employer-side usage)
+JobApplicationSchema.index({ job: 1, status: 1 });
+
+// For tracking interviewMode filtering (rare, but useful if used in analytics)
+JobApplicationSchema.index({ interviewMode: 1 });
 
 export const JobApplication = model<IJobApplication>(
   "JobApplication",

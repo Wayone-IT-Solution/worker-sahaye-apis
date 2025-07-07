@@ -7,7 +7,7 @@ export interface IMessage extends Document {
   updatedAt: Date;
   isRead: boolean;
   chatFileUrl?: string;
-  sender: "passenger" | "driver";
+  sender: "user" | "admin";
   senderId: mongoose.Types.ObjectId;
   receiverId: mongoose.Types.ObjectId;
 }
@@ -17,7 +17,7 @@ const MessageSchema: Schema<IMessage> = new Schema(
   {
     sender: {
       type: String,
-      enum: ["passenger", "driver"],
+      enum: ["user", "admin"],
       required: true,
     },
     senderId: {

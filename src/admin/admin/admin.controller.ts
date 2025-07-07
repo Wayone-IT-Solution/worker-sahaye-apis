@@ -95,28 +95,23 @@ export class AdminController {
   ): Promise<any> {
     try {
       const { page = 1, limit = 10 }: any = req.query;
-      const { pipeline, matchStage, options } = getPipeline(req.query);
+      const { pipeline, options } = getPipeline(req.query);
 
-      const pageNumber = parseInt(page, 10);
-      const limitNumber = parseInt(limit, 10);
+      const result = await Admin.aggregate(pipeline, options);
+      const { data = [], totalCount = 0 } = result?.[0] || {};
 
-      const response = await Admin.aggregate(pipeline, options);
-      const totalAdmins = await Admin.countDocuments(
-        Object.keys(matchStage).length > 0 ? matchStage : {}
-      );
-
-      if (!response.length)
-        return res.status(404).json(new ApiError(404, "No Reviews found"));
-
-      const data = paginationResult(
-        pageNumber,
-        limitNumber,
-        totalAdmins,
-        response
-      );
+      const respone = {
+        result: data,
+        pagination: {
+          currentPage: page,
+          itemsPerPage: limit,
+          totalItems: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+        },
+      };
       return res
         .status(200)
-        .json(new ApiResponse(200, data, "Tickets fetched successfully"));
+        .json(new ApiResponse(200, respone, "Tickets fetched successfully"));
     } catch (error) {
       next(error);
     }

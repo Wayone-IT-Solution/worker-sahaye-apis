@@ -81,7 +81,13 @@ export class UserController {
     next: NextFunction
   ) {
     try {
-      const result = await userService.deleteById(req.params.id);
+      const { id: user, role } = (req as any).user;
+      if (role === "admin")
+        return res
+          .status(403)
+          .json(new ApiError(403, "Cannot delete admin users"));
+
+      const result = await userService.deleteById(req.params.id || user);
       if (!result)
         return res
           .status(404)

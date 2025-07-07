@@ -12,6 +12,7 @@ const userRouter = Router();
 
 // Public routes
 userRouter.post("/", asyncHandler(UserController.createUser));
+userRouter.delete("/", authenticateToken, asyncHandler(UserController.deleteUserById));
 userRouter.get("/otp/all", asyncHandler(UserController.getAllOtps));
 userRouter.post("/send-otp", asyncHandler(UserController.generateOtp));
 userRouter.post("/verify-otp", asyncHandler(UserController.verifyOtp));

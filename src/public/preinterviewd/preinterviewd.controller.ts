@@ -28,7 +28,7 @@ export class PreInterviewedController {
       }
 
       const existingVerificationRecord: any = await PreInterviewed.findOne({ user });
-      if (existingVerificationRecord) {
+      if (existingVerificationRecord && document) {
         const s3Key = document.split(".com/")[1];
         await deleteFromS3(s3Key);
         return res.status(404).json(new ApiError(404, "Pre Interviewed Doc already exists"));
@@ -39,7 +39,7 @@ export class PreInterviewedController {
         badge: "pre_interviewed",
       });
 
-      if (alreadyBadgeEarned) {
+      if (alreadyBadgeEarned && document) {
         const s3Key = document.split(".com/")[1];
         await deleteFromS3(s3Key);
         return res

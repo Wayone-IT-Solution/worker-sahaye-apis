@@ -5,7 +5,10 @@ import { ObjectId } from "mongodb";
  * @param {Record<string, any>} query - The query parameters to build the pipeline from
  * @returns {Object} - The constructed pipeline and matching stage
  */
-export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
+export const getPipeline = (
+  query: Record<string, any>,
+  additionalStages?: any[] | Record<string, any>
+) => {
   const {
     _id,
     user,
@@ -13,81 +16,76 @@ export const getPipeline = (query: any, optionsToBeExtract?: any): any => {
     status,
     userId,
     endDate,
-    assignee,
     postedBy,
-    page = 1,
+    assignee,
     createdBy,
     startDate,
     community,
     searchkey,
+    applicantId,
+    page = 1,
     limit = 10,
     search = "",
-    applicantId,
     sortDir = "desc",
     sortKey = "createdAt",
   } = query;
 
-  const pageNumber = parseInt(page, 10);
-  const limitNumber = parseInt(limit, 10);
-
+  const pageNumber = Math.max(parseInt(page, 10), 1);
+  const limitNumber = Math.max(parseInt(limit, 10), 1);
   const pipeline: any[] = [];
-  const matchStage: Record<string, any> = {};
+  const match: Record<string, any> = {};
 
-  if (type) matchStage.type = type;
-  if (status) matchStage.status = status;
-  if (_id) matchStage._id = new ObjectId(_id);
-  if (user) matchStage.user = new ObjectId(user);
-  if (userId) matchStage.userId = new ObjectId(userId);
-  if (postedBy) matchStage.postedBy = new ObjectId(postedBy);
-  if (assignee) matchStage.assignee = new ObjectId(assignee);
-  if (community) matchStage.community = new ObjectId(community);
-  if (createdBy) matchStage.createdBy = new ObjectId(createdBy);
-  if (applicantId) matchStage.applicant = new ObjectId(applicantId);
+  const safeObjectId = (value: any) =>
+    ObjectId.isValid(value) ? new ObjectId(value) : value;
 
+  // Basic filters
+  if (type) match.type = type;
+  if (status) match.status = status;
+  if (_id) match._id = safeObjectId(_id);
+  if (user) match.user = safeObjectId(user);
+  if (userId) match.userId = safeObjectId(userId);
+  if (postedBy) match.postedBy = safeObjectId(postedBy);
+  if (assignee) match.assignee = safeObjectId(assignee);
+  if (createdBy) match.createdBy = safeObjectId(createdBy);
+  if (community) match.community = safeObjectId(community);
+  if (applicantId) match.applicant = safeObjectId(applicantId);
+
+  // Date range
   if (startDate || endDate) {
-    matchStage.createdAt = {};
-    if (startDate) matchStage.createdAt.$gte = new Date(startDate);
-    if (endDate) matchStage.createdAt.$lte = new Date(endDate);
+    match.createdAt = {};
+    if (startDate) match.createdAt.$gte = new Date(startDate);
+    if (endDate) match.createdAt.$lte = new Date(endDate);
   }
 
-  // Push match stage if anything exists
-  if (Object.keys(matchStage).length > 0) {
-    pipeline.push({ $match: matchStage });
-  }
+  if (Object.keys(match).length) pipeline.push({ $match: match });
 
-  // Handle search with regex
-  if (search && searchkey === "_id") {
-    pipeline.push({ $addFields: { idStr: { $toString: "$_id" } } });
-    pipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
-    pipeline.push({ $project: { idStr: 0 } });
-  } else if (search && searchkey === "category") {
-    pipeline.push({ $addFields: { idStr: { $toString: "$category" } } });
-    pipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
-    pipeline.push({ $project: { idStr: 0 } });
-  } else if (search && searchkey) {
-    pipeline.push({
-      $match: { [searchkey]: { $regex: search, $options: "i" } },
-    });
+  if (search && searchkey) {
+    if (["_id", "category"].includes(searchkey)) {
+      pipeline.push({ $addFields: { idStr: { $toString: `$${searchkey}` } } });
+      pipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
+      pipeline.push({ $project: { idStr: 0 } });
+    } else pipeline.push({ $match: { [searchkey]: { $regex: search, $options: "i" } } });
   }
 
   // Sorting
-  pipeline.push({
-    $sort: { [sortKey]: sortDir === "asc" ? 1 : -1 },
-  });
+  pipeline.push({ $sort: { [sortKey]: sortDir === "asc" ? 1 : -1 } });
 
   // Pagination
-  pipeline.push({ $skip: (pageNumber - 1) * limitNumber });
-  pipeline.push({ $limit: limitNumber });
+  pipeline.push(
+    { $skip: (pageNumber - 1) * limitNumber },
+    { $limit: limitNumber }
+  );
 
-  if (Array.isArray(optionsToBeExtract)) pipeline.push(...optionsToBeExtract);
-  else if (
-    typeof optionsToBeExtract === "object" &&
-    optionsToBeExtract !== null
-  )
-    pipeline.push(optionsToBeExtract);
+  // Optional additional stages
+  if (Array.isArray(additionalStages)) pipeline.push(...additionalStages);
+  else if (additionalStages && typeof additionalStages === "object")
+    pipeline.push(additionalStages);
 
-  const options = { collation: { locale: "en", strength: 2 } };
-  return { pipeline, matchStage, options };
+  return {
+    pipeline,
+    matchStage: match,
+    options: { collation: { locale: "en", strength: 2 } },
+  };
 };
 
 /**

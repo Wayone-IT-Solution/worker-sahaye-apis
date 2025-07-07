@@ -263,6 +263,150 @@ export const getUserApplications = async (
   }
 };
 
+export const getReceivedApplications = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id: userId, role } = (req as any).user;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json(new ApiError(400, "Invalid or missing user ID."));
+    }
+
+    if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(role)) {
+      return res.status(404).json(new ApiError(403, "Unauthorized access."));
+    }
+
+    // Pagination
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const sortBy: any = req.query.sortBy || "createdAt";
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+    const statusFilter = req.query.status as string;
+    const search = (req.query.search as string)?.trim();
+
+    const matchConditions: any = [];
+
+    // Match only jobs posted by current user
+    matchConditions.push({ "jobDetails.postedBy": new mongoose.Types.ObjectId(userId) });
+    if (statusFilter) matchConditions.push({ status: statusFilter });
+
+    if (search) {
+      matchConditions.push({
+        $or: [
+          { "jobDetails.title": { $regex: search, $options: "i" } },
+          { "applicantDetails.fullName": { $regex: search, $options: "i" } },
+        ],
+      });
+    }
+
+    const pipeline: any[] = [
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "job",
+          foreignField: "_id",
+          as: "jobDetails",
+        },
+      },
+      { $unwind: "$jobDetails" },
+      {
+        $lookup: {
+          from: "users",
+          localField: "applicant",
+          foreignField: "_id",
+          as: "applicantDetails",
+        },
+      },
+      { $unwind: "$applicantDetails" },
+      { $match: matchConditions.length ? { $and: matchConditions } : {} },
+      {
+        $project: {
+          _id: 1,
+          status: 1,
+          history: 1,
+          resumeUrl: 1,
+          createdAt: 1,
+          coverLetter: 1,
+          availability: 1,
+          interviewMode: 1,
+          expectedSalary: 1,
+          applicantSnapshot: 1,
+          interviewModeAccepted: 1,
+          jobId: "$jobDetails._id",
+          jobTitle: "$jobDetails.title",
+          jobType: "$jobDetails.jobType",
+          jobWorkMode: "$jobDetails.workMode",
+          jobDescription: "$jobDetails.description",
+          jobSkillsRequired: "$jobDetails.skillsRequired",
+          jobExperienceLevel: "$jobDetails.experienceLevel",
+          applicantId: "$applicantDetails._id",
+          applicantEmail: "$applicantDetails.email",
+          applicantPhone: "$applicantDetails.mobile",
+          applicantName: "$applicantDetails.fullName",
+          applicantGender: "$applicantDetails.gender",
+          applicantProfile: "$applicantDetails.profile",
+        },
+      },
+      { $sort: { [sortBy]: sortOrder } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const result = await JobApplication.aggregate(pipeline);
+
+    // Total count (with same match conditions)
+    const totalCount = await JobApplication.aggregate([
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "job",
+          foreignField: "_id",
+          as: "jobDetails",
+        },
+      },
+      { $unwind: "$jobDetails" },
+      {
+        $lookup: {
+          from: "users",
+          localField: "applicant",
+          foreignField: "_id",
+          as: "applicantDetails",
+        },
+      },
+      { $unwind: "$applicantDetails" },
+      { $match: matchConditions.length ? { $and: matchConditions } : {} },
+      { $count: "count" },
+    ]);
+
+    const totalItems = totalCount[0]?.count || 0;
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          result,
+          pagination: {
+            totalItems,
+            currentPage: page,
+            itemsPerPage: limit,
+            totalPages: Math.ceil(totalItems / limit),
+          },
+        },
+        "Applications received"
+      )
+    );
+  } catch (err) {
+    console.log("❌ Error in getReceivedApplications:", err);
+    return res.status(404).json(new ApiError(500, "Failed to fetch received applications"));
+  }
+};
+
 export const getAllUserApplications = async (
   req: Request,
   res: Response,

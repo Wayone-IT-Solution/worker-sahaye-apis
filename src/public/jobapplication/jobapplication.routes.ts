@@ -14,6 +14,7 @@ import {
   handleOfferAccepted,
   updateStatusByEmployer,
   getAllUserApplications,
+  getReceivedApplications,
 } from "./jobapplication.controller";
 
 const router = express.Router();
@@ -36,6 +37,11 @@ router.get(
   authenticateToken,
   isWorker,
   asyncHandler(handleOfferAccepted)
+);
+router.get(
+  "/received/applications",
+  authenticateToken,
+  asyncHandler(getReceivedApplications)
 );
 router.patch(
   "/:id/withdraw",

@@ -104,7 +104,7 @@ export const getPipeline = (
   return {
     pipeline,
     matchStage: match,
-    options: { collation: { locale: "en", strength: 2 } },
+    options: { collation: { locale: "en", strength: 2 }, allowDiskUse: true },
   };
 };
 

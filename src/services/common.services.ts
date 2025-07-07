@@ -30,25 +30,22 @@ export class CommonService<T extends Document> {
 
   async getAll(query: any = {}, optionsToBeExtract?: any) {
     try {
-      const { page = 1, limit = 10 } = query;
-      const pageNumber = parseInt(page, 10);
-      const limitNumber = parseInt(limit, 10);
+      const { pipeline, options } = getPipeline(query, optionsToBeExtract);
+      const result = await this.model.aggregate(pipeline, options);
 
-      const { pipeline, matchStage, options } = getPipeline(
-        query,
-        optionsToBeExtract
-      );
+      const { data = [], totalCount = 0 } = result?.[0] || {};
+      const page = parseInt(query.page, 10) || 1;
+      const limit = parseInt(query.limit, 10) || 10;
 
-      const data = await this.model.aggregate(pipeline, options);
-      const totalCount = await this.model.countDocuments(matchStage);
-
-      const paginated = paginationResult(
-        pageNumber,
-        limitNumber,
-        totalCount,
-        data
-      );
-      return paginated;
+      return {
+        result: data,
+        pagination: {
+          currentPage: page,
+          itemsPerPage: limit,
+          totalItems: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+        },
+      };
     } catch (error: any) {
       throw new ApiError(500, error.message || "Failed to fetch data");
     }

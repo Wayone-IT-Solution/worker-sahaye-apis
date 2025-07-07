@@ -32,13 +32,12 @@ export const getPipeline = (
 
   const pageNumber = Math.max(parseInt(page, 10), 1);
   const limitNumber = Math.max(parseInt(limit, 10), 1);
-  const pipeline: any[] = [];
+  const basePipeline: any[] = [];
   const match: Record<string, any> = {};
 
-  const safeObjectId = (value: any) =>
-    ObjectId.isValid(value) ? new ObjectId(value) : value;
+  const safeObjectId = (val: any) => ObjectId.isValid(val) ? new ObjectId(val) : val;
 
-  // Basic filters
+  // Basic match filters
   if (type) match.type = type;
   if (status) match.status = status;
   if (_id) match._id = safeObjectId(_id);
@@ -50,36 +49,57 @@ export const getPipeline = (
   if (community) match.community = safeObjectId(community);
   if (applicantId) match.applicant = safeObjectId(applicantId);
 
-  // Date range
   if (startDate || endDate) {
     match.createdAt = {};
     if (startDate) match.createdAt.$gte = new Date(startDate);
     if (endDate) match.createdAt.$lte = new Date(endDate);
   }
 
-  if (Object.keys(match).length) pipeline.push({ $match: match });
+  if (Object.keys(match).length) basePipeline.push({ $match: match });
 
+  // Add additional stages before faceting (lookups, projections, etc.)
+  if (Array.isArray(additionalStages)) basePipeline.push(...additionalStages);
+  else if (additionalStages && typeof additionalStages === "object") basePipeline.push(additionalStages);
+
+  // Search (including multi-field)
   if (search && searchkey) {
-    if (["_id", "category"].includes(searchkey)) {
-      pipeline.push({ $addFields: { idStr: { $toString: `$${searchkey}` } } });
-      pipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
-      pipeline.push({ $project: { idStr: 0 } });
-    } else pipeline.push({ $match: { [searchkey]: { $regex: search, $options: "i" } } });
+    const keys = searchkey.split(",").map((k: string) => k.trim()).filter(Boolean);
+
+    if (keys.length > 1) {
+      basePipeline.push({
+        $match: {
+          $or: keys.map((key: any) => ({
+            [key]: { $regex: search, $options: "i" },
+          })),
+        },
+      });
+    } else {
+      const key = keys[0];
+      if (["_id", "category"].includes(key)) {
+        basePipeline.push({ $addFields: { idStr: { $toString: `$${key}` } } });
+        basePipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
+        basePipeline.push({ $project: { idStr: 0 } });
+      } else {
+        basePipeline.push({ $match: { [key]: { $regex: search, $options: "i" } } });
+      }
+    }
   }
 
-  // Sorting
-  pipeline.push({ $sort: { [sortKey]: sortDir === "asc" ? 1 : -1 } });
-
-  // Pagination
-  pipeline.push(
-    { $skip: (pageNumber - 1) * limitNumber },
-    { $limit: limitNumber }
-  );
-
-  // Optional additional stages
-  if (Array.isArray(additionalStages)) pipeline.push(...additionalStages);
-  else if (additionalStages && typeof additionalStages === "object")
-    pipeline.push(additionalStages);
+  // Wrap in facet for pagination and total count
+  const pipeline = [
+    ...basePipeline,
+    { $sort: { [sortKey]: sortDir === "asc" ? 1 : -1 } },
+    {
+      $facet: {
+        data: [
+          { $skip: (pageNumber - 1) * limitNumber },
+          { $limit: limitNumber },
+        ],
+        total: [{ $count: "count" }],
+      },
+    },
+    { $addFields: { totalCount: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] } } },
+  ];
 
   return {
     pipeline,

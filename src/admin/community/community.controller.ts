@@ -9,6 +9,21 @@ import { CommunityMember } from "../../modals/communitymember.model";
 
 const communityService = new CommonService(Community);
 
+export const extractImageUrl = async (input: any, existing: string) => {
+  if (!input || (Array.isArray(input) && input.length === 0))
+    return existing || "";
+  if (Array.isArray(input) && input.length > 0) {
+    const newUrl = input[0]?.url;
+    if (existing && existing !== newUrl) {
+      const s3Key = existing.split(".com/")[1];
+      await deleteFromS3(s3Key);
+    }
+    return newUrl || "";
+  }
+  if (typeof input === "string") return input;
+  return existing || "";
+};
+
 export class CommunityController {
   static async createCommunity(
     req: Request,
@@ -189,21 +204,6 @@ export class CommunityController {
     next: NextFunction
   ) {
     try {
-      const extractImageUrl = async (input: any, existing: string) => {
-        if (!input || (Array.isArray(input) && input.length === 0))
-          return existing || "";
-        if (Array.isArray(input) && input.length > 0) {
-          const newUrl = input[0]?.url;
-          if (existing && existing !== newUrl) {
-            const s3Key = existing.split(".com/")[1];
-            await deleteFromS3(s3Key);
-          }
-          return newUrl || "";
-        }
-        if (typeof input === "string") return input;
-        return existing || "";
-      };
-
       const communityId = req.params.id;
       if (!mongoose.Types.ObjectId.isValid(communityId))
         return res.status(400).json(new ApiError(400, "Invalid community ID"));

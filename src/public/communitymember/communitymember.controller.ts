@@ -308,7 +308,7 @@ export class CommunityMemberController {
           userMobile: "$userDetails.mobile",
           profilePicUrl: "$profilePicFile.url",
         },
-      },]
+      }]
 
       const members = await CommunityMemberService.getAll({ ...req.query, status: req.query.status ?? "joined", community: communityId }, pipeline);
       return res.status(200).json(

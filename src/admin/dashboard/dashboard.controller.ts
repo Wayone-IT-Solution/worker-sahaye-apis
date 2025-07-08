@@ -3,85 +3,363 @@ import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { Enrollment } from "../../modals/enrollment.model";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
-import { startOfDay, subDays, parseISO, isValid } from "date-fns";
-import { CommunityMember, MemberStatus } from "../../modals/communitymember.model";
-import { ApplicationStatus, JobApplication } from "../../modals/jobapplication.model";
+import {
+  subDays,
+  isValid,
+  parseISO,
+  endOfDay,
+  formatISO,
+  startOfDay,
+} from "date-fns";
+import {
+  JobApplication,
+  ApplicationStatus,
+} from "../../modals/jobapplication.model";
+import {
+  MemberStatus,
+  CommunityMember,
+} from "../../modals/communitymember.model";
+import Ticket from "../../modals/ticket.model";
 
 export class DashboardController {
-  static async getDashboardStats(req: Request, res: Response, next: NextFunction) {
+  static async getDashboardStats(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const { startDate, endDate } = req.query;
 
-      const end = endDate && isValid(new Date(endDate as string))
-        ? startOfDay(parseISO(endDate as string))
-        : startOfDay(new Date());
+      const end =
+        endDate && isValid(new Date(endDate as string))
+          ? startOfDay(parseISO(endDate as string))
+          : startOfDay(new Date());
 
-      const start = startDate && isValid(new Date(startDate as string))
-        ? startOfDay(parseISO(startDate as string))
-        : subDays(end, 13); // default to last 14 days
+      const start =
+        startDate && isValid(new Date(startDate as string))
+          ? startOfDay(parseISO(startDate as string))
+          : subDays(end, 13);
 
-      const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      const dayBuckets = Array.from({ length: totalDays }, (_, i) => {
-        const day = subDays(end, totalDays - 1 - i);
-        return { start: day, end: new Date(day.getTime() + 86400000) }; // 24 * 60 * 60 * 1000
-      });
+      const totalDays =
+        Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) +
+        1;
+      const extendedStart = subDays(start, totalDays); // Previous period
 
-      const getDailyAggregation = async (
+      // Common helper
+      const aggregateDaily = async (
         model: any,
-        field: string,
-        matchExtra: Record<string, any> = {}
+        dateField: string,
+        sumField?: string,
+        match: any = {}
       ): Promise<number[]> => {
-        return Promise.all(
-          dayBuckets.map(({ start, end }) =>
-            model.aggregate([
-              { $match: { createdAt: { $gte: start, $lt: end }, ...matchExtra } },
-              { $group: { _id: null, total: { $sum: `$${field}` } } },
-            ])
-          )
-        ).then((res) => res.map((r) => r[0]?.total || 0));
+        const pipeline: any[] = [
+          {
+            $match: {
+              [dateField]: { $gte: extendedStart, $lte: end },
+              ...match,
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: { format: "%Y-%m-%d", date: `$${dateField}` },
+              },
+              value: sumField ? { $sum: `$${sumField}` } : { $sum: 1 },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ];
+
+        const result = await model.aggregate(pipeline);
+
+        // Create a lookup map for fast access
+        const lookup: any = new Map(result.map((r: any) => [r._id, r.value]));
+
+        // Fill all days (totalDays * 2)
+        const buckets: number[] = [];
+        for (let i = totalDays * 2 - 1; i >= 0; i--) {
+          const day = subDays(end, i);
+          const key = formatISO(day, { representation: "date" });
+          buckets.push(lookup.get(key) || 0);
+        }
+
+        return buckets;
       };
 
-      const getDailyCount = async (model: any, dateField: string, match: Record<string, any> = {}): Promise<number[]> => {
-        return Promise.all(
-          dayBuckets.map(({ start, end }) =>
-            model.aggregate([
-              { $match: { [dateField]: { $gte: start, $lt: end }, ...match } },
-              { $group: { _id: null, count: { $sum: 1 } } },
-            ])
-          )
-        ).then((res) => res.map((r) => r[0]?.count || 0));
-      };
-
-      const [payments, courses, activeUsers, appliedJobs, communityJoins] = await Promise.all([
-        getDailyAggregation(EnrolledPlan, "finalAmount", { "paymentDetails.status": "success" }),
-        getDailyAggregation(Enrollment, "finalAmount", { "paymentDetails.status": "success" }),
-        getDailyCount(User, "createdAt", { userType: "worker" }),
-        getDailyCount(JobApplication, "createdAt", { status: ApplicationStatus.APPLIED }),
-        getDailyCount(CommunityMember, "joinedAt", { status: MemberStatus.JOINED }),
-      ]);
+      // Fetch all in parallel
+      const [payments, courses, activeUsers, appliedJobs, communityJoins] =
+        await Promise.all([
+          aggregateDaily(EnrolledPlan, "createdAt", "finalAmount", {
+            "paymentDetails.status": "success",
+          }),
+          aggregateDaily(Enrollment, "createdAt", "finalAmount", {
+            "paymentDetails.status": "success",
+          }),
+          aggregateDaily(User, "createdAt", undefined, { userType: "worker" }),
+          aggregateDaily(JobApplication, "createdAt", undefined, {
+            status: ApplicationStatus.APPLIED,
+          }),
+          aggregateDaily(CommunityMember, "joinedAt", undefined, {
+            status: MemberStatus.JOINED,
+          }),
+        ]);
 
       const totalRevenue = payments.map((_, i) => payments[i] + courses[i]);
 
-      // Use last half and previous half for percentage comparison
-      const mid = Math.floor(totalRevenue.length / 2);
-      const currentRange = totalRevenue.slice(mid);
-      const previousRange = totalRevenue.slice(0, mid);
+      const prevIndex = 0;
+      const currIndex = totalDays;
 
-      const calculateStats = (current: number[], previous: number[]) => {
+      const calculateStats = (data: number[]) => {
+        const previous = data.slice(prevIndex, currIndex);
+        const current = data.slice(currIndex);
         const totalCurrent = current.reduce((a, b) => a + b, 0);
         const totalPrevious = previous.reduce((a, b) => a + b, 0);
-        const change =
-          totalPrevious === 0 ? 100 : parseFloat(((totalCurrent - totalPrevious) / totalPrevious * 100).toFixed(2));
-        return { totalCurrent, totalPrevious, percentageChange: change, chartData: current };
+
+        let percentageChange = 0;
+        if (totalPrevious === 0 && totalCurrent > 0) percentageChange = 100;
+        else if (totalPrevious === 0 && totalCurrent === 0)
+          percentageChange = 0;
+        else if (totalPrevious === 0 && totalCurrent < 0)
+          percentageChange = -100;
+        else
+          percentageChange = +(
+            ((totalCurrent - totalPrevious) / totalPrevious) *
+            100
+          ).toFixed(2);
+
+        return {
+          totalCurrent,
+          totalPrevious,
+          percentageChange,
+          chartData: current,
+        };
       };
 
       return res.status(200).json(
-        new ApiResponse(200, {
-          revenue: calculateStats(currentRange, previousRange),
-          activeUsers: calculateStats(activeUsers.slice(mid), activeUsers.slice(0, mid)),
-          appliedJobs: calculateStats(appliedJobs.slice(mid), appliedJobs.slice(0, mid)),
-          communityJoins: calculateStats(communityJoins.slice(mid), communityJoins.slice(0, mid)),
-        }, "Dashboard data fetched")
+        new ApiResponse(
+          200,
+          {
+            revenue: calculateStats(totalRevenue),
+            activeUsers: calculateStats(activeUsers),
+            appliedJobs: calculateStats(appliedJobs),
+            communityJoins: calculateStats(communityJoins),
+          },
+          "Dashboard data fetched"
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getCustomerSupportDetails(
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { startDate: start, endDate: end } = _req.query;
+
+      const endDate = end ? new Date(end as string) : new Date();
+      const startDate = start ? new Date(start as string) : subDays(endDate, 7);
+
+      const prevEndDate = subDays(startDate, 1);
+      const prevStartDate = subDays(startDate, 7);
+
+      const currentRange = {
+        $gte: startOfDay(startDate),
+        $lte: endOfDay(endDate),
+      };
+
+      const prevRange = {
+        $gte: startOfDay(prevStartDate),
+        $lte: endOfDay(prevEndDate),
+      };
+
+      const statuses = [
+        "open",
+        "closed",
+        "on_hold",
+        "resolved",
+        "in_progress",
+        "re_assigned",
+      ];
+
+      const [currentCounts, previousCounts] = await Promise.all([
+        Ticket.aggregate([
+          { $match: { createdAt: currentRange } },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        Ticket.aggregate([
+          { $match: { createdAt: prevRange } },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+      ]);
+
+      const currentMap = Object.fromEntries(
+        statuses.map((status) => [status, 0])
+      );
+      const prevMap = { ...currentMap };
+
+      currentCounts.forEach(({ _id, count }) => (currentMap[_id] = count));
+      previousCounts.forEach(({ _id, count }) => (prevMap[_id] = count));
+
+      const result = statuses.reduce((acc, status) => {
+        const current = currentMap[status];
+        const previous = prevMap[status];
+        const percentageChange =
+          previous === 0
+            ? current > 0
+              ? 100
+              : 0
+            : ((current - previous) / previous) * 100;
+
+        acc[status] = current;
+        acc[`${status}_change`] = parseFloat(percentageChange.toFixed(2));
+        return acc;
+      }, {} as Record<string, number>);
+
+      res.status(200).json({
+        success: true,
+        from: startOfDay(startDate),
+        to: endOfDay(endDate),
+        ...result,
+      });
+    } catch (error) {
+      console.error("Error getting ticket summary:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+
+  static async getYearlyRevenueComparison(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const yearParam =
+        parseInt(req.query.year as string) || new Date().getFullYear();
+      const currentYear = yearParam;
+      const previousYear = currentYear - 1;
+
+      const getMonthlyRevenue = async (
+        model: any,
+        year: number
+      ): Promise<number[]> => {
+        const pipeline = [
+          {
+            $match: {
+              createdAt: {
+                $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+              },
+              "paymentDetails.status": "success",
+            },
+          },
+          {
+            $group: {
+              _id: { month: { $month: "$createdAt" } },
+              total: { $sum: "$finalAmount" },
+            },
+          },
+          { $sort: { "_id.month": 1 } },
+        ];
+
+        const result = await model.aggregate(pipeline);
+        const monthlyTotals = Array(12).fill(0);
+        for (const item of result) {
+          const monthIndex = item._id.month - 1;
+          monthlyTotals[monthIndex] = item.total;
+        }
+
+        return monthlyTotals;
+      };
+
+      const [
+        enrollmentCurrent,
+        enrolledPlanCurrent,
+        enrollmentPrevious,
+        enrolledPlanPrevious,
+      ] = await Promise.all([
+        getMonthlyRevenue(Enrollment, currentYear),
+        getMonthlyRevenue(EnrolledPlan, currentYear),
+        getMonthlyRevenue(Enrollment, previousYear),
+        getMonthlyRevenue(EnrolledPlan, previousYear),
+      ]);
+
+      const currentCombined = enrollmentCurrent.map(
+        (val, i) => val + enrolledPlanCurrent[i]
+      );
+      const previousCombined = enrollmentPrevious.map(
+        (val, i) => val + enrolledPlanPrevious[i]
+      );
+
+      const totalEnrollmentCurrent = enrollmentCurrent.reduce(
+        (a, b) => a + b,
+        0
+      );
+      const totalEnrollmentPrevious = enrollmentPrevious.reduce(
+        (a, b) => a + b,
+        0
+      );
+      const totalEnrolledPlanCurrent = enrolledPlanCurrent.reduce(
+        (a, b) => a + b,
+        0
+      );
+      const totalEnrolledPlanPrevious = enrolledPlanPrevious.reduce(
+        (a, b) => a + b,
+        0
+      );
+      const totalCurrent = totalEnrollmentCurrent + totalEnrolledPlanCurrent;
+      const totalPrevious = totalEnrollmentPrevious + totalEnrolledPlanPrevious;
+
+      const getPercentageChange = (curr: number, prev: number) => {
+        if (prev === 0 && curr > 0) return 100;
+        if (prev === 0 && curr === 0) return 0;
+        if (prev === 0 && curr < 0) return -100;
+        return +(((curr - prev) / prev) * 100).toFixed(2);
+      };
+
+      const percentageChange = getPercentageChange(totalCurrent, totalPrevious);
+      const enrollmentPercentageChange = getPercentageChange(
+        totalEnrollmentCurrent,
+        totalEnrollmentPrevious
+      );
+      const enrolledPlanPercentageChange = getPercentageChange(
+        totalEnrolledPlanCurrent,
+        totalEnrolledPlanPrevious
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            currentYear,
+            previousYear,
+            totalEnrollmentCurrent,
+            totalEnrollmentPrevious,
+            totalEnrolledPlanCurrent,
+            totalEnrolledPlanPrevious,
+            totalCurrent,
+            totalPrevious,
+            percentageChange,
+            enrollmentPercentageChange,
+            enrolledPlanPercentageChange,
+            monthlyData: {
+              [currentYear]: {
+                enrollment: enrollmentCurrent,
+                enrolledPlan: enrolledPlanCurrent,
+                combined: currentCombined,
+              },
+              [previousYear]: {
+                enrollment: enrollmentPrevious,
+                enrolledPlan: enrolledPlanPrevious,
+                combined: previousCombined,
+              },
+            },
+          },
+          "Yearly revenue data fetched"
+        )
       );
     } catch (err) {
       next(err);

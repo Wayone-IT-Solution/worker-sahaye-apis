@@ -326,24 +326,32 @@ export class EndorsementController {
   ) {
     try {
       const { id: userId } = (req as any).user;
-      const { message } = req.body;
+      const {
+        message,
+        respect,
+        timelines,
+        wouldRehire,
+        qualityOfWork,
+        overallPerformance,
+      } = req.body;
 
       const endorsement = await Endorsement.findById(req.params.id);
-      if (!endorsement)
-        return res.status(404).json(new ApiError(404, "Endorsement not found"));
+      if (!endorsement) return res.status(404).json(new ApiError(404, "Endorsement not found"));
 
       if (endorsement.fulfilled) {
         return res.status(400).json(
           new ApiResponse(
             400,
             endorsement,
-            "This endorsement has already been fulfilled with a message."
+            "This endorsement has already been fulfilled."
           )
         );
       }
 
       if (endorsement.endorsedBy.toString() !== userId.toString()) {
-        return res.status(403).json(new ApiError(403, "You are not authorized to update this endorsement"));
+        return res
+          .status(403)
+          .json(new ApiError(403, "You are not authorized to update this endorsement"));
       }
 
       const connection = await ConnectionModel.findOne({
@@ -362,26 +370,61 @@ export class EndorsementController {
       });
 
       if (!connection) {
-        return res.status(403).json(
-          new ApiError(403, "A valid connection must exist to update endorsement")
-        );
+        return res
+          .status(403)
+          .json(new ApiError(403, "A valid connection must exist to update this endorsement"));
       }
 
-      // Message must be provided
+      // Validate required fields
       if (!message || !message.trim()) {
         return res
           .status(400)
           .json(new ApiError(400, "Message is required to fulfill the endorsement"));
       }
 
-      // Update endorsement
+      if (
+        !overallPerformance ||
+        ![1, 2, 3, 4, 5].includes(Number(overallPerformance))
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Valid overall performance rating (1-5) is required"));
+      }
+
+      const validTimelines = ["On-Time", "Delayed", "Ahead of Schedule"];
+      if (!validTimelines.includes(timelines)) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid value for timelines"));
+      }
+
+      const validQualities = ["Excellent", "Good", "Average", "Poor"];
+      if (!validQualities.includes(qualityOfWork)) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid value for quality of work"));
+      }
+
+      const validRespects = ["High", "Moderate", "Low"];
+      if (!validRespects.includes(respect)) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid value for respect level"));
+      }
+
+      // Update all fields
+      endorsement.fulfilled = true;
+      endorsement.respect = respect;
+      endorsement.timelines = timelines;
       endorsement.message = message.trim();
-      (endorsement as any).fulfilled = true;
+      endorsement.qualityOfWork = qualityOfWork;
+      endorsement.wouldRehire = Boolean(wouldRehire);
+      endorsement.overallPerformance = overallPerformance;
 
       const result = await endorsement.save();
-      return res.status(200).json(
-        new ApiResponse(200, result, "Endorsement updated successfully")
-      );
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Endorsement updated successfully"));
     } catch (err) {
       next(err);
     }

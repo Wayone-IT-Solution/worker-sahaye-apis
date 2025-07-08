@@ -1,13 +1,23 @@
 import mongoose, { Schema, model, Document } from "mongoose";
 
+export type EndorsementPerformanceLevel = 1 | 2 | 3 | 4 | 5;
+export type EndorsementRespect = "High" | "Moderate" | "Low";
+export type EndorsementQuality = "Excellent" | "Good" | "Average" | "Poor";
+export type EndorsementTimeline = "On-Time" | "Delayed" | "Ahead of Schedule";
+
 export interface IEndorsement extends Document {
   createdAt: Date;
   updatedAt: Date;
   message?: string;
   fulfilled: boolean;
+  wouldRehire?: boolean;
+  overallPerformance?: number;
   endorsedBy: mongoose.Types.ObjectId;
   endorsedTo: mongoose.Types.ObjectId;
+  respect?: "High" | "Moderate" | "Low";
   connectionId: mongoose.Types.ObjectId;
+  timelines?: "On-Time" | "Delayed" | "Ahead of Schedule";
+  qualityOfWork?: "Excellent" | "Good" | "Average" | "Poor";
 }
 
 const EndorsementSchema = new Schema<IEndorsement>(
@@ -38,6 +48,57 @@ const EndorsementSchema = new Schema<IEndorsement>(
     fulfilled: {
       type: Boolean,
       default: false,
+    },
+    overallPerformance: {
+      type: Number,
+      min: [1, "Minimum rating is 1"],
+      max: [5, "Maximum rating is 5"],
+      required: true,
+      validate: {
+        validator: Number.isInteger,
+        message: "{VALUE} is not a valid integer",
+      },
+      description: "Overall rating on a scale of 1 to 5",
+    },
+
+    timelines: {
+      type: String,
+      enum: {
+        values: ["On-Time", "Delayed", "Ahead of Schedule"],
+        message: "{VALUE} is not a valid timeline status",
+      },
+      required: true,
+      default: "On-Time",
+      description: "Whether the task was completed on time",
+    },
+
+    qualityOfWork: {
+      type: String,
+      enum: {
+        values: ["Excellent", "Good", "Average", "Poor"],
+        message: "{VALUE} is not a valid quality level",
+      },
+      required: true,
+      default: "Good",
+      description: "Quality level of the work delivered",
+    },
+
+    wouldRehire: {
+      type: Boolean,
+      required: true,
+      default: false,
+      description: "Indicates if the endorser would rehire the candidate",
+    },
+
+    respect: {
+      type: String,
+      enum: {
+        values: ["High", "Moderate", "Low"],
+        message: "{VALUE} is not a valid respect level",
+      },
+      required: true,
+      default: "Moderate",
+      description: "Respect level the endorser has for the candidate",
     },
   },
   { timestamps: true }

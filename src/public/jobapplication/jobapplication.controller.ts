@@ -331,8 +331,21 @@ export const getReceivedApplications = async (
       { $unwind: "$applicantDetails" },
       {
         $lookup: {
+          from: "candidatebrandingbadges",
+          localField: "applicant",
+          foreignField: "user",
+          as: "badgeDetails"
+        }
+      },
+      {
+        $addFields: {
+          candidateBadges: "$badgeDetails"
+        }
+      },
+      {
+        $lookup: {
           from: "fileuploads",
-          let: { userId: "$applicantDetails._id" },
+          let: { userId: "$applicant" },
           pipeline: [
             {
               $match: {
@@ -363,6 +376,7 @@ export const getReceivedApplications = async (
           availability: 1,
           interviewMode: 1,
           expectedSalary: 1,
+          candidateBadges: 1,
           applicantSnapshot: 1,
           interviewModeAccepted: 1,
 

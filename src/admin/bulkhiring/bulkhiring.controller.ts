@@ -53,7 +53,8 @@ export class BulkHiringController {
     next: NextFunction
   ) {
     try {
-      const result = await bulkHiringService.getAll(req.query);
+      const { id: userId, role } = (req as any).user;
+      const result = await bulkHiringService.getAll({ ...req.query, ...(role === "admin" ? {} : userId) });
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -68,7 +69,7 @@ export class BulkHiringController {
     next: NextFunction
   ) {
     try {
-      const result = await bulkHiringService.getById(req.params.id);
+      const result = await bulkHiringService.getById(req.params.id, true);
       if (!result)
         return res
           .status(404)
@@ -87,10 +88,23 @@ export class BulkHiringController {
     next: NextFunction
   ) {
     try {
-      const result = await bulkHiringService.updateById(
-        req.params.id,
-        req.body
-      );
+      const id = req.params.id;
+      const record = await bulkHiringService.getById(id);
+      if (!record)
+        return res
+          .status(404)
+          .json(new ApiError(404, "Bulk hiring request not found"));
+
+      const allowedStatuses = ["Pending", "In Review"];
+      if (!allowedStatuses.includes(record.status)) {
+        return res.status(403).json(
+          new ApiError(
+            403,
+            `Cannot update request with status '${record.status}'. Allowed only in: ${allowedStatuses.join(", ")}`
+          )
+        );
+      }
+      const result = await bulkHiringService.updateById(id, req.body);
       if (!result)
         return res
           .status(404)
@@ -109,11 +123,23 @@ export class BulkHiringController {
     next: NextFunction
   ) {
     try {
-      const result = await bulkHiringService.deleteById(req.params.id);
-      if (!result)
+      const id = req.params.id;
+      const record = await bulkHiringService.getById(id);
+      if (!record)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to delete bulk hiring"));
+          .json(new ApiError(404, "Bulk hiring request not found"));
+
+      const allowedStatuses = ["Pending", "Cancelled"];
+      if (!allowedStatuses.includes(record.status)) {
+        return res.status(403).json(
+          new ApiError(
+            403,
+            `Cannot delete request with status '${record.status}'. Allowed only in: ${allowedStatuses.join(", ")}`
+          )
+        );
+      }
+      const result = await bulkHiringService.deleteById(id);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));

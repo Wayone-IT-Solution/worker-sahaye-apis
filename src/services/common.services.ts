@@ -18,9 +18,19 @@ export class CommonService<T extends Document> {
     }
   }
 
-  async getById(id: string) {
+  async getById(id: string, populate: boolean = false) {
     try {
-      const result = await this.model.findById(id);
+      const query = this.model.findById(id);
+      if (populate) {
+        const schemaPaths = this.model.schema.paths;
+        Object.keys(schemaPaths).forEach((key) => {
+          const path = schemaPaths[key];
+          if ((path as any).options?.ref) {
+            query.populate(key);
+          }
+        });
+      }
+      const result = await query;
       if (!result) throw new Error("Record not found");
       return result;
     } catch (error) {

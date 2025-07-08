@@ -2,8 +2,9 @@ import jwt from "jsonwebtoken";
 import { NextFunction } from "express";
 import Admin from "../modals/admin.model";
 import { User } from "../modals/user.model";
+import { config } from "../config/config";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
+const JWT_SECRET = config.jwt.secret;
 
 /**
  * Middleware to verify JWT token
@@ -52,42 +53,42 @@ const capitalize = (text: string): string =>
 
 const checkRole =
   (requiredRole: "admin" | "user" | "worker" | "employer" | "contractor") =>
-  async (req: AuthenticatedRequest, res: any, next: NextFunction) => {
-    const { user } = req;
+    async (req: AuthenticatedRequest, res: any, next: NextFunction) => {
+      const { user } = req;
 
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized. User not found." });
-    }
-    if (user.role !== requiredRole) {
-      return res.status(403).json({
-        status: false,
-        message: `Access denied. ${capitalize(
-          user.role
-        )}s cannot access this route.`,
-        expectedRole: requiredRole,
-        currentRole: user.role,
-      });
-    }
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized. User not found." });
+      }
+      if (user.role !== requiredRole) {
+        return res.status(403).json({
+          status: false,
+          message: `Access denied. ${capitalize(
+            user.role
+          )}s cannot access this route.`,
+          expectedRole: requiredRole,
+          currentRole: user.role,
+        });
+      }
 
-    const Model: any = getModelByRole(requiredRole);
+      const Model: any = getModelByRole(requiredRole);
 
-    if (!Model) {
-      return res.status(500).json({
-        status: false,
-        message: "Internal server error. Invalid user role mapping.",
-      });
-    }
+      if (!Model) {
+        return res.status(500).json({
+          status: false,
+          message: "Internal server error. Invalid user role mapping.",
+        });
+      }
 
-    const existingUser = await Model.findOne({ _id: user.id });
-    if (!existingUser) {
-      return res.status(404).json({
-        status: false,
-        message: `${capitalize(requiredRole)} not found in the system.`,
-      });
-    }
+      const existingUser = await Model.findOne({ _id: user.id });
+      if (!existingUser) {
+        return res.status(404).json({
+          status: false,
+          message: `${capitalize(requiredRole)} not found in the system.`,
+        });
+      }
 
-    next();
-  };
+      next();
+    };
 
 // Export role-specific middlewares
 export const isUser: any = checkRole("user");

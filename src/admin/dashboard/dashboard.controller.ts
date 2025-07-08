@@ -20,6 +20,7 @@ import {
   CommunityMember,
 } from "../../modals/communitymember.model";
 import Ticket from "../../modals/ticket.model";
+import { ForumPost } from "../../modals/forumpost.model";
 
 export class DashboardController {
   static async getDashboardStats(
@@ -87,7 +88,7 @@ export class DashboardController {
       };
 
       // Fetch all in parallel
-      const [payments, courses, activeUsers, appliedJobs, communityJoins] =
+      const [payments, courses, activeUsers, appliedJobs, communityJoins, posts] =
         await Promise.all([
           aggregateDaily(EnrolledPlan, "createdAt", "finalAmount", {
             "paymentDetails.status": "success",
@@ -101,6 +102,9 @@ export class DashboardController {
           }),
           aggregateDaily(CommunityMember, "joinedAt", undefined, {
             status: MemberStatus.JOINED,
+          }),
+          aggregateDaily(ForumPost, "createdAt", undefined, {
+            status: "active",
           }),
         ]);
 
@@ -139,6 +143,7 @@ export class DashboardController {
         new ApiResponse(
           200,
           {
+            posts: calculateStats(posts),
             revenue: calculateStats(totalRevenue),
             activeUsers: calculateStats(activeUsers),
             appliedJobs: calculateStats(appliedJobs),

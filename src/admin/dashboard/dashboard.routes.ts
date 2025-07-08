@@ -5,6 +5,8 @@ import { authenticateToken } from "../../middlewares/authMiddleware";
 
 const {
     getDashboardStats,
+    getUserTypeCounts,
+    getJobApplicationsStats,
     getCustomerSupportDetails,
     getYearlyRevenueComparison,
 } = DashboardController;
@@ -21,6 +23,16 @@ router.get(
     "/customer-support",
     authenticateToken,
     asyncHandler(getCustomerSupportDetails)
+);
+router.get(
+    "/user-stats",
+    authenticateToken,
+    asyncHandler(getUserTypeCounts)
+);
+router.get(
+    "/job-applications",
+    authenticateToken,
+    asyncHandler(getJobApplicationsStats)
 );
 
 export default router;

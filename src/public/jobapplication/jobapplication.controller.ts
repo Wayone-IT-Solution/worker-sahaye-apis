@@ -91,7 +91,7 @@ export const applyToJob = async (
         type: "job-applied",
         context: {
           jobTitle: jobDoc?.title,
-          applicantName: "Rishabh",
+          applicantName: userDoc.fullName,
         },
         senderId: applicantId,
         senderRole: UserType.WORKER,
@@ -289,12 +289,17 @@ export const getReceivedApplications = async (
 
     const statusFilter = req.query.status as string;
     const search = (req.query.search as string)?.trim();
+    const jobIdFilter = req.query.job as string;
 
     const matchConditions: any = [];
 
     // Match only jobs posted by current user
     matchConditions.push({ "jobDetails.postedBy": new mongoose.Types.ObjectId(userId) });
     if (statusFilter) matchConditions.push({ status: statusFilter });
+
+    if (jobIdFilter && mongoose.Types.ObjectId.isValid(jobIdFilter)) {
+      matchConditions.push({ job: new mongoose.Types.ObjectId(jobIdFilter) });
+    }
 
     if (search) {
       matchConditions.push({
@@ -324,6 +329,28 @@ export const getReceivedApplications = async (
         },
       },
       { $unwind: "$applicantDetails" },
+      {
+        $lookup: {
+          from: "fileuploads",
+          let: { userId: "$applicantDetails._id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$userId", "$$userId"] },
+                    { $eq: ["$tag", "profilePic"] },
+                  ],
+                },
+              },
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: "profilePicFile",
+        },
+      },
+      { $addFields: { profilePic: { $arrayElemAt: ["$profilePicFile.url", 0] }, }, },
       { $match: matchConditions.length ? { $and: matchConditions } : {} },
       {
         $project: {
@@ -338,6 +365,7 @@ export const getReceivedApplications = async (
           expectedSalary: 1,
           applicantSnapshot: 1,
           interviewModeAccepted: 1,
+
           jobId: "$jobDetails._id",
           jobTitle: "$jobDetails.title",
           jobType: "$jobDetails.jobType",
@@ -345,6 +373,8 @@ export const getReceivedApplications = async (
           jobDescription: "$jobDetails.description",
           jobSkillsRequired: "$jobDetails.skillsRequired",
           jobExperienceLevel: "$jobDetails.experienceLevel",
+
+          profilePic: 1,
           applicantId: "$applicantDetails._id",
           applicantEmail: "$applicantDetails.email",
           applicantPhone: "$applicantDetails.mobile",

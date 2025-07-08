@@ -231,6 +231,105 @@ export class DashboardController {
     }
   }
 
+  static async getJobApplicationsStats(
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { startDate: start, endDate: end } = _req.query;
+
+      const endDate = end ? new Date(end as string) : new Date();
+      const startDate = start ? new Date(start as string) : subDays(endDate, 7);
+
+      const prevEndDate = subDays(startDate, 1);
+      const prevStartDate = subDays(startDate, 7);
+
+      const currentRange = {
+        $gte: startOfDay(startDate),
+        $lte: endOfDay(endDate),
+      };
+
+      const prevRange = {
+        $gte: startOfDay(prevStartDate),
+        $lte: endOfDay(prevEndDate),
+      };
+
+      const statuses = [
+        "hired",
+        "applied",
+        "offered",
+        "rejected",
+        "interview",
+        "withdrawn",
+        "shortlisted",
+        "under_review",
+        "offer_declined",
+        "offer_accepted",
+      ];
+
+      const [currentCounts, previousCounts] = await Promise.all([
+        JobApplication.aggregate([
+          { $match: { createdAt: currentRange } },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        JobApplication.aggregate([
+          { $match: { createdAt: prevRange } },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+      ]);
+
+      const currentMap = Object.fromEntries(
+        statuses.map((status) => [status, 0])
+      );
+      const prevMap = { ...currentMap };
+
+      currentCounts.forEach(({ _id, count }) => (currentMap[_id] = count));
+      previousCounts.forEach(({ _id, count }) => (prevMap[_id] = count));
+
+      const result = statuses.reduce((acc, status) => {
+        const current = currentMap[status];
+        const previous = prevMap[status];
+        const percentageChange =
+          previous === 0
+            ? current > 0
+              ? 100
+              : 0
+            : ((current - previous) / previous) * 100;
+
+        acc[status] = current;
+        acc[`${status}_change`] = parseFloat(percentageChange.toFixed(2));
+        return acc;
+      }, {} as Record<string, number>);
+
+      res.status(200).json({
+        success: true,
+        from: startOfDay(startDate),
+        to: endOfDay(endDate),
+        ...result,
+      });
+    } catch (error) {
+      console.error("Error getting ticket summary:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+
+  static async getUserTypeCounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userTypes = ["worker", "employer", "contractor"];
+      const counts = await Promise.all(
+        userTypes.map((type) =>
+          User.countDocuments({ userType: type, status: "active" })
+        )
+      );
+      return res.status(200).json(
+        new ApiResponse(200, counts, "Active user type counts fetched")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getYearlyRevenueComparison(
     req: Request,
     res: Response,

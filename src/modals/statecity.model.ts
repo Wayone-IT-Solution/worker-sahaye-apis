@@ -1,6 +1,26 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 /**
+ * ==============================
+ * 🌍 Country Schema & Interface
+ * ==============================
+ */
+export interface ICountry extends Document {
+  name: string;
+  code: string;
+}
+
+const CountrySchema: Schema<ICountry> = new Schema(
+  {
+    name: { type: String, required: true, trim: true, unique: true },
+    code: { type: String, required: true, trim: true, uppercase: true }, // e.g., "IN", "US"
+  },
+  { timestamps: true }
+);
+
+const Country: Model<ICountry> = mongoose.model<ICountry>("Country", CountrySchema);
+
+/**
  * ===========================
  * 📍 State Schema & Interface
  * ===========================
@@ -8,12 +28,18 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IState extends Document {
   name: string;
   code: string;
+  countryId: mongoose.Types.ObjectId;
 }
 
 const StateSchema: Schema<IState> = new Schema(
   {
     name: { type: String, required: true, trim: true, unique: true },
     code: { type: String, required: true, trim: true, uppercase: true },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      required: true,
+    },
   },
   { timestamps: true }
 );
@@ -45,4 +71,4 @@ const CitySchema: Schema<ICity> = new Schema(
 );
 
 const City: Model<ICity> = mongoose.model<ICity>("City", CitySchema);
-export { State, City };
+export { State, City, Country };

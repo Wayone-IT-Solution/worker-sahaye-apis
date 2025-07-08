@@ -3,22 +3,66 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { StateCityController } from "./statecity.controller";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
-const { createStateCity, getAllStateCitys, getAllCity, getAllStates, createState, getStateById, updateStateById, deleteStateById, createCity, updateCityById, getCityById, deleteCityById } = StateCityController;
+const {
+  // Country
+  createCountry,
+  getAllCountries,
+  getCountryById,
+  updateCountryById,
+  deleteCountryById,
+
+  // State
+  createState,
+  getAllStates,
+  getStateById,
+  updateStateById,
+  deleteStateById,
+
+  // City
+  createCity,
+  getAllCity,
+  getCityById,
+  updateCityById,
+  deleteCityById,
+
+  // Combined
+  createStateCity,
+  getAllStateCitys,
+} = StateCityController;
 
 const router = express.Router();
 
-router
-  .post("/", authenticateToken, asyncHandler(createStateCity))
-  .get("/", authenticateToken, asyncHandler(getAllStateCitys))
-  .get("/city", authenticateToken, asyncHandler(getAllCity))
-  .post("/city", authenticateToken, asyncHandler(createCity))
-  .get("/city/:id", authenticateToken, asyncHandler(getCityById))
-  .put("/city/:id", authenticateToken, asyncHandler(updateCityById))
-  .delete("/city/:id", authenticateToken, asyncHandler(deleteCityById))
-  .get("/state", authenticateToken, asyncHandler(getAllStates))
-  .post("/state", authenticateToken, asyncHandler(createState))
-  .get("/state/:id", authenticateToken, asyncHandler(getStateById))
-  .put("/state/:id", authenticateToken, asyncHandler(updateStateById))
-  .delete("/state/:id", authenticateToken, asyncHandler(deleteStateById));
+// ==============================
+// 🌍 Country Routes
+// ==============================
+router.post("/country", authenticateToken, asyncHandler(createCountry));
+router.get("/country", authenticateToken, asyncHandler(getAllCountries));
+router.get("/country/:id", authenticateToken, asyncHandler(getCountryById));
+router.put("/country/:id", authenticateToken, asyncHandler(updateCountryById));
+router.delete("/country/:id", authenticateToken, asyncHandler(deleteCountryById));
+
+// ==============================
+// 📍 State Routes
+// ==============================
+router.post("/state", authenticateToken, asyncHandler(createState));
+router.get("/state", authenticateToken, asyncHandler(getAllStates));
+router.get("/state/:id", authenticateToken, asyncHandler(getStateById));
+router.put("/state/:id", authenticateToken, asyncHandler(updateStateById));
+router.delete("/state/:id", authenticateToken, asyncHandler(deleteStateById));
+
+// ==============================
+// 🏙️ City Routes
+// ==============================
+router.post("/city", authenticateToken, asyncHandler(createCity));
+router.get("/city", authenticateToken, asyncHandler(getAllCity));
+router.get("/city/:id", authenticateToken, asyncHandler(getCityById));
+router.put("/city/:id", authenticateToken, asyncHandler(updateCityById));
+router.delete("/city/:id", authenticateToken, asyncHandler(deleteCityById));
+
+// ==============================
+// 🌐 Combined Route (Optional)
+// ==============================
+router.post("/", authenticateToken, asyncHandler(createStateCity));
+router.get("/", authenticateToken, asyncHandler(getAllStateCitys));
 
 export default router;

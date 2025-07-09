@@ -453,37 +453,47 @@ export const addInteraction = async (
   res: Response
 ): Promise<any> => {
   try {
-    let { role } = req.user;
-
-    if (role === "user") role = "user";
+    let { role, id } = req.user;
     const { initiator, receiver, action, content, ticketId } = req.body;
 
-    const ticket = await Ticket.findById({ _id: ticketId });
+    const ticket = await Ticket.findById(ticketId);
     if (!ticket)
       return res.status(404).json(new ApiError(404, "Ticket not found"));
 
-    if (ticket && ticket?.status === "closed")
-      return res.status(404).json(new ApiError(404, "Ticket has been closed"));
+    // Only initiator or assignee can interact
+    if (
+      ticket.requester?.toString() !== id &&
+      ticket.assignee?.toString() !== id
+    ) {
+      return res
+        .status(403)
+        .json(new ApiError(403, "You are not authorized to access this ticket"));
+    }
+
+    if (ticket.status === "closed")
+      return res.status(400).json(new ApiError(400, "Ticket has been closed"));
+
+    const isUserRole = ["worker", "employer", "contractor"].includes(role?.toLowerCase());
 
     const userExist = await User.findById({
-      _id: role === "user" ? initiator : receiver,
+      _id: isUserRole ? initiator : receiver,
     });
     if (!userExist)
       return res.status(404).json(new ApiError(404, "User not found"));
 
     const agentExist = await Agent.findById({
-      _id: role === "user" ? receiver : initiator,
+      _id: isUserRole ? receiver : initiator,
     });
     if (!agentExist)
       return res.status(404).json(new ApiError(404, "Agent not found"));
 
     const interaction = createInteractionObject({
-      action, // for user interaction it must be "commented" and for agent can be anything
-      content, // shows the interaction content
-      receiver, // if role is user then it will be agent ID or vice-versa
-      initiator, // if role is user then it will be user ID or vice-versa
-      receiverType: role === "user" ? "Agent" : "user",
-      initiatorType: role === "user" ? "user" : "Agent",
+      action,
+      content,
+      receiver,
+      initiator,
+      receiverType: isUserRole ? "Agent" : "User",
+      initiatorType: isUserRole ? "User" : "Agent",
     });
 
     ticket.interactions.push(interaction);

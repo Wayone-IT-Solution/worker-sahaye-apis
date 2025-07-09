@@ -1,20 +1,23 @@
-// Virtualhr Routes
 import express from "express";
-import {
-  createVirtualhr,
-  getAllVirtualhrs,
-  getVirtualhrById,
-  updateVirtualhrById,
-  deleteVirtualhrById,
-} from "./virtualhr.controller";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { VirtualHRController } from "./virtualhr.controller";
+import { authenticateToken } from "../../middlewares/authMiddleware";
+
+const {
+  createVirtualHR,
+  getAllVirtualHRs,
+  getVirtualHRById,
+  updateVirtualHRById,
+  deleteVirtualHRById,
+} = VirtualHRController;
 
 const router = express.Router();
 
 router
-  .post("/", createVirtualhr)
-  .get("/", getAllVirtualhrs)
-  .get("/:id", getVirtualhrById)
-  .put("/:id", updateVirtualhrById)
-  .delete("/:id", deleteVirtualhrById);
+  .post("/", authenticateToken, asyncHandler(createVirtualHR))
+  .get("/", authenticateToken, asyncHandler(getAllVirtualHRs))
+  .get("/:id", authenticateToken, asyncHandler(getVirtualHRById))
+  .put("/:id", authenticateToken, asyncHandler(updateVirtualHRById))
+  .delete("/:id", authenticateToken, asyncHandler(deleteVirtualHRById))
 
 export default router;

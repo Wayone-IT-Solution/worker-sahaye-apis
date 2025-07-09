@@ -2,11 +2,12 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export interface IVirtualHR extends Document {
   bio?: string;
+  name: string;
+  email: string;
+  mobile: string;
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
-  isAvailable: boolean;
-  userId: Types.ObjectId;
   availableDays: string[];
   expertiseAreas: string[];
   experienceInYears: number;
@@ -16,14 +17,23 @@ export interface IVirtualHR extends Document {
   communicationModes: ("Google Meet" | "Phone Call" | "WhatsApp" | "Zoom" | string)[];
 }
 
+// --- Custom Mobile Validator ---
+const validateMobile = (mobile: string): boolean => {
+  return /^[6-9]\d{9}$/.test(mobile); // Indian mobile number
+};
+
 const VirtualHRSchema = new Schema<IVirtualHR>(
   {
-    userId: {
-      ref: "Admin",
-      index: true,
-      unique: true,
+    name: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    mobile: {
+      type: String,
       required: true,
-      type: Schema.Types.ObjectId,
+      unique: true,
+      validate: {
+        validator: validateMobile,
+        message: "Invalid Indian mobile number",
+      },
     },
     bio: {
       type: String,
@@ -54,12 +64,12 @@ const VirtualHRSchema = new Schema<IVirtualHR>(
       type: [String],
       enum: [
         "Monday",
+        "Friday",
+        "Sunday",
         "Tuesday",
         "Wednesday",
-        "Thursday",
-        "Friday",
         "Saturday",
-        "Sunday",
+        "Thursday",
       ],
       default: [],
     },
@@ -67,10 +77,6 @@ const VirtualHRSchema = new Schema<IVirtualHR>(
       type: [String],
       enum: ["Google Meet", "Phone Call", "WhatsApp", "Zoom"],
       default: [],
-    },
-    isAvailable: {
-      type: Boolean,
-      default: true,
     },
     isActive: {
       type: Boolean,

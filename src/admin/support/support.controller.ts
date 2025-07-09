@@ -6,12 +6,16 @@ import {
 } from "../../modals/ticket.model";
 import ApiError from "../../utils/ApiError";
 import Agent from "../../modals/agent.model";
-import Admin from "../../modals/admin.model";
 import { User } from "../../modals/user.model";
 import Ticket from "../../modals/ticket.model";
 import ApiResponse from "../../utils/ApiResponse";
+import { deleteFromS3 } from "../../config/s3Uploader";
 import { Request, Response, NextFunction } from "express";
-import { getPipeline, paginationResult } from "../../utils/helper";
+import { CommonService } from "../../services/common.services";
+import { extractImageUrl } from "../community/community.controller";
+
+const agentService = new CommonService(Agent);
+const ticketService = new CommonService(Ticket);
 
 // CREATE a new ticket
 export const createTicket = async (
@@ -22,6 +26,20 @@ export const createTicket = async (
   try {
     const { id } = req.user;
     const { tags, title, description } = req.body;
+
+    const duplicate = await Ticket.findOne({
+      $or: [
+        { tags: tags },
+        { title: title },
+        { description: description }
+      ]
+    });
+
+    if (duplicate) {
+      return res
+        .status(409)
+        .json(new ApiError(409, "Ticket with same tags, title, or description already exists."));
+    }
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0); // set to start of the day
@@ -87,38 +105,38 @@ export const createAgent = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    const { userId, availability, skills } = req.body;
-    const userData: any = await Admin.findById(userId);
-    if (!userData)
-      return res.status(404).json(new ApiError(404, "User not found"));
+    const profilePictureUrl = req?.body?.profilePictureUrl?.[0]?.url;
+    const duplicate = await Agent.findOne({
+      $or: [
+        { name: req.body.name },
+        { email: req.body.email },
+        { mobile: req.body.mobile },
+      ]
+    });
 
-    const email = userData.email;
-    const name = userData.username;
-
-    const isAgentExist = await Agent.findOne({ email: email });
-    if (isAgentExist)
+    if (duplicate) {
+      if (profilePictureUrl) {
+        const s3Key = profilePictureUrl.split(".com/")[1];
+        await deleteFromS3(s3Key);
+      }
       return res
-        .status(200)
-        .json(
-          new ApiResponse(200, null, "Agent with this email already exists")
-        );
+        .status(409)
+        .json(new ApiError(409, "Agent with same name, email, or mobile already exists."));
+    }
+    const result = await agentService.create({ ...req.body, profilePictureUrl });
+    if (!result) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Failed to create Agent profile"));
+    }
 
-    const agent = new Agent({
-      name,
-      email,
-      skills,
-      userId,
-      availability: availability === "active",
-    });
-    const response = await agent.save();
-    return res.status(200).json({
-      success: true,
-      data: response,
-      message: "Agent created successfully",
-    });
+    return res
+      .status(201)
+      .json(new ApiResponse(201, result, "Agent created successfully"));
+
   } catch (error) {
     console.log(error);
-    return res.status(500).json(new ApiError(400, "Failed to create ticket"));
+    return res.status(500).json(new ApiError(400, "Failed to create ticket", error));
   }
 };
 
@@ -194,17 +212,16 @@ export const getTicket = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    const { role } = req.user;
-    const { id } = req.params;
-
-    const data = await getData(id, role);
-
-    return res.status(200).json({
-      data: data,
-      success: true,
-      message: "Ticket Fetched successfully",
-    });
+    const result = await ticketService.getById(req.params.id, true);
+    if (!result)
+      return res
+        .status(404)
+        .json(new ApiError(404, "Ticket not found"));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
   } catch (error) {
+    console.log(error)
     next(new ApiError(500, "Error fetching ticket", error));
   }
 };
@@ -235,9 +252,8 @@ export const deactivateAgent = async (
 
     return res.status(200).json({
       success: true,
-      message: `Agent ${
-        agent.availability ? "activated " : "deactivated "
-      } successfully`,
+      message: `Agent ${agent.availability ? "activated " : "deactivated "
+        } successfully`,
     });
   } catch (error) {
     next(new ApiError(500, "Error fetching ticket", error));
@@ -272,90 +288,59 @@ export const getTickets = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    const { _id, role } = req.user;
-    const { page = 1, limit = 10 } = req.query;
-    const pageNumber = parseInt(page);
-    const limitNumber = parseInt(limit);
-
-    let id = _id;
-    if (role === "agent") {
-      const userAgent = await Agent.findOne({
-        userId: _id,
-        availability: true,
-      });
-      if (!userAgent)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Agent not active or not found"));
-      id = userAgent._id;
-    }
-
+    const { id, role } = req.user;
+    const { assignee } = req.query;
     const query: any = { ...req.query };
-    if (role === "agent") query.assignee = id;
-    const { pipeline, matchStage, options } = getPipeline(query);
 
-    pipeline.push(
-      {
-        $lookup: {
-          from: "users",
-          localField: "requester",
-          foreignField: "_id",
-          as: "requesterInfo",
-        },
+    if (role === "agent") query.assignee = assignee || id;
+    const pipeline = [{
+      $lookup: {
+        from: "users",
+        localField: "requester",
+        foreignField: "_id",
+        as: "requesterInfo",
       },
-      {
-        $unwind: {
-          path: "$requesterInfo",
-          preserveNullAndEmptyArrays: true,
-        },
+    },
+    {
+      $unwind: {
+        path: "$requesterInfo",
+        preserveNullAndEmptyArrays: true,
       },
-      {
-        $lookup: {
-          from: "agents",
-          localField: "assignee",
-          foreignField: "_id",
-          as: "assigneeInfo",
-        },
+    },
+    {
+      $lookup: {
+        from: "agents",
+        localField: "assignee",
+        foreignField: "_id",
+        as: "assigneeInfo",
       },
-      {
-        $unwind: {
-          path: "$assigneeInfo",
-          preserveNullAndEmptyArrays: true,
-        },
+    },
+    {
+      $unwind: {
+        path: "$assigneeInfo",
+        preserveNullAndEmptyArrays: true,
       },
-      {
-        $project: {
-          _id: 1,
-          status: 1,
-          dueDate: 1,
-          priority: 1,
-          createdAt: 1,
-          resolutionDate: 1,
-          assigneeName: "$assigneeInfo.name",
-          assigneeEmail: "$assigneeInfo.email",
-          requesterName: "$requesterInfo.name",
-          requesterNumber: "$requesterInfo.phoneNumber",
-        },
-      }
-    );
-
-    const response = await Ticket.aggregate(pipeline, options);
-    const totalTickets = await Ticket.countDocuments(
-      Object.keys(matchStage).length > 0 ? matchStage : {}
-    );
-
-    if (!response.length) {
-      return res.status(404).json(new ApiError(404, "No Tickets found"));
-    }
-    const data = paginationResult(
-      pageNumber,
-      limitNumber,
-      totalTickets,
-      response
-    );
+    },
+    {
+      $project: {
+        _id: 1,
+        status: 1,
+        dueDate: 1,
+        priority: 1,
+        createdAt: 1,
+        resolutionDate: 1,
+        assigneeName: "$assigneeInfo.name",
+        assigneeEmail: "$assigneeInfo.email",
+        assigneeMobile: "$assigneeInfo.mobile",
+        requesterEmail: "$requesterInfo.email",
+        requesterName: "$requesterInfo.fullName",
+        requesterNumber: "$requesterInfo.mobile",
+      },
+    }]
+    const result = await ticketService.getAll(query, pipeline);
     return res
       .status(200)
-      .json(new ApiResponse(200, data, "Tickets fetched successfully"));
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
   } catch (error) {
     console.log(error);
     next(new ApiError(500, "Error fetching tickets", error));
@@ -368,69 +353,13 @@ export const getAgents = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    const { page = 1, limit = 10 } = req.query;
-    const pageNumber = parseInt(page);
-    const limitNumber = parseInt(limit);
-
-    const { pipeline, matchStage, options } = getPipeline(req.query);
-
-    const response = await Agent.aggregate(pipeline, options);
-    const totalAgents = await Agent.countDocuments(
-      Object.keys(matchStage).length > 0 ? matchStage : {}
-    );
-
-    if (!response.length) {
-      return res.status(200).json(new ApiError(200, "No Tickets found"));
-    }
-    const data = paginationResult(
-      pageNumber,
-      limitNumber,
-      totalAgents,
-      response
-    );
+    const result = await agentService.getAll(req.query);
     return res
       .status(200)
-      .json(new ApiResponse(200, data, "Tickets fetched successfully"));
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
   } catch (error) {
     console.log(error);
     next(new ApiError(500, "Error fetching tickets", error));
-  }
-};
-
-export const getUniqueAgents = async (
-  req: Request | any,
-  res: Response,
-  next: NextFunction
-): Promise<any> => {
-  try {
-    const users = await Admin.find(
-      { role: { $in: ["agent"] }, status: true },
-      { _id: 1 }
-    );
-    const userIds = users.map((admin: any) => admin._id.toString());
-    const existingAgents = await Agent.find({}, { _id: 0, userId: 1 });
-    const existingAgentsIds = existingAgents.map((agent) =>
-      agent.userId.toString()
-    );
-    const unique =
-      userIds && userIds.filter((id) => !existingAgentsIds.includes(id));
-    if (unique?.length > 0) {
-      const unassignedAgents = await Admin.find({ _id: { $in: unique } });
-      const filterdata = unassignedAgents.map((agent: any) => ({
-        _id: agent?._id,
-        name: agent?.username,
-      }));
-
-      return res
-        .status(200)
-        .json(new ApiResponse(200, filterdata, "Agents Fetched Successfully"));
-    }
-    return res
-      .status(200)
-      .json(new ApiResponse(200, [], "Agents Fetched Successfully"));
-  } catch (error) {
-    console.log(error);
-    next(new ApiError(500, "Error fetching unique agents", error));
   }
 };
 
@@ -527,7 +456,6 @@ export const addInteraction = async (
     let { role } = req.user;
 
     if (role === "user") role = "user";
-
     const { initiator, receiver, action, content, ticketId } = req.body;
 
     const ticket = await Ticket.findById({ _id: ticketId });
@@ -611,8 +539,8 @@ export const manualAssignTicketToAgent = async (
 
 const getData = async (id: any, role: any): Promise<any> => {
   let ticketData: any = await Ticket.findById({ _id: id })
-    .populate("requester", "name email")
-    .populate("assignee", "name email")
+    .populate("requester", "fullName email mobile")
+    .populate("assignee", "name email mobile")
     .populate("relatedTickets", "title status");
 
   if (!ticketData) throw new Error("Ticket Doesn not exist: ");
@@ -688,11 +616,18 @@ export const updateAgent = async (
   req: Request | any,
   res: Response
 ): Promise<any> => {
-  const { skills, userId, availability } = req.body;
+  const { availability } = req.body;
   try {
+    const userId = req.params.id;
+    const profilePictureUrl = req?.body?.profilePictureUrl?.[0]?.url;
     const agent = await Agent.findById({ _id: userId });
-    if (!agent)
+    if (!agent) {
+      if (profilePictureUrl) {
+        const s3Key = profilePictureUrl.split(".com/")[1];
+        await deleteFromS3(s3Key);
+      }
       return res.status(404).json(new ApiError(404, "Agent not found"));
+    }
 
     if (!availability) {
       await Ticket.updateMany(
@@ -704,14 +639,21 @@ export const updateAgent = async (
       );
       agent.activeTickets = 0;
     }
-    agent.availability = availability === "active";
-    agent.skills = skills;
-    await agent.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Agent updated successfully",
-    });
+    let document;
+    if (req?.body?.profilePictureUrl && agent.profilePictureUrl) {
+      document = await extractImageUrl(req?.body?.profilePictureUrl, agent.profilePictureUrl as string);
+    }
+    const result = await agentService.updateById(
+      userId,
+      { ...req.body, profilePictureUrl: document }
+    );
+    if (!result)
+      return res
+        .status(404)
+        .json(new ApiError(404, "Failed to update agent"));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Updated successfully"));
   } catch (error) {
     console.log(error);
     res.status(500).json(new ApiError(500, "Failed to Assigned manually"));

@@ -10,7 +10,7 @@ const ActivityLogSchema = new Schema(
     role: {
       type: String,
       required: false,
-      enum: ["Passenger", "Rider", "Agent"],
+      enum: ["User", "Rider", "Agent"],
     },
     action: { type: String },
     description: { type: String },

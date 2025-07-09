@@ -41,8 +41,10 @@ export class VirtualHRRequestController {
       });
 
       if (existing) {
-        const s3Key = jobDescriptionUrl.split(".com/")[1];
-        await deleteFromS3(s3Key);
+        if (jobDescriptionUrl) {
+          const s3Key = jobDescriptionUrl.split(".com/")[1];
+          await deleteFromS3(s3Key);
+        }
         return res.status(200).json(
           new ApiResponse(
             200,
@@ -136,8 +138,10 @@ export class VirtualHRRequestController {
         );
       }
 
-      const jobDescriptionUrl = await extractImageUrl(document, record.jobDescriptionUrl as string);
-
+      let jobDescriptionUrl;
+      if (req?.body?.jobDescriptionUrl && record.jobDescriptionUrl) {
+        jobDescriptionUrl = await extractImageUrl(req?.body?.jobDescriptionUrl, record.jobDescriptionUrl as string);
+      }
       const result = await virtualHRRequestService.updateById(id, { ...req.body, jobDescriptionUrl });
       if (!result) {
         return res

@@ -105,12 +105,12 @@ const InteractionSchema = new Schema<IInteraction>(
     },
     initiatorType: {
       type: String,
-      enum: ["Passenger", "Agent"],
+      enum: ["User", "Agent"],
       required: true,
     },
     receiverType: {
       type: String,
-      enum: ["Passenger", "Agent"],
+      enum: ["User", "Agent"],
       required: true,
     },
     action: {
@@ -139,7 +139,7 @@ const TicketSchema = new Schema<ITicket>(
     description: { type: String, required: true },
     requester: {
       type: Schema.Types.ObjectId,
-      ref: "Passenger",
+      ref: "User",
       required: true,
     },
     assignee: { type: Schema.Types.ObjectId, ref: "Agent" },

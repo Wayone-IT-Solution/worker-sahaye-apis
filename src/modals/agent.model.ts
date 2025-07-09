@@ -2,14 +2,18 @@ import mongoose, { Document, Schema, Model } from "mongoose";
 
 export interface IAgent extends Document {
   name: string;
+  bio?: string;
   email: string;
+  mobile?: string;
   skills: string[];
   createdAt?: Date;
   updatedAt?: Date;
+  location?: string;
+  department?: string;
   availability: boolean;
   activeTickets: number;
-  resolvedTickets?: number;
-  userId: mongoose.Types.ObjectId;
+  resolvedTickets: number;
+  profilePictureUrl?: string;
 }
 
 const AgentSchema: Schema<IAgent> = new Schema(
@@ -19,17 +23,30 @@ const AgentSchema: Schema<IAgent> = new Schema(
       required: true,
       trim: true,
     },
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Admin",
-      required: true,
-      unique: true,
-      index: true,
-    },
     email: {
       type: String,
       required: true,
       unique: true,
+      trim: true,
+    },
+    mobile: {
+      type: String,
+      match: /^[6-9]\d{9}$/, // Indian format
+    },
+    department: {
+      type: String,
+      trim: true,
+    },
+    profilePictureUrl: {
+      type: String,
+    },
+    bio: {
+      type: String,
+      maxlength: 1000,
+    },
+    location: {
+      type: String,
+      trim: true,
     },
     availability: {
       type: Boolean,

@@ -12,7 +12,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 
 const router = Router();
 
-// 💬 Passenger messages
+// 💬 User messages
 router.post(
   "/",
   authenticateToken,

@@ -1,10 +1,10 @@
 import jwt from "jsonwebtoken";
 import { NextFunction } from "express";
 import Admin from "../modals/admin.model";
-import { User } from "../modals/user.model";
 import { config } from "../config/config";
+import { User } from "../modals/user.model";
 
-const JWT_SECRET = config.jwt.secret;
+const secret = config.jwt.secret;
 
 /**
  * Middleware to verify JWT token
@@ -18,7 +18,7 @@ export const authenticateToken = (req: any, res: any, next: NextFunction) => {
       .json({ message: "Authentication token is required" });
   }
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, secret) as {
       _id: string;
       role: string;
       email: string;

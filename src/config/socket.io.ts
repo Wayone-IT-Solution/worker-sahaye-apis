@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { config } from "./config";
 import { Server } from "socket.io";
 import { Application } from "express";
 import { Server as HttpServer } from "http";
@@ -32,7 +33,7 @@ export const configureSocket = async (
 ): Promise<void> => {
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL,
+      origin: config.frontendUrl,
       methods: ["GET", "POST"],
     },
   });

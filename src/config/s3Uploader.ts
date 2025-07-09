@@ -36,7 +36,7 @@ export const uploadToS3 = async (
 
   const { Location } = await s3.upload(params).promise();
 
-  if (process.env.NODE_ENV !== "production")
+  if (config.env !== "production")
     console.log(`✅ Uploaded to S3 → ${Location}`);
   return Location;
 };

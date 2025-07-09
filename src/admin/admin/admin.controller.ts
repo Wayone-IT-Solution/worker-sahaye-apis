@@ -1,11 +1,12 @@
-import jwt from "jsonwebtoken";
-import ApiError from "../../utils/ApiError";
 import Admin from "../../modals/admin.model";
+import { config } from "../../config/config";
+import jwt, { SignOptions } from "jsonwebtoken";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { getPipeline, paginationResult } from "../../utils/helper";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_jwt_secret";
+const secret = config.jwt.secret;
+const expiresIn = config.jwt.expiresIn as SignOptions["expiresIn"];;
 
 /**
  * User Controller
@@ -217,8 +218,8 @@ export class AdminController {
 
     const token = jwt.sign(
       { _id: user._id, email: user.email, role: user.role ?? "admin" },
-      JWT_SECRET,
-      { expiresIn: "7d" }
+      secret,
+      { expiresIn }
     );
 
     return {

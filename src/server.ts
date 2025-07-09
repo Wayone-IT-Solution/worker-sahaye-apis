@@ -7,13 +7,17 @@ import connectDB from "./config/database";
 import { Server as HttpServer } from "http";
 import { watchEnvFile } from "./config/envWatcher";
 import { configureSocket } from "./config/socket.io";
+import { config as manualConfig } from "./config/config"
 
 // Load environment variables
 config();
 watchEnvFile();
 
+const port = manualConfig.port;
+const dbUrl = manualConfig.db.url;
+
 // Validate necessary environment variables
-if (!process.env.PORT || !process.env.DB_URL) {
+if (!port || !dbUrl) {
   logger.error("Missing required environment variables. Exiting...");
   process.exit(1);
 }
@@ -58,9 +62,9 @@ process.on("SIGINT", shutdown);
 const startServer = async (): Promise<void> => {
   try {
     await connectDB(); // Establish database connection
-    httpServer.listen(process.env.PORT, () => {
+    httpServer.listen(port, () => {
       logger.info(
-        `Server is running at http://localhost:${process.env.PORT}`.blue,
+        `Server is running at http://localhost:${port}`.blue,
       );
     });
   } catch (err: any) {

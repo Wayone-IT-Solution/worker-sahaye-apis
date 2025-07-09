@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { config } from "./config";
 import nodemailer, { SendMailOptions, SentMessageInfo } from "nodemailer";
 
 // Load environment variables
@@ -14,8 +15,8 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false, // False because Gmail SMTP uses STARTTLS
   auth: {
-    user: process.env.ADMIN_EMAIL, // Email address (from environment variables)
-    pass: process.env.PASSWORD, // Password (from environment variables)
+    user: config.email.user, // Email address (from environment variables)
+    pass: config.email.pass, // Password (from environment variables)
   },
 });
 
@@ -34,7 +35,7 @@ const createMailOptions = (
   return {
     from: {
       name: "Multivendor", // Sender name
-      address: process.env.ADMIN_EMAIL as string, // Sender email (from environment variables)
+      address: config.email.user as string, // Sender email (from environment variables)
     },
     to: receiverEmail, // Recipient's email
     subject: subject, // Email subject

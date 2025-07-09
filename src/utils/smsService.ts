@@ -22,7 +22,7 @@ export async function sendSMS({
         }
         const response = await client.messages.create({
             body: message,
-            from: process.env.TWILIO_PHONE,
+            from: config.sms.twilio.phoneNumber,
             to,
         });
 

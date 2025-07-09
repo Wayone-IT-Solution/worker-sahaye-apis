@@ -1,4 +1,5 @@
 import { logger } from "../config/logger";
+import { config as manualConfig } from "../config/config";
 import { Request, Response, NextFunction } from "express";
 
 export const globalErrorHandler = (
@@ -12,8 +13,7 @@ export const globalErrorHandler = (
 
   // Log detailed error info with request path and method
   logger.error(
-    `[${new Date().toISOString()}] Error on ${req.method} ${
-      req.originalUrl
+    `[${new Date().toISOString()}] Error on ${req.method} ${req.originalUrl
     } - Status: ${statusCode} - Message: ${message}`,
     { stack: err.stack }
   );
@@ -22,7 +22,7 @@ export const globalErrorHandler = (
     success: false,
     message,
     // Include stack trace only in development for debugging
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
+    ...(manualConfig.env === "development" && { stack: err.stack }),
     timestamp: new Date().toISOString(),
     path: req.originalUrl,
   });

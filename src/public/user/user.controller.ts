@@ -149,15 +149,57 @@ export class UserController {
   }
 
   static async getAllUsers(
-    req: Request | any,
+    req: Request,
     res: Response,
     next: NextFunction
   ): Promise<any> {
     try {
-      const result = await userService.getAll(req.query);
+      const pipeline: any[] = [
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePic",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePic",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $replaceRoot: {
+            newRoot: {
+              $mergeObjects: [
+                "$$ROOT",
+                {
+                  profilePic: "$profilePic.url"
+                }
+              ]
+            }
+          }
+        }
+      ];
+
+      const result = await userService.getAll(req.query, pipeline);
       return res
         .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
+        .json(new ApiResponse(200, result, "Users fetched successfully"));
     } catch (error) {
       next(error);
     }
@@ -442,6 +484,35 @@ export class UserController {
       next(error);
     }
   }
+
+  static async getUserForAdminById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const userId = req.params.id;
+      const user = await userService.getById(userId);
+      if (!user) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+      const profilePic = await FileUpload.findOne({
+        userId,
+        tag: "profilePic",
+      }).sort({ createdAt: -1 });
+
+      const responseData: any = {
+        ...user.toObject(),
+        profilePicUrl: profilePic?.url || null,
+      };
+      return res
+        .status(200)
+        .json(new ApiResponse(200, responseData, "User fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+
 
   static async getCurrentUser(
     req: Request,

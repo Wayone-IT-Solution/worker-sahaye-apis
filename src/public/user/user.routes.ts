@@ -24,6 +24,11 @@ userRouter.get(
 );
 userRouter.delete("/all/:id", asyncHandler(UserController.deleteUserById));
 userRouter.get(
+  "/all/:id",
+  authenticateToken,
+  asyncHandler(UserController.getUserForAdminById)
+);
+userRouter.get(
   "/all/notifications",
   authenticateToken,
   asyncHandler(getAllNotifications)

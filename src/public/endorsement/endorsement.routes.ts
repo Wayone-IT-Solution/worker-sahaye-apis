@@ -10,14 +10,27 @@ const {
   deleteEndorsementById,
   updateEndorsementById,
   getAllEndorsementsGiven,
-  getAllEndorsementsReceived
+  getAllEndorsementsReceived,
+  showPendingRequestsICanFulfill,
+  showMyPendingEndorsementRequests
 } = EndorsementController;
 
 const router = express.Router();
 
 router.get("/", authenticateToken, asyncHandler(getAllEndorsements));
+
+// Endorsements you have **given** to others
 router.get("/given/to", authenticateToken, asyncHandler(getAllEndorsementsGiven));
+
+// Endorsements you have **received** from others
 router.get("/received/from", authenticateToken, asyncHandler(getAllEndorsementsReceived));
+
+// Endorsement **requests you have sent** to others but they haven't fulfilled yet
+router.get("/requests/sent", authenticateToken, asyncHandler(showMyPendingEndorsementRequests));
+
+// Endorsement **requests you have received** but haven't fulfilled
+router.get("/requests/received", authenticateToken, asyncHandler(showPendingRequestsICanFulfill));
+
 router.post("/", authenticateToken, isWorker, asyncHandler(createEndorsement));
 router.get("/:id", authenticateToken, asyncHandler(getEndorsementById));
 router.put("/:id", authenticateToken, asyncHandler(updateEndorsementById));

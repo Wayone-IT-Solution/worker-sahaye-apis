@@ -12,46 +12,66 @@ const endorsementService = new CommonService(Endorsement);
 export class EndorsementController {
   static async createEndorsement(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id: userId } = (req as any).user;
-      const { endorsedBy } = req.body;
+      const { id: userId } = (req as any).user; // user making the request (Person A)
+      const { endorsedBy } = req.body; // Person B (expected to endorse)
 
-      if (!endorsedBy)
+      if (!endorsedBy) {
         return res.status(400).json(new ApiError(400, "Missing endorsedBy field"));
+      }
 
-      const connection: any = await ConnectionModel.findOne({
+      // ✅ Ensure A & B have accepted connection
+      const connection = await ConnectionModel.findOne({
         $or: [
-          { requester: userId, recipient: endorsedBy, status: ConnectionStatus.ACCEPTED },
-          { requester: endorsedBy, recipient: userId, status: ConnectionStatus.ACCEPTED },
+          {
+            requester: userId,
+            recipient: endorsedBy,
+            status: ConnectionStatus.ACCEPTED,
+          },
+          {
+            requester: endorsedBy,
+            recipient: userId,
+            status: ConnectionStatus.ACCEPTED,
+          },
         ],
       });
 
       if (!connection) {
         return res
           .status(403)
-          .json(new ApiError(403, "You must have an accepted connection to endorse"));
+          .json(new ApiError(403, "You must have an accepted connection to request an endorsement"));
       }
 
+      // ✅ Prevent duplicate request
       const alreadyExists = await Endorsement.findOne({
         endorsedBy,
         endorsedTo: userId,
+        isRequest: true,
+        status: "pending",
       });
 
       if (alreadyExists) {
         return res
           .status(200)
-          .json(new ApiResponse(200, alreadyExists, "Endorsement already sent!"));
+          .json(new ApiResponse(200, alreadyExists, "Endorsement request already sent!"));
       }
 
-      const data = { endorsedBy, endorsedTo: userId, connectionId: connection?._id };
-      const result = await endorsementService.create(data);
+      // ✅ Create endorsement request (not actual endorsement yet)
+      const data = {
+        endorsedBy,
+        isRequest: true,
+        status: "pending",
+        endorsedTo: userId,
+        connectionId: connection._id,
+      };
+
+      const result = await endorsementService.create((data as any));
       if (!result) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Failed to create Endorsement"));
+        return res.status(400).json(new ApiError(400, "Failed to create endorsement request"));
       }
+
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Endorsement created successfully"));
+        .json(new ApiResponse(201, result, "Endorsement request created successfully"));
     } catch (err) {
       next(err);
     }
@@ -122,9 +142,16 @@ export class EndorsementController {
           $project: {
             _id: 1,
             message: 1,
+            respect: 1,
+            timelines: 1,
             fulfilled: 1,
             createdAt: 1,
             updatedAt: 1,
+            endorsedBy: 1,
+            endorsedTo: 1,
+            wouldRehire: 1,
+            qualityOfWork: 1,
+            overallPerformance: 1,
             "endorsedByDetails.email": 1,
             "endorsedByDetails.mobile": 1,
             "endorsedByDetails.fullName": 1,
@@ -148,13 +175,19 @@ export class EndorsementController {
     }
   }
 
-  static async getAllEndorsementsReceived(req: Request, res: Response, next: NextFunction) {
+  static async showMyPendingEndorsementRequests(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const { id: userId } = (req as any).user;
+
       const pipeline = [
         {
           $match: {
             endorsedTo: new mongoose.Types.ObjectId(userId),
+            fulfilled: false,
           },
         },
         {
@@ -190,23 +223,171 @@ export class EndorsementController {
           $project: {
             _id: 1,
             message: 1,
+            respect: 1,
+            timelines: 1,
             fulfilled: 1,
             createdAt: 1,
             updatedAt: 1,
             endorsedBy: 1,
             endorsedTo: 1,
+            wouldRehire: 1,
+            qualityOfWork: 1,
+            overallPerformance: 1,
             "endorsedByDetails.email": 1,
-            "endorsedByDetails.mobile": 1,
             "endorsedByDetails.fullName": 1,
             "endorsedByDetails.userType": 1,
             "endorsedByProfile": { $arrayElemAt: ["$endorsedByProfile.url", 0] },
           },
         },
       ];
+
       const result = await endorsementService.getAll(req.query, pipeline);
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Endorsements received successfully"));
+
+      return res.status(200).json(
+        new ApiResponse(200, result, "Endorsement requests you sent are listed")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async showPendingRequestsICanFulfill(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id: userId } = (req as any).user;
+      const pipeline = [
+        {
+          $match: {
+            endorsedBy: new mongoose.Types.ObjectId(userId),
+            fulfilled: false,
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "endorsedTo",
+            foreignField: "_id",
+            as: "endorsedToDetails",
+          },
+        },
+        { $unwind: "$endorsedToDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$endorsedBy" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$refId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "endorsedToProfile",
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            message: 1,
+            respect: 1,
+            timelines: 1,
+            fulfilled: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            endorsedBy: 1,
+            endorsedTo: 1,
+            wouldRehire: 1,
+            qualityOfWork: 1,
+            overallPerformance: 1,
+            "endorsedToDetails.email": 1,
+            "endorsedToDetails.mobile": 1,
+            "endorsedToDetails.fullName": 1,
+            "endorsedToDetails.userType": 1,
+            "endorsedToProfile": { $arrayElemAt: ["$endorsedToProfile.url", 0] },
+          },
+        },
+      ];
+      const result = await endorsementService.getAll(req.query, pipeline);
+      return res.status(200).json(
+        new ApiResponse(200, result, "Endorsement requests you can fulfill")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllEndorsementsReceived(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id: userId } = (req as any).user;
+      const pipeline = [
+        {
+          $match: {
+            endorsedTo: new mongoose.Types.ObjectId(userId),
+            isRequest: false, // ✅ only real endorsements
+            fulfilled: true,  // ✅ only completed
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "endorsedBy",
+            foreignField: "_id",
+            as: "endorsedByDetails",
+          },
+        },
+        { $unwind: "$endorsedByDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$endorsedBy" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$refId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "endorsedByProfile",
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            message: 1,
+            respect: 1,
+            timelines: 1,
+            fulfilled: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            endorsedBy: 1,
+            endorsedTo: 1,
+            wouldRehire: 1,
+            qualityOfWork: 1,
+            overallPerformance: 1,
+            "endorsedByDetails.email": 1,
+            "endorsedByDetails.mobile": 1,
+            "endorsedByDetails.fullName": 1,
+            "endorsedByDetails.userType": 1,
+            endorsedByProfile: { $arrayElemAt: ["$endorsedByProfile.url", 0] },
+          },
+        },
+      ];
+
+      const result = await endorsementService.getAll(req.query, pipeline);
+      return res.status(200).json(
+        new ApiResponse(200, result, "Endorsements received successfully")
+      );
     } catch (err) {
       next(err);
     }
@@ -219,6 +400,8 @@ export class EndorsementController {
         {
           $match: {
             endorsedBy: new mongoose.Types.ObjectId(userId),
+            isRequest: false, // ✅ only real endorsements
+            fulfilled: true,  // ✅ only completed
           },
         },
         {
@@ -259,15 +442,19 @@ export class EndorsementController {
             updatedAt: 1,
             endorsedBy: 1,
             endorsedTo: 1,
+            overallPerformance: 1,
+            qualityOfWork: 1,
+            timelines: 1,
+            respect: 1,
+            wouldRehire: 1,
             "endorsedToDetails.email": 1,
             "endorsedToDetails.mobile": 1,
             "endorsedToDetails.fullName": 1,
             "endorsedToDetails.userType": 1,
-            "endorsedToProfile": { $arrayElemAt: ["$endorsedToProfile.url", 0] },
+            endorsedToProfile: { $arrayElemAt: ["$endorsedToProfile.url", 0] },
           },
         },
       ];
-
       const result = await endorsementService.getAll(req.query, pipeline);
       return res.status(200).json(
         new ApiResponse(200, result, "Endorsements given successfully")
@@ -319,11 +506,7 @@ export class EndorsementController {
     }
   }
 
-  static async updateEndorsementById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async updateEndorsementById(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: userId } = (req as any).user;
       const {
@@ -336,23 +519,18 @@ export class EndorsementController {
       } = req.body;
 
       const endorsement = await Endorsement.findById(req.params.id);
-      if (!endorsement) return res.status(404).json(new ApiError(404, "Endorsement not found"));
+      if (!endorsement)
+        return res.status(404).json(new ApiError(404, "Endorsement not found"));
 
-      if (endorsement.fulfilled) {
+      if (endorsement.fulfilled)
         return res.status(400).json(
-          new ApiResponse(
-            400,
-            endorsement,
-            "This endorsement has already been fulfilled."
-          )
+          new ApiResponse(400, endorsement, "This endorsement has already been fulfilled.")
         );
-      }
 
-      if (endorsement.endorsedBy.toString() !== userId.toString()) {
+      if (endorsement.endorsedBy.toString() !== userId.toString())
         return res
           .status(403)
           .json(new ApiError(403, "You are not authorized to update this endorsement"));
-      }
 
       const connection = await ConnectionModel.findOne({
         $or: [
@@ -369,59 +547,45 @@ export class EndorsementController {
         ],
       });
 
-      if (!connection) {
+      if (!connection)
         return res
           .status(403)
           .json(new ApiError(403, "A valid connection must exist to update this endorsement"));
-      }
 
-      // Validate required fields
-      if (!message || !message.trim()) {
+      // --- Validation ---
+      if (!message || !message.trim())
+        return res.status(400).json(new ApiError(400, "Message is required"));
+
+      if (![1, 2, 3, 4, 5].includes(Number(overallPerformance)))
         return res
           .status(400)
-          .json(new ApiError(400, "Message is required to fulfill the endorsement"));
-      }
-
-      if (
-        !overallPerformance ||
-        ![1, 2, 3, 4, 5].includes(Number(overallPerformance))
-      ) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Valid overall performance rating (1-5) is required"));
-      }
+          .json(new ApiError(400, "Overall performance must be between 1 and 5"));
 
       const validTimelines = ["On-Time", "Delayed", "Ahead of Schedule"];
-      if (!validTimelines.includes(timelines)) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Invalid value for timelines"));
-      }
+      if (!validTimelines.includes(timelines))
+        return res.status(400).json(new ApiError(400, "Invalid timelines value"));
 
       const validQualities = ["Excellent", "Good", "Average", "Poor"];
-      if (!validQualities.includes(qualityOfWork)) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Invalid value for quality of work"));
-      }
+      if (!validQualities.includes(qualityOfWork))
+        return res.status(400).json(new ApiError(400, "Invalid quality of work value"));
 
       const validRespects = ["High", "Moderate", "Low"];
-      if (!validRespects.includes(respect)) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Invalid value for respect level"));
-      }
+      if (!validRespects.includes(respect))
+        return res.status(400).json(new ApiError(400, "Invalid respect value"));
 
-      // Update all fields
-      endorsement.fulfilled = true;
+      // --- Update ---
+      endorsement.message = message.trim();
       endorsement.respect = respect;
       endorsement.timelines = timelines;
-      endorsement.message = message.trim();
       endorsement.qualityOfWork = qualityOfWork;
       endorsement.wouldRehire = Boolean(wouldRehire);
       endorsement.overallPerformance = overallPerformance;
+      endorsement.fulfilled = true;
+      endorsement.status = "endorsed";
+      endorsement.isRequest = false;
 
       const result = await endorsement.save();
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Endorsement updated successfully"));

@@ -10,8 +10,10 @@ export interface IEndorsement extends Document {
   updatedAt: Date;
   message?: string;
   fulfilled: boolean;
+  isRequest: boolean;
   wouldRehire?: boolean;
   overallPerformance?: number;
+  status: "pending" | "endorsed";
   endorsedBy: mongoose.Types.ObjectId;
   endorsedTo: mongoose.Types.ObjectId;
   respect?: "High" | "Moderate" | "Low";
@@ -44,6 +46,15 @@ const EndorsementSchema = new Schema<IEndorsement>(
       required: true,
       ref: "Connection",
       type: Schema.Types.ObjectId,
+    },
+    isRequest: {
+      type: Boolean,
+      default: false,
+    },
+    status: {
+      type: String,
+      enum: ["pending", "endorsed"],
+      default: "pending",
     },
     fulfilled: {
       type: Boolean,

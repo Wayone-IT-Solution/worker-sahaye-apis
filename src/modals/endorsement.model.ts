@@ -53,11 +53,11 @@ const EndorsementSchema = new Schema<IEndorsement>(
       type: Number,
       min: [1, "Minimum rating is 1"],
       max: [5, "Maximum rating is 5"],
-      required: true,
       validate: {
         validator: Number.isInteger,
         message: "{VALUE} is not a valid integer",
       },
+      default: 1,
       description: "Overall rating on a scale of 1 to 5",
     },
 
@@ -67,7 +67,6 @@ const EndorsementSchema = new Schema<IEndorsement>(
         values: ["On-Time", "Delayed", "Ahead of Schedule"],
         message: "{VALUE} is not a valid timeline status",
       },
-      required: true,
       default: "On-Time",
       description: "Whether the task was completed on time",
     },
@@ -78,14 +77,12 @@ const EndorsementSchema = new Schema<IEndorsement>(
         values: ["Excellent", "Good", "Average", "Poor"],
         message: "{VALUE} is not a valid quality level",
       },
-      required: true,
       default: "Good",
       description: "Quality level of the work delivered",
     },
 
     wouldRehire: {
       type: Boolean,
-      required: true,
       default: false,
       description: "Indicates if the endorser would rehire the candidate",
     },
@@ -96,7 +93,6 @@ const EndorsementSchema = new Schema<IEndorsement>(
         values: ["High", "Moderate", "Low"],
         message: "{VALUE} is not a valid respect level",
       },
-      required: true,
       default: "Moderate",
       description: "Respect level the endorser has for the candidate",
     },

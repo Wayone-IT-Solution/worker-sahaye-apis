@@ -1,15 +1,47 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 
 export enum JobCategoryType {
-  OTHERS = "Others",
+  SALES = "Sales",
+  LEGAL = "Legal",
+  DESIGN = "Design",
+  ENERGY = "Energy",
+  FINANCE = "Finance",
   SERVICE = "Service",
+  SECURITY = "Security",
   CREATIVE = "Creative",
+  FREELANCE = "Freelance",
+  MARKETING = "Marketing",
+  LOGISTICS = "Logistics",
   EDUCATION = "Education",
   TECHNICAL = "Technical",
   MANAGEMENT = "Management",
   HEALTHCARE = "Healthcare",
+  NGO = "NGO / Non-Profit",
+  OPERATIONS = "Operations",
+  GOVERNMENT = "Government",
+  CONSULTING = "Consulting",
+  ENGINEERING = "Engineering",
+  REAL_ESTATE = "Real Estate",
+  AGRICULTURE = "Agriculture",
+  PROCUREMENT = "Procurement",
   CONSTRUCTION = "Construction",
+  SUPPLY_CHAIN = "Supply Chain",
   NON_TECHNICAL = "Non-Technical",
+  ADMINISTRATION = "Administration",
+  DATA_ANALYTICS = "Data Analytics",
+  CONTENT_WRITING = "Content Writing",
+  HUMAN_RESOURCES = "Human Resources",
+  CUSTOMER_SUPPORT = "Customer Support",
+  EVENT_MANAGEMENT = "Event Management",
+  BUSINESS_ANALYSIS = "Business Analysis",
+  DIGITAL_MARKETING = "Digital Marketing",
+  TELECOMMUNICATION = "Telecommunication",
+  TRAVEL_AND_TOURISM = "Travel and Tourism",
+  PRODUCT_MANAGEMENT = "Product Management",
+  PROJECT_MANAGEMENT = "Project Management",
+  INFORMATION_TECHNOLOGY = "Information Technology",
+  MEDIA_AND_ENTERTAINMENT = "Media and Entertainment",
+  RESEARCH_AND_DEVELOPMENT = "Research and Development",
 }
 
 export interface IJobCategory extends Document {
@@ -36,9 +68,7 @@ const JobCategorySchema: Schema<IJobCategory> = new Schema(
     parentCategory: { type: Schema.Types.ObjectId, ref: "JobCategory" },
     isActive: { type: Boolean, default: true },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 // To support filtering by category type (e.g., all 'Technical' jobs)

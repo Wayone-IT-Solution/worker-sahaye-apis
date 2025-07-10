@@ -46,18 +46,14 @@ export const createConnection = async (
     // Check for existing accepted connection
     const existing = await ConnectionModel.findOne({
       $or: [
-        { requester, recipient, status: ConnectionStatus.ACCEPTED },
-        {
-          requester: recipient,
-          recipient: requester,
-          status: ConnectionStatus.ACCEPTED,
-        },
+        { requester, recipient },
+        { requester: recipient, recipient: requester },
       ],
     });
     if (existing) {
       return res
         .status(200)
-        .json(new ApiResponse(200, existing, "Connection already established"));
+        .json(new ApiResponse(200, existing, "Connection already existed"));
     }
 
     const pending = await ConnectionModel.findOne({
@@ -206,7 +202,7 @@ export const getAllConnections = async (
 ) => {
   try {
     const { id: userId } = (req as any).user;
-    const { type, page = 1, limit = 10, offlimit = false } = req.query;
+    const { type, page = 1, limit = 10 } = req.query;
 
     const validTypes = ["pending", "accepted", "removed", "send-request"];
     if (!type || !validTypes.includes(type as string)) {

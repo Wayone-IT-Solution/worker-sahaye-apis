@@ -18,7 +18,7 @@ export class CommonService<T extends Document> {
     }
   }
 
-  async getById(id: string, populate: boolean = false) {
+  async getById(id: string, populate: boolean = true) {
     try {
       const query = this.model.findById(id);
       if (populate) {

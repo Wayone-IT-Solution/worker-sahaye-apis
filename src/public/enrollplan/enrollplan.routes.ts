@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { EnrollPlanController } from "./enrollplan.controller";
-import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
   getAllEnrolled,
@@ -17,7 +17,8 @@ const router = express.Router();
 router
   .post("/", authenticateToken, asyncHandler(createEnrollPlan)) // Enroll in plans
   .get("/", authenticateToken, asyncHandler(getAllEnrollPlans)) // Get all enrollPlans
-  .get("/all/plans", authenticateToken, asyncHandler(getAllEnrolled)) // Get all enrollPlans
+  .get("/all/plans", authenticateToken, isAdmin, asyncHandler(getAllEnrolled)) // Get all enrollPlans
+  .get("/all/plans/:id", authenticateToken, isAdmin, asyncHandler(getEnrollPlanById)) // Get all enrollPlans
   .get("/:id", authenticateToken, asyncHandler(getEnrollPlanById)) // Get specific enrollPlan
   .post(
     "/update-payment",

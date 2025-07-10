@@ -268,7 +268,7 @@ export class EnrollPlanController {
     next: NextFunction
   ) {
     try {
-      const result = await enrollPlanService.getById(req.params.id);
+      const result = await enrollPlanService.getById(req.params.id, true);
       if (!result)
         return res.status(404).json(new ApiError(404, "Enrollment not found"));
 

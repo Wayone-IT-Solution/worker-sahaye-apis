@@ -46,14 +46,18 @@ export const createConnection = async (
     // Check for existing accepted connection
     const existing = await ConnectionModel.findOne({
       $or: [
-        { requester, recipient },
-        { requester: recipient, recipient: requester },
+        { requester, recipient, status: ConnectionStatus.ACCEPTED },
+        {
+          requester: recipient,
+          recipient: requester,
+          status: ConnectionStatus.ACCEPTED,
+        },
       ],
     });
     if (existing) {
       return res
         .status(200)
-        .json(new ApiResponse(200, existing, "Connection already existed"));
+        .json(new ApiResponse(200, existing, "Connection already established"));
     }
 
     const pending = await ConnectionModel.findOne({
@@ -261,17 +265,18 @@ export const getAllConnections = async (
 
     // Step 1: Extract all user IDs (either requester or recipient)
     const users = connections.map((conn) => {
+      const { requester, recipient, _id: connectionId, updatedAt } = conn;
+      const isRequesterPopulated =
+        requester && typeof requester === "object" && "fullName" in requester;
       const isRecipientPopulated =
-        conn.recipient &&
-        typeof conn.recipient === "object" &&
-        "fullName" in conn.recipient;
-      const user = isRecipientPopulated ? conn.recipient : conn.requester;
-      return {
-        user,
-        isRecipientPopulated,
-        connectionId: conn._id,
-        updatedAt: conn.updatedAt,
-      };
+        recipient && typeof recipient === "object" && "fullName" in recipient;
+
+      let user = null;
+      if (isRequesterPopulated && isRecipientPopulated) {
+        if (requester._id.toString() === userId) user = recipient;
+        else user = requester;
+      } else user = isRecipientPopulated ? recipient : requester;
+      return { user, connectionId, updatedAt };
     });
 
     const userIdSet = new Set(users.map((u) => u.user._id.toString()));

@@ -28,7 +28,7 @@ userRouter.get(
   authenticateToken,
   asyncHandler(UserController.getUserForAdminById)
 );
-userRouter.get(
+userRouter.post(
   "/all/notifications",
   authenticateToken,
   asyncHandler(getAllNotifications)

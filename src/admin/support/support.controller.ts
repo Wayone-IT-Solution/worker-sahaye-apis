@@ -17,7 +17,6 @@ import { extractImageUrl } from "../community/community.controller";
 const agentService = new CommonService(Agent);
 const ticketService = new CommonService(Ticket);
 
-// CREATE a new ticket
 export const createTicket = async (
   req: Request | any,
   res: Response,
@@ -140,7 +139,6 @@ export const createAgent = async (
   }
 };
 
-// Helper function to assign a ticket to an agent
 const assignTicketToAgent = async (ticketId: string): Promise<any> => {
   try {
     let ticket: any = await Ticket.findById(ticketId);
@@ -205,7 +203,6 @@ const checkRelatedTickets = async (tags: any): Promise<any> => {
   return response.map((ticket) => ticket._id);
 };
 
-// READ - Get a single ticket by ID
 export const getTicket = async (
   req: Request | any,
   res: Response,
@@ -281,7 +278,6 @@ export const getAgentByID = async (
   }
 };
 
-// READ - Get all tickets (with optional filters)
 export const getTickets = async (
   req: Request | any,
   res: Response,
@@ -324,11 +320,16 @@ export const getTickets = async (
     {
       $project: {
         _id: 1,
+        tags: 1,
+        title: 1,
         status: 1,
         dueDate: 1,
         priority: 1,
         createdAt: 1,
+        description: 1,
         resolutionDate: 1,
+        assigneeId: "$assigneeInfo._id",
+        requesterId: "$requesterInfo._id",
         assigneeName: "$assigneeInfo.name",
         assigneeEmail: "$assigneeInfo.email",
         assigneeMobile: "$assigneeInfo.mobile",
@@ -363,7 +364,6 @@ export const getAgents = async (
   }
 };
 
-// DELETE - Delete a ticket by ID
 export const deleteTicket = async (
   req: Request | any,
   res: Response
@@ -391,7 +391,6 @@ export const deleteTicket = async (
   }
 };
 
-// DELETE - Delete a Agent by ID
 export const deleteAgent = async (
   req: Request | any,
   res: Response
@@ -447,7 +446,6 @@ const createInteractionObject = ({
   return interaction;
 };
 
-// ADD INTERACTION - Add an interaction to a ticket
 export const addInteraction = async (
   req: Request | any,
   res: Response

@@ -112,8 +112,9 @@ export class PreInterviewedController {
           verifiedAt: 1,
           interviewedAt: 1,
           userEmail: "$userDetails.email",
-          userName: "$userDetails.fullName",
           userMobile: "$userDetails.mobile",
+          userName: "$userDetails.fullName",
+          userProfile: "$userDetails.profile",
           profilePicUrl: "$profilePicFile.url",
         },
       }]

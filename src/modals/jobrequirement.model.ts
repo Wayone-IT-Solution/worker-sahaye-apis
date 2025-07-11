@@ -1,9 +1,9 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
 export enum JobRequirementStatus {
-  OPEN = "Open",
-  FILLED = "Filled",
+  PENDING = "Pending",
   ASSIGNED = "Assigned",
+  COMPLETED = "Completed",
   CANCELLED = "Cancelled",
   IN_PROGRESS = "In Progress",
 }
@@ -52,7 +52,7 @@ const JobRequirementSchema = new Schema<IJobRequirement>(
     designation: { type: String, required: true },
     userId: {
       type: Schema.Types.ObjectId,
-      ref: "Admin",
+      ref: "User",
       index: true,
       required: true,
     },
@@ -104,7 +104,7 @@ const JobRequirementSchema = new Schema<IJobRequirement>(
     status: {
       type: String,
       enum: Object.values(JobRequirementStatus),
-      default: JobRequirementStatus.OPEN,
+      default: JobRequirementStatus.PENDING,
     },
     assignedRecruiterId: {
       type: Schema.Types.ObjectId,

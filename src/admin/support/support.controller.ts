@@ -112,7 +112,10 @@ export const createAgent = async (
         { mobile: req.body.mobile },
       ]
     });
-
+    let { availability } = req.body;
+    if (availability === "active" || availability === "inactive") {
+      req.body.availability = availability === "active";
+    }
     if (duplicate) {
       if (profilePictureUrl) {
         const s3Key = profilePictureUrl.split(".com/")[1];
@@ -624,7 +627,10 @@ export const updateAgent = async (
   req: Request | any,
   res: Response
 ): Promise<any> => {
-  const { availability } = req.body;
+  let { availability } = req.body;
+  if (availability === "active" || availability === "inactive") {
+    req.body.availability = availability === "active";
+  }
   try {
     const userId = req.params.id;
     const profilePictureUrl = req?.body?.profilePictureUrl?.[0]?.url;
@@ -653,7 +659,7 @@ export const updateAgent = async (
     }
     const result = await agentService.updateById(
       userId,
-      { ...req.body, profilePictureUrl: document }
+      { ...req.body, profilePictureUrl: document || profilePictureUrl }
     );
     if (!result)
       return res

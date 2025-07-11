@@ -66,7 +66,8 @@ export class LessonController {
 
   static async getLessonById(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await lessonService.getById(req.params.id);
+      const { role } = (req as any)?.user;
+      const result = await lessonService.getById(req.params.id, role !== "admin");
       if (!result)
         return res.status(404).json(new ApiError(404, "Lesson not found"));
       return res

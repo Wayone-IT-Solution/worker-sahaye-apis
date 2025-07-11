@@ -15,6 +15,11 @@ export class CourseController {
         ...req.body,
         imageUrl: req?.body?.imageUrl[0]?.url,
       };
+      let { isFree, tags } = req.body;
+      if (isFree === "active" || isFree === "inactive") {
+        req.body.isFree = isFree === "active";
+      }
+      if (typeof tags === "string") req.body.tags = tags.split(",");
       const result = await courseService.create(data);
       if (!result)
         return res
@@ -65,7 +70,8 @@ export class CourseController {
 
   static async getCourseById(req: Request, res: Response, next: NextFunction) {
     try {
-      let result = await courseService.getById(req.params.id);
+      const { role } = (req as any).user;
+      let result = await courseService.getById(req.params.id, role !== "admin");
       if (!result)
         return res.status(404).json(new ApiError(404, "course not found"));
       const reviewsData = await getReviewStats(req.params.id.toString());
@@ -104,9 +110,15 @@ export class CourseController {
       if (!existingCourse)
         return res.status(404).json(new ApiError(404, "Course not found"));
 
+      let { isFree, tags } = req.body;
+      if (isFree === "active" || isFree === "inactive") {
+        req.body.isFree = isFree === "active";
+      }
+      if (typeof tags === "string") req.body.tags = tags.split(",");
+
       const normalizedData = {
         ...req.body,
-        bannerImage: await extractImageUrl(
+        imageUrl: await extractImageUrl(
           req.body.imageUrl,
           existingCourse?.imageUrl
         ),

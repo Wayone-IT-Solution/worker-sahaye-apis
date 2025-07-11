@@ -65,14 +65,10 @@ export interface ICourse extends Document {
   status: CourseStatus;
   priority: PriorityLevel;
   category: Schema.Types.ObjectId;
-  locationDetails?: {
-    address?: string;
-    locationName?: string;
-    contactEmail?: string;
-    contactPhone?: string;
-    meetingDates?: Date[];
-  };
-
+  address?: string;
+  locationName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
   calculateProgress(): Promise<number>;
 }
 
@@ -142,13 +138,10 @@ const CourseSchema = new Schema<ICourse>(
       type: Number,
       required: true,
     },
-    locationDetails: {
-      address: { type: String },
-      locationName: { type: String },
-      contactEmail: { type: String },
-      contactPhone: { type: String },
-      meetingDates: [{ type: Date }],
-    },
+    address: { type: String },
+    locationName: { type: String },
+    contactEmail: { type: String },
+    contactPhone: { type: String },
   },
   {
     timestamps: true,
@@ -167,7 +160,7 @@ CourseSchema.virtual("lessons", {
 CourseSchema.pre("validate", function (next) {
   if (
     this.type === CourseType.OFFLINE &&
-    (!this.locationDetails || !this.locationDetails.address)
+    (!this.address)
   ) {
     return next(
       new Error("Offline courses must include location details with address.")

@@ -142,7 +142,7 @@ export class JobRequirementController {
       if (req?.body?.jobDescriptionUrl && record.jobDescriptionUrl) {
         jobDescriptionUrl = await extractImageUrl(req?.body?.jobDescriptionUrl, record.jobDescriptionUrl as string);
       }
-      const result = await jobRequirementService.updateById(id, { ...req.body, jobDescriptionUrl });
+      const result = await jobRequirementService.updateById(id, { ...req.body, jobDescriptionUrl: jobDescriptionUrl || document });
       if (!result) {
         return res
           .status(400)

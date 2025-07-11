@@ -10,6 +10,7 @@ export enum FeatureTarget {
   WORKER = "worker",
   EMPLOYER = "employer",
   CONTRACTOR = "contractor",
+  BOTH = "employer and contractor"
 }
 
 export interface IFeature extends Document {

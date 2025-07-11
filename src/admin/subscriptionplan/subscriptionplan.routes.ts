@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken } from "../../middlewares/authMiddleware";
 import { SubscriptionplanController } from "./subscriptionplan.controller";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
   createSubscriptionplan,
@@ -14,10 +14,10 @@ const {
 const router = express.Router();
 
 router
-  .post("/", asyncHandler(createSubscriptionplan))
-  .get("/", asyncHandler(getAllSubscriptionplans))
-  .get("/:id", asyncHandler(getSubscriptionplanById))
-  .put("/:id", asyncHandler(updateSubscriptionplanById))
-  .delete("/:id", asyncHandler(deleteSubscriptionplanById));
+  .get("/", authenticateToken, asyncHandler(getAllSubscriptionplans))
+  .post("/", authenticateToken, isAdmin, asyncHandler(createSubscriptionplan))
+  .get("/:id", authenticateToken, isAdmin, asyncHandler(getSubscriptionplanById))
+  .put("/:id", authenticateToken, isAdmin, asyncHandler(updateSubscriptionplanById))
+  .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteSubscriptionplanById));
 
 export default router;

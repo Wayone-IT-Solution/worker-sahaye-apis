@@ -2,7 +2,7 @@ import express from "express";
 import { LessonController } from "./lesson.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { CourseController } from "./courses.controller";
-import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import {
   dynamicUpload,
   s3UploaderMiddleware,
@@ -52,8 +52,9 @@ router
 router.post("/lesson", authenticateToken, asyncHandler(createLesson));
 router.get("/lesson/all", authenticateToken, asyncHandler(getAllLesson));
 router.get("/lesson/:id", authenticateToken, asyncHandler(getLessonById));
-router.put("/lesson/:id", authenticateToken, asyncHandler(updateLessonById));
-router.delete("/lesson/:id", authenticateToken, asyncHandler(deleteLessonById));
+router.get("/lesson/all/:id", authenticateToken, isAdmin, asyncHandler(getLessonById));
+router.put("/lesson/all/:id", authenticateToken, isAdmin, asyncHandler(updateLessonById));
+router.delete("/lesson/all/:id", authenticateToken, isAdmin, asyncHandler(deleteLessonById));
 
 // Optional: Get lessons for a specific course
 router.get(

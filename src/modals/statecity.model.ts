@@ -55,6 +55,7 @@ export interface ICity extends Document {
   name: string;
   isCapital?: boolean;
   stateId: mongoose.Types.ObjectId;
+  countryId: mongoose.Types.ObjectId;
 }
 
 const CitySchema: Schema<ICity> = new Schema(
@@ -63,6 +64,11 @@ const CitySchema: Schema<ICity> = new Schema(
     stateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "State",
+      required: true,
+    },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
       required: true,
     },
     isCapital: { type: Boolean, default: false },

@@ -15,28 +15,19 @@ import { Community, CommunityPrivacy } from "../../modals/community.model";
 const CommunityMemberService = new CommonService(CommunityMember);
 
 export const resetStats = async (communityId: string) => {
-  const community = await Community.findById(communityId);
-  if (!community) {
-    throw new Error("Community not found");
-  }
-  const totalPosts = await ForumPost.countDocuments({ community: communityId });
-  const totalComments = await ForumComment.countDocuments({
-    community: communityId,
-  });
-  const totalMembers = await CommunityMember.countDocuments({
-    community: communityId,
-  });
-  const activeMembers = await CommunityMember.countDocuments({
-    community: communityId,
-    status: MemberStatus.JOINED,
-  });
-  community.stats = {
-    totalPosts,
-    totalMembers,
-    totalComments,
-    activeMembers,
-  };
-  await community.save();
+  const [totalPosts, totalComments, totalMembers, activeMembers] = await Promise.all([
+    ForumPost.countDocuments({ community: communityId }),
+    ForumComment.countDocuments({ community: communityId }),
+    CommunityMember.countDocuments({ community: communityId }),
+    CommunityMember.countDocuments({ community: communityId, status: MemberStatus.JOINED }),
+  ]);
+  const updatedCommunity = await Community.findByIdAndUpdate(
+    communityId,
+    { $set: { stats: { totalPosts, totalComments, totalMembers, activeMembers } } },
+    { new: true }
+  );
+  if (!updatedCommunity) throw new Error("Community not found");
+  return updatedCommunity;
 };
 
 export class CommunityMemberController {

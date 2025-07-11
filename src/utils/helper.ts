@@ -22,6 +22,7 @@ export const getPipeline = (
     startDate,
     community,
     searchkey,
+    countryId,
     applicantId,
     page = 1,
     limit = 10,
@@ -47,6 +48,7 @@ export const getPipeline = (
   if (assignee) match.assignee = safeObjectId(assignee);
   if (createdBy) match.createdBy = safeObjectId(createdBy);
   if (community) match.community = safeObjectId(community);
+  if (countryId) match.countryId = safeObjectId(countryId);
   if (applicantId) match.applicant = safeObjectId(applicantId);
 
   if (startDate || endDate) {

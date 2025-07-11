@@ -21,6 +21,7 @@ export interface IForumPost extends Document {
   createdBy: Types.ObjectId;
   community: Types.ObjectId;
   attachments?: IAttachment[];
+  postedByAdmin?: Types.ObjectId;
 }
 
 const ForumPostSchema = new Schema<IForumPost>(
@@ -40,7 +41,6 @@ const ForumPostSchema = new Schema<IForumPost>(
     ],
     createdBy: {
       index: true,
-      required: true,
       ref: "CommunityMember",
       type: Schema.Types.ObjectId,
     },
@@ -48,6 +48,11 @@ const ForumPostSchema = new Schema<IForumPost>(
       index: true,
       required: true,
       ref: "Community",
+      type: Schema.Types.ObjectId,
+    },
+    postedByAdmin: {
+      index: true,
+      ref: "Admin",
       type: Schema.Types.ObjectId,
     },
     status: {

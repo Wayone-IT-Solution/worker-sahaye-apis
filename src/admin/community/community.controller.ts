@@ -31,6 +31,7 @@ export class CommunityController {
     next: NextFunction
   ) {
     try {
+      let { tags } = req.body;
       const data = {
         ...req.body,
         location: {
@@ -43,6 +44,7 @@ export class CommunityController {
 
       delete data.city;
       delete data.state;
+      if (typeof tags === "string") req.body.tags = tags.split(",");
       const result = await communityService.create(data);
       if (!result)
         return res
@@ -205,6 +207,9 @@ export class CommunityController {
   ) {
     try {
       const communityId = req.params.id;
+      let { tags } = req.body;
+      if (typeof tags === "string") req.body.tags = tags.split(",");
+
       if (!mongoose.Types.ObjectId.isValid(communityId))
         return res.status(400).json(new ApiError(400, "Invalid community ID"));
 

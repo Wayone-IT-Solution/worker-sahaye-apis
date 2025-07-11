@@ -242,6 +242,8 @@ export class StateCityController {
           code: 1,
           name: 1,
           countryId: 1,
+          createdAt: 1,
+          updatedAt: 1,
           countryName: "$countryData.name",
           countryCode: "$countryData.code",
         },
@@ -261,7 +263,8 @@ export class StateCityController {
     next: NextFunction
   ) {
     try {
-      const result = await stateService.getById(req.params.id);
+      const { role } = (req as any).user;
+      const result = await stateService.getById(req.params.id, role !== "admin");
       if (!result)
         return res
           .status(404)
@@ -321,25 +324,40 @@ export class StateCityController {
     next: NextFunction
   ) {
     try {
-      const pipeline = [{
-        $lookup: {
-          from: "states",
-          localField: "stateId",
-          foreignField: "_id",
-          as: "stateData",
+      const pipeline = [
+        {
+          $lookup: {
+            from: "states",
+            localField: "stateId",
+            foreignField: "_id",
+            as: "stateData",
+          },
         },
-      },
-      { $unwind: "$stateData" },
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          stateId: 1,
-          isCapital: 1,
-          stateName: "$stateData.name",
-          stateCode: "$stateData.code",
+        { $unwind: "$stateData" },
+        {
+          $lookup: {
+            from: "countries",
+            localField: "stateData.countryId",
+            foreignField: "_id",
+            as: "countryData",
+          },
         },
-      }];
+        { $unwind: "$countryData" },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            stateId: 1,
+            isCapital: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            stateName: "$stateData.name",
+            stateCode: "$stateData.code",
+            countryName: "$countryData.name",
+            countryCode: "$countryData.code",
+          },
+        },
+      ];
       const states = await cityService.getAll(req.query, pipeline);
       return res
         .status(200)
@@ -374,7 +392,8 @@ export class StateCityController {
     next: NextFunction
   ) {
     try {
-      const result = await cityService.getById(req.params.id);
+      const { role } = (req as any).user;
+      const result = await cityService.getById(req.params.id, role !== "admin");
       if (!result)
         return res
           .status(404)

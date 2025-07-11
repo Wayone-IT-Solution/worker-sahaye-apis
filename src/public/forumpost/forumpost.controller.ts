@@ -26,11 +26,11 @@ export class ForumPostController {
     next: NextFunction
   ) {
     try {
+      const { attachments } = req.body;
       const { id: user, role: userType } = (req as any).user;
       if (userType === UserType.WORKER) {
-        const { files } = req.body;
-        if (files && files.length > 0) {
-          files.map(async (file: any) => {
+        if (attachments && attachments.length > 0) {
+          attachments.map(async (file: any) => {
             await extractImageUrl(file);
           });
         }
@@ -39,10 +39,16 @@ export class ForumPostController {
           .json(new ApiError(403, "Workers cannot create forum posts"));
       }
 
-      if (!req.body.community)
+      if (!req.body.community) {
+        if (attachments && attachments.length > 0) {
+          attachments.map(async (file: any) => {
+            await extractImageUrl(file);
+          });
+        }
         return res
           .status(400)
           .json(new ApiError(400, "Community ID is required"));
+      }
 
       const communityMember = await CommunityMember.findOne({
         user: user,
@@ -50,18 +56,24 @@ export class ForumPostController {
         userType: userType,
         community: req.body.community,
       });
-      if (!communityMember)
+      if (!communityMember) {
+        if (attachments && attachments.length > 0) {
+          attachments.map(async (file: any) => {
+            await extractImageUrl(file);
+          });
+        }
         return res
           .status(400)
           .json(new ApiError(400, "User is not a member of the community"));
+      }
 
-      const { title, content, tags, community, files } = req.body;
+      const { title, content, tags, community } = req.body;
       const data: any = {
         tags,
         title,
         content,
         community,
-        attachments: files?.map((file: any, index: number) => ({
+        attachments: attachments?.map((file: any, index: number) => ({
           order: index,
           url: file.url,
           s3Key: file.url.split(".com/")[1],

@@ -21,7 +21,7 @@ const router = express.Router();
 router
   .post(
     "/",
-    dynamicUpload([{ name: "files", maxCount: 5 }]),
+    dynamicUpload([{ name: "attachments", maxCount: 5 }]),
     s3UploaderMiddleware("posts"),
     authenticateToken,
     asyncHandler(createForumPost)

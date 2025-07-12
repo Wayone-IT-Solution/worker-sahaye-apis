@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { ForumPostController } from "./forumpost.controller";
-import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import {
   dynamicUpload,
   s3UploaderMiddleware,
@@ -13,6 +13,7 @@ const {
   getForumPostById,
   getAllForumPosts,
   removeForumPostById,
+  createaForumPostByAdmin,
   getAllGeneralForumPosts,
 } = ForumPostController;
 
@@ -21,10 +22,18 @@ const router = express.Router();
 router
   .post(
     "/",
+    authenticateToken,
     dynamicUpload([{ name: "attachments", maxCount: 5 }]),
     s3UploaderMiddleware("posts"),
-    authenticateToken,
     asyncHandler(createForumPost)
+  )
+  .post(
+    "/admin/create",
+    authenticateToken,
+    isAdmin,
+    dynamicUpload([{ name: "attachments", maxCount: 5 }]),
+    s3UploaderMiddleware("posts"),
+    asyncHandler(createaForumPostByAdmin)
   )
   .get("/", authenticateToken, asyncHandler(getAllPosts))
   .get("/:postId", authenticateToken, asyncHandler(getForumPostById))

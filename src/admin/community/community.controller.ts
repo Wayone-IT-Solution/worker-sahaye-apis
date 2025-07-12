@@ -187,7 +187,8 @@ export class CommunityController {
     next: NextFunction
   ) {
     try {
-      const result = await communityService.getById(req.params.id);
+      const { role } = (req as any)?.user;
+      const result = await communityService.getById(req.params.id, role !== "admin");
       if (!result)
         return res
           .status(404)

@@ -229,6 +229,7 @@ export class TrainedWorkerController {
     next: NextFunction
   ) {
     try {
+      const { id, role } = (req as any).user;
       const verificationId = req.params.id;
       if (!mongoose.Types.ObjectId.isValid(verificationId))
         return res
@@ -265,9 +266,10 @@ export class TrainedWorkerController {
           "",
       };
 
-      if (status === VerificationStatus.APPROVED) {
+      if (status === VerificationStatus.APPROVED && role === "admin") {
         await checkAndAssignBadge(existingVerificationRecord.user, slug, {
           assignIfNotExists: true,
+          user: { id, role },
         });
       }
       if (courseEnrollmentId) {

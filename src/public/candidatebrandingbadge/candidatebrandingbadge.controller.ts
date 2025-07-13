@@ -1,8 +1,10 @@
 import ApiError from "../../utils/ApiError";
+import { User } from "../../modals/user.model";
 import { Badge } from "../../modals/badge.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import { sendSingleNotification } from "../../services/notification.service";
 import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
 
 const candidateBrandingBadgesService = new CommonService(
@@ -12,52 +14,34 @@ const candidateBrandingBadgesService = new CommonService(
 export const checkAndAssignBadge = async (
   userId: any,
   badgeSlug: string,
-  options?: { assignIfNotExists?: boolean; extraData?: Record<string, any> }
+  options?: {
+    user?: any;
+    assignIfNotExists?: boolean;
+    extraData?: Record<string, any>;
+  }
 ) => {
   const badge = await Badge.findOne({ slug: badgeSlug });
-  if (!badge) {
-    return {
-      badge: null,
-      success: false,
-      message: `Badge '${badgeSlug}' not found.`,
-    };
-  }
-  const alreadyEarned = await CandidateBrandingBadge.findOne({
+  if (!badge) return;
+
+  const existingBadge = await CandidateBrandingBadge.findOne({
     user: userId,
-    status: "active",
     badge: badge.slug,
   });
-  if (alreadyEarned) {
-    return {
-      badge,
-      success: false,
-      message: `User already has the '${badge.name}' badge.`,
-    };
-  }
+
+  // Already assigned and active → do nothing
+  if (existingBadge?.status === "active") return;
+
+  // Assign or reactivate if flag is true
   if (options?.assignIfNotExists) {
-    const existing = await CandidateBrandingBadge.findOne({
-      user: userId,
-      badge: badge.slug,
-    });
-    if (existing) {
-      const updated = await CandidateBrandingBadge.findByIdAndUpdate(
-        existing._id,
-        {
-          status: "active",
-          earnedBy: "manual",
-          assignedAt: new Date(),
-          metaData: options?.extraData || {},
-        },
-        { new: true }
-      );
-      return {
-        badge,
-        success: true,
-        assigned: updated,
-        message: `Badge '${badge.name}' was already assigned — updated successfully.`,
-      };
+    if (existingBadge) {
+      await CandidateBrandingBadge.findByIdAndUpdate(existingBadge._id, {
+        status: "active",
+        earnedBy: "manual",
+        assignedAt: new Date(),
+        metaData: options.extraData || {},
+      });
     } else {
-      const assigned = await CandidateBrandingBadge.create({
+      await CandidateBrandingBadge.create({
         user: userId,
         badge: badge._id,
         status: "active",
@@ -65,19 +49,25 @@ export const checkAndAssignBadge = async (
         assignedAt: new Date(),
         metaData: options?.extraData || {},
       });
-      return {
-        badge,
-        assigned,
-        success: true,
-        message: `Badge '${badge.name}' assigned to user.`,
-      };
+    }
+
+    const userDetails = await User.findById(userId);
+    if (userDetails) {
+      await sendSingleNotification({
+        type: "badge-earned",
+        context: {
+          badgeName: badge.name,
+          userName: userDetails.fullName,
+        },
+        toUserId: userId,
+        toRole: userDetails.userType,
+        fromUser: {
+          id: options?.user?.id,
+          role: options?.user?.role,
+        },
+      });
     }
   }
-  return {
-    badge,
-    success: true,
-    message: `Badge '${badge.name}' is valid and not yet assigned.`,
-  };
 };
 
 export class CandidateBrandingBadgeController {

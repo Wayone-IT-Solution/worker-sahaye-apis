@@ -39,43 +39,73 @@ import {
   updateTicketStatus,
   manualAssignTicketToAgent,
 } from "./support.controller";
-import {
-  isUser,
-  isAdmin,
-  authenticateToken,
-} from "../../middlewares/authMiddleware";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
+import { isAdmin, authenticateToken } from "../../middlewares/authMiddleware";
+import {
+  dynamicUpload,
+  s3UploaderMiddleware,
+} from "../../middlewares/s3FileUploadMiddleware";
 
 const router = express.Router();
 
 // AGENT ROUTES
-router.post("/create-agent",
+router.post(
+  "/create-agent",
   authenticateToken,
   isAdmin,
   dynamicUpload([{ name: "profilePictureUrl", maxCount: 1 }]),
   s3UploaderMiddleware("profile"),
-  asyncHandler(createAgent));
+  asyncHandler(createAgent)
+);
 
-router.put("/update-agent/:id",
+router.put(
+  "/update-agent/:id",
   authenticateToken,
   isAdmin,
   dynamicUpload([{ name: "profilePictureUrl", maxCount: 1 }]),
   s3UploaderMiddleware("profile"),
-  asyncHandler(updateAgent));
+  asyncHandler(updateAgent)
+);
 
 router.get("/agents", authenticateToken, isAdmin, asyncHandler(getAgents));
-router.get("/agents/:id", authenticateToken, isAdmin, asyncHandler(getAgentByID));
-router.delete("/agents/:id", authenticateToken, isAdmin, asyncHandler(deleteAgent));
-router.get("/agents/deactivate/:id", authenticateToken, isAdmin, asyncHandler(deactivateAgent));
+router.get(
+  "/agents/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getAgentByID)
+);
+router.delete(
+  "/agents/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(deleteAgent)
+);
+router.get(
+  "/agents/deactivate/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(deactivateAgent)
+);
 
 // TICKET ROUTES
 router.get("/tickets", authenticateToken, asyncHandler(getTickets));
 router.get("/tickets/:id", authenticateToken, asyncHandler(getTicket));
 router.post("/tickets", authenticateToken, asyncHandler(createTicket));
 router.delete("/tickets/:id", authenticateToken, asyncHandler(deleteTicket));
-router.post("/tickets/interactions", authenticateToken, asyncHandler(addInteraction));
-router.get("/tickets/:id/:status", authenticateToken, asyncHandler(updateTicketStatus));
-router.post("/tickets/manually-assigned", authenticateToken, asyncHandler(manualAssignTicketToAgent));
+router.post(
+  "/tickets/interactions",
+  authenticateToken,
+  asyncHandler(addInteraction)
+);
+router.get(
+  "/tickets/:id/:status",
+  authenticateToken,
+  asyncHandler(updateTicketStatus)
+);
+router.post(
+  "/tickets/manually-assigned",
+  authenticateToken,
+  asyncHandler(manualAssignTicketToAgent)
+);
 
 export default router;

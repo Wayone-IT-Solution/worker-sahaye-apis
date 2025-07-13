@@ -1,9 +1,5 @@
 import { Router } from "express";
-import {
-  isUser,
-  isAdmin,
-  authenticateToken,
-} from "../../middlewares/authMiddleware";
+import { isAdmin, authenticateToken } from "../../middlewares/authMiddleware";
 import {
   MessageController,
   getUniqueConversations,
@@ -16,7 +12,6 @@ const router = Router();
 router.post(
   "/",
   authenticateToken,
-  isUser,
   asyncHandler(MessageController.createMessage)
 );
 

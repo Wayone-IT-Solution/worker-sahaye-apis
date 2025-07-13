@@ -8,6 +8,7 @@
 
 import { Router } from "express";
 // ADMIN FOLDER
+import badgeRoutes from "../admin/badge/badge.routes";
 import adminRoutes from "../admin/admin/admin.routes";
 import coursesRoutes from "../admin/courses/courses.routes";
 import supportRoutes from "../admin/support/support.routes";
@@ -18,6 +19,7 @@ import bulkhiringRoutes from "../admin/bulkhiring/bulkhiring.routes";
 import jobCategoryRoutes from "../admin/jobcategory/jobcategory.routes";
 import workerCategoryRoutes from "../admin/workercategory/workercategory.routes";
 import subscriptionPlanRoutes from "../admin/subscriptionplan/subscriptionplan.routes";
+import complianceCalendarRoutes from "../admin/compliancecalendar/compliancecalendar.routes";
 import projectBasedHiringRoutes from "../admin/projectbasedhiring/projectbasedhiring.routes";
 
 // PUBLIC FOLDER
@@ -49,6 +51,7 @@ import communityMemberRoutes from "../public/communitymember/communitymember.rou
 import employerFeedbackRoutes from "../public/employerfeedback/employerfeedback.routes";
 import virtualHRRequestRoutes from "../public/virtualhrrequest/virtualhrrequest.routes";
 import skilledCandidateRoutes from "../public/skilledcandidate/skilledcandidate.routes";
+import unifiedServcieRequestRoutes from "../public/unifiedrequest/unifiedrequest.routes";
 import policeVerificationRoutes from "../public/policeverification/policeverification.routes";
 import candidateBrandingBadgeRoutes from "../public/candidatebrandingbadge/candidatebrandingbadge.routes";
 
@@ -57,6 +60,7 @@ const router = Router();
 
 // ROUTE MOUNTS
 router.use("/admin", adminRoutes);
+router.use("/badge", badgeRoutes);
 router.use("/courses", coursesRoutes);
 router.use("/support", supportRoutes);
 router.use("/community", communityRoutes);
@@ -66,6 +70,7 @@ router.use("/bulkhiring", bulkhiringRoutes);
 router.use("/jobcategory", jobCategoryRoutes);
 router.use("/workercategory", workerCategoryRoutes);
 router.use("/subscriptionplan", subscriptionPlanRoutes);
+router.use("/complianceCalendar", complianceCalendarRoutes);
 router.use("/projectbasedhiring", projectBasedHiringRoutes);
 
 router.use("/job", jobRoutes);
@@ -97,6 +102,7 @@ router.use("/skilledcandidate", skilledCandidateRoutes);
 router.use("/employerfeedback", employerFeedbackRoutes);
 router.use("/virtualhrrequest", virtualHRRequestRoutes);
 router.use("/policeverification", policeVerificationRoutes);
+router.use("/unifiedservicerequest", unifiedServcieRequestRoutes);
 router.use("/candidatebrandingbadge", candidateBrandingBadgeRoutes);
 
 export default router;

@@ -5,8 +5,11 @@ import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { extractImageUrl } from "../../admin/community/community.controller";
-import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
-import { PoliceVerification, VerificationStatus } from "../../modals/policeverification.model";
+import {
+  PoliceVerification,
+  VerificationStatus,
+} from "../../modals/policeverification.model";
+import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
 
 const policeVerificationService = new CommonService(PoliceVerification);
 
@@ -27,34 +30,41 @@ export class PoliceVerificationController {
           .json(new ApiError(400, "Name and document are required."));
       }
 
-      const existingVerificationRecord: any = await PoliceVerification.findOne({ user });
+      const existingVerificationRecord: any = await PoliceVerification.findOne({
+        user,
+      });
       if (existingVerificationRecord) {
         const s3Key = document.split(".com/")[1];
         await deleteFromS3(s3Key);
-        return res.status(404).json(new ApiError(404, "Police Verification Doc already exists"));
-      }
-
-      const alreadyBadgeEarned = await CandidateBrandingBadge.findOne({
-        user,
-        badge: "police_verified",
-      });
-
-      if (alreadyBadgeEarned) {
-        const s3Key = document.split(".com/")[1];
-        await deleteFromS3(s3Key);
         return res
-          .status(200)
-          .json(new ApiResponse(200, alreadyBadgeEarned, "You have already earned this badge."));
+          .status(404)
+          .json(new ApiError(404, "Police Verification Doc already exists"));
       }
-      const result = await policeVerificationService.create({ name, user, document });
+
+      const result = await policeVerificationService.create({
+        name,
+        user,
+        document,
+      });
       if (!result) {
         return res
           .status(500)
-          .json(new ApiError(500, "Something went wrong while creating police verification."));
+          .json(
+            new ApiError(
+              500,
+              "Something went wrong while creating police verification."
+            )
+          );
       }
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Police verification submitted successfully."));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            "Police verification submitted successfully."
+          )
+        );
     } catch (err) {
       next(err);
     }
@@ -66,58 +76,63 @@ export class PoliceVerificationController {
     next: NextFunction
   ) {
     try {
-      const pipeline = [{
-        $lookup: {
-          from: "users",
-          localField: "user",
-          foreignField: "_id",
-          as: "userDetails",
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
         },
-      },
-      { $unwind: "$userDetails" },
-      {
-        $lookup: {
-          from: "fileuploads",
-          let: { userId: "$userDetails._id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ["$userId", "$$userId"] },
-                    { $eq: ["$tag", "profilePic"] },
-                  ],
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
                 },
               },
-            },
-            { $sort: { createdAt: -1 } },
-            { $limit: 1 },
-          ],
-          as: "profilePicFile",
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
         },
-      },
-      {
-        $unwind: {
-          path: "$profilePicFile",
-          preserveNullAndEmptyArrays: true,
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
         },
-      },
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          status: 1,
-          remarks: 1,
-          document: 1,
-          createdAt: 1,
-          verifiedAt: 1,
-          userEmail: "$userDetails.email",
-          userName: "$userDetails.fullName",
-          userMobile: "$userDetails.mobile",
-          profilePicUrl: "$profilePicFile.url",
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            status: 1,
+            remarks: 1,
+            document: 1,
+            createdAt: 1,
+            verifiedAt: 1,
+            userEmail: "$userDetails.email",
+            userName: "$userDetails.fullName",
+            userMobile: "$userDetails.mobile",
+            profilePicUrl: "$profilePicFile.url",
+          },
         },
-      }]
-      const result = await policeVerificationService.getAll(req.query, pipeline);
+      ];
+      const result = await policeVerificationService.getAll(
+        req.query,
+        pipeline
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -173,46 +188,40 @@ export class PoliceVerificationController {
     try {
       const verificationId = req.params.id;
       if (!mongoose.Types.ObjectId.isValid(verificationId))
-        return res.status(400).json(new ApiError(400, "Invalid police verification doc ID"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid police verification doc ID"));
 
-      const existingVerificationRecord: any = await policeVerificationService.getById(
-        verificationId
-      );
+      const existingVerificationRecord: any =
+        await policeVerificationService.getById(verificationId);
       if (!existingVerificationRecord)
-        return res.status(404).json(new ApiError(404, "Police Verification Doc not found"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Police Verification Doc not found"));
 
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED)
-        return res.status(404).json(new ApiError(404, "Police Verification already approved"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Police Verification already approved"));
 
-      const { name, status, remarks, document } = req.body;
+      const { name, status, remarks, document, slug } = req.body;
       const normalizedData = {
         name: name?.trim() || existingVerificationRecord.name,
         remarks: remarks?.trim() || existingVerificationRecord.remarks || "",
-        status: status?.toLowerCase() || existingVerificationRecord.status || "pending",
-        document: await extractImageUrl(document, existingVerificationRecord.document),
+        status:
+          status?.toLowerCase() ||
+          existingVerificationRecord.status ||
+          "pending",
+        document: await extractImageUrl(
+          document,
+          existingVerificationRecord.document
+        ),
       };
-
       if (status === VerificationStatus.APPROVED) {
-        const existingBadge = await CandidateBrandingBadge.findOne({
-          user: existingVerificationRecord.user,
-          badge: "police_verified",
+        await checkAndAssignBadge(existingVerificationRecord.user, slug, {
+          assignIfNotExists: true,
         });
-        if (existingBadge) {
-          existingBadge.status = "active";
-          existingBadge.earnedBy = "manual";
-          existingBadge.assignedAt = new Date();
-          await existingBadge.save();
-        } else {
-          await CandidateBrandingBadge.create({
-            status: "active",
-            earnedBy: "manual",
-            assignedAt: new Date(),
-            badge: "police_verified",
-            user: existingVerificationRecord.user,
-          });
-        }
       }
-
       const result = await policeVerificationService.updateById(
         verificationId,
         normalizedData
@@ -237,18 +246,26 @@ export class PoliceVerificationController {
     try {
       const verificationId = req.params.id;
       if (!mongoose.Types.ObjectId.isValid(verificationId))
-        return res.status(400).json(new ApiError(400, "Invalid police verification doc ID"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid police verification doc ID"));
 
-      const existingVerificationRecord: any = await policeVerificationService.getById(
-        verificationId
-      );
+      const existingVerificationRecord: any =
+        await policeVerificationService.getById(verificationId);
       if (!existingVerificationRecord)
-        return res.status(404).json(new ApiError(404, "Police Verification Doc not found"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Police Verification Doc not found"));
 
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED) {
-        return res.status(400).json(
-          new ApiError(400, "Police verification is already approved and cannot be deleted or modified.")
-        );
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              "Police verification is already approved and cannot be deleted or modified."
+            )
+          );
       }
       const result = await policeVerificationService.deleteById(req.params.id);
       if (!result)

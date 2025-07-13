@@ -1,98 +1,187 @@
 import jwt from "jsonwebtoken";
-import { NextFunction } from "express";
 import Admin from "../modals/admin.model";
 import { config } from "../config/config";
+import Agent from "../modals/agent.model";
 import { User } from "../modals/user.model";
+import { Request, Response, NextFunction } from "express";
+
+// Role type
+export type Role = "admin" | "worker" | "agent" | "employer" | "contractor";
+
+// Extend Express Request with typed user
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    role: Role;
+    email?: string;
+  };
+}
 
 const secret = config.jwt.secret;
 
 /**
- * Middleware to verify JWT token
+ * Middleware to authenticate JWT token and attach user to request
  */
-export const authenticateToken = (req: any, res: any, next: NextFunction) => {
+export const authenticateToken = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): any => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
-    return res
-      .status(401)
-      .json({ message: "Authentication token is required" });
+    return res.status(401).json({
+      status: false,
+      message: "Access denied. No authentication token provided.",
+    });
   }
+
   try {
     const decoded = jwt.verify(token, secret) as {
       _id: string;
-      role: string;
+      role: Role;
       email: string;
     };
-    (req as any).user = { ...decoded, id: decoded?._id };
+
+    (req as AuthenticatedRequest).user = {
+      id: decoded._id,
+      email: decoded.email,
+      role: decoded.role,
+    };
+
     next();
   } catch (error) {
-    return res.status(401).json({ message: "Invalid or expired token" });
+    return res.status(401).json({
+      status: false,
+      message: "Invalid or expired authentication token.",
+    });
   }
 };
 
-// Type safety for req.user
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email?: string;
-    role: "admin" | "user" | "worker" | "employer" | "contractor";
-  };
-}
+/**
+ * Allow all roles except the ones listed
+ */
+export const allowAllExcept =
+  (...rolesToBlock: Role[]) =>
+  (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { user } = req;
 
-const getModelByRole = (role: string) => {
+    if (!user) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access. User not found.",
+      });
+    }
+
+    if (rolesToBlock.includes(user.role)) {
+      return res.status(403).json({
+        status: false,
+        message: `Access restricted. '${capitalize(
+          user.role
+        )}' role is not permitted on this route.`,
+      });
+    }
+
+    next();
+  };
+
+/**
+ * Allow only the listed roles
+ */
+export const allowOnly =
+  (...allowedRoles: Role[]) =>
+  (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { user } = req;
+
+    if (!user) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access. User not found.",
+      });
+    }
+
+    if (!allowedRoles.includes(user.role)) {
+      return res.status(403).json({
+        status: false,
+        message: `Access denied. Only [${allowedRoles
+          .map(capitalize)
+          .join(", ")}] roles are allowed.`,
+        yourRole: user.role,
+      });
+    }
+
+    next();
+  };
+
+/**
+ * Middleware to check if the user has a specific role and exists in the DB
+ */
+export const checkRole: any =
+  (requiredRole: Role) =>
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { user } = req;
+
+    if (!user) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access. User not found.",
+      });
+    }
+
+    if (user.role !== requiredRole) {
+      return res.status(403).json({
+        status: false,
+        message: `Access denied. '${capitalize(
+          user.role
+        )}' role cannot access this route.`,
+        expectedRole: requiredRole,
+        yourRole: user.role,
+      });
+    }
+
+    const Model: any = getModelByRole(user.role);
+
+    if (!Model) {
+      return res.status(500).json({
+        status: false,
+        message: "Internal error. Unable to resolve user role model.",
+      });
+    }
+
+    const existingUser = await Model.findById(user.id);
+    if (!existingUser) {
+      return res.status(404).json({
+        status: false,
+        message: `${capitalize(requiredRole)} account not found in the system.`,
+      });
+    }
+
+    next();
+  };
+
+// Utility: Map role to respective model
+const getModelByRole = (role: Role) => {
   switch (role) {
     case "admin":
       return Admin;
-    default:
+    case "agent":
+      return Agent;
+    case "employer":
+    case "worker":
+    case "contractor":
       return User;
+    default:
+      return null;
   }
 };
 
+// Utility: Capitalize the first letter
 const capitalize = (text: string): string =>
-  text && text.charAt(0).toUpperCase() + text.slice(1);
+  text.charAt(0).toUpperCase() + text.slice(1);
 
-const checkRole =
-  (requiredRole: "admin" | "user" | "worker" | "employer" | "contractor") =>
-    async (req: AuthenticatedRequest, res: any, next: NextFunction) => {
-      const { user } = req;
-
-      if (!user) {
-        return res.status(401).json({ message: "Unauthorized. User not found." });
-      }
-      if (user.role !== requiredRole) {
-        return res.status(403).json({
-          status: false,
-          message: `Access denied. ${capitalize(
-            user.role
-          )}s cannot access this route.`,
-          expectedRole: requiredRole,
-          currentRole: user.role,
-        });
-      }
-
-      const Model: any = getModelByRole(requiredRole);
-
-      if (!Model) {
-        return res.status(500).json({
-          status: false,
-          message: "Internal server error. Invalid user role mapping.",
-        });
-      }
-
-      const existingUser = await Model.findOne({ _id: user.id });
-      if (!existingUser) {
-        return res.status(404).json({
-          status: false,
-          message: `${capitalize(requiredRole)} not found in the system.`,
-        });
-      }
-
-      next();
-    };
-
-// Export role-specific middlewares
-export const isUser: any = checkRole("user");
-export const isAdmin: any = checkRole("admin");
-export const isWorker: any = checkRole("worker");
-export const isEmployer: any = checkRole("employer");
-export const isContractor: any = checkRole("contractor");
+// Export reusable role-based middlewares
+export const isAdmin = checkRole("admin");
+export const isAgent = checkRole("agent");
+export const isWorker = checkRole("worker");
+export const isEmployer = checkRole("employer");
+export const isContractor = checkRole("contractor");

@@ -1,6 +1,8 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
 export enum UserType {
+  ADMIN = "admin",
+  AGENT = "agent",
   WORKER = "worker",
   EMPLOYER = "employer",
   CONTRACTOR = "contractor",
@@ -11,6 +13,7 @@ export type NotificationType =
   | "job-applied"
   | "job-expiring"
   | "course-added"
+  | "badge-earned"
   | "reply-on-post"
   | "admin-message"
   | "general-alert"
@@ -92,7 +95,7 @@ const NotificationSchema = new Schema<INotification>(
     },
     readAt: { type: Date },
   },
-  { timestamps: true, }
+  { timestamps: true }
 );
 
 // 🔍 Quickly find notifications by recipient user + status (already present, good)

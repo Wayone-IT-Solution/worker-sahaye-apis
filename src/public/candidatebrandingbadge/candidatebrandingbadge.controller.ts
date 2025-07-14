@@ -1,12 +1,74 @@
 import ApiError from "../../utils/ApiError";
+import { User } from "../../modals/user.model";
+import { Badge } from "../../modals/badge.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import { sendSingleNotification } from "../../services/notification.service";
 import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
 
 const candidateBrandingBadgesService = new CommonService(
   CandidateBrandingBadge
 );
+
+export const checkAndAssignBadge = async (
+  userId: any,
+  badgeSlug: string,
+  options?: {
+    user?: any;
+    assignIfNotExists?: boolean;
+    extraData?: Record<string, any>;
+  }
+) => {
+  const badge = await Badge.findOne({ slug: badgeSlug });
+  if (!badge) return;
+
+  const existingBadge = await CandidateBrandingBadge.findOne({
+    user: userId,
+    badge: badge.slug,
+  });
+
+  // Already assigned and active → do nothing
+  if (existingBadge?.status === "active") return;
+
+  // Assign or reactivate if flag is true
+  if (options?.assignIfNotExists) {
+    if (existingBadge) {
+      await CandidateBrandingBadge.findByIdAndUpdate(existingBadge._id, {
+        status: "active",
+        earnedBy: "manual",
+        assignedAt: new Date(),
+        metaData: options.extraData || {},
+      });
+    } else {
+      await CandidateBrandingBadge.create({
+        user: userId,
+        badge: badge._id,
+        status: "active",
+        earnedBy: "manual",
+        assignedAt: new Date(),
+        metaData: options?.extraData || {},
+      });
+    }
+
+    const userDetails = await User.findById(userId);
+    if (userDetails) {
+      await sendSingleNotification({
+        type: "badge-earned",
+        context: {
+          badgeName: badge.name,
+          userName: userDetails.fullName,
+        },
+        toUserId: userId,
+        toRole: userDetails.userType,
+        fromUser: {
+          id: options?.user?.id,
+          role: options?.user?.role,
+        },
+      });
+    }
+  }
+};
 
 export class CandidateBrandingBadgeController {
   static async createCandidateBrandingBadge(

@@ -98,22 +98,6 @@ export const applyToJob = async (
         receiverId: receiver._id,
         receiverRole: receiver.userType,
       });
-
-    // await sendSingleNotification({
-    //   type: "job-expiring",
-    //   context: {
-    //     jobTitle: "Electrician Opening",
-    //     expiryDate: "2025-07-08",
-    //   },
-    //   toUserId: "664baaa7d9ff1bca3a7f112a",
-    //   toRole: "worker",
-    //   fromUser: {
-    //     id: "664bbcc97b7aa1bcddaa1100",
-    //     role: "employer",
-    //   },
-    //   direction: "receiver",
-    // });
-
     return res
       .status(201)
       .json(
@@ -272,7 +256,9 @@ export const getReceivedApplications = async (
     const { id: userId, role } = (req as any).user;
 
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json(new ApiError(400, "Invalid or missing user ID."));
+      return res
+        .status(400)
+        .json(new ApiError(400, "Invalid or missing user ID."));
     }
 
     if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(role)) {
@@ -294,7 +280,9 @@ export const getReceivedApplications = async (
     const matchConditions: any = [];
 
     // Match only jobs posted by current user
-    matchConditions.push({ "jobDetails.postedBy": new mongoose.Types.ObjectId(userId) });
+    matchConditions.push({
+      "jobDetails.postedBy": new mongoose.Types.ObjectId(userId),
+    });
     if (statusFilter) matchConditions.push({ status: statusFilter });
 
     if (jobIdFilter && mongoose.Types.ObjectId.isValid(jobIdFilter)) {
@@ -334,13 +322,13 @@ export const getReceivedApplications = async (
           from: "candidatebrandingbadges",
           localField: "applicant",
           foreignField: "user",
-          as: "badgeDetails"
-        }
+          as: "badgeDetails",
+        },
       },
       {
         $addFields: {
-          candidateBadges: "$badgeDetails"
-        }
+          candidateBadges: "$badgeDetails",
+        },
       },
       {
         $lookup: {
@@ -363,7 +351,11 @@ export const getReceivedApplications = async (
           as: "profilePicFile",
         },
       },
-      { $addFields: { profilePic: { $arrayElemAt: ["$profilePicFile.url", 0] }, }, },
+      {
+        $addFields: {
+          profilePic: { $arrayElemAt: ["$profilePicFile.url", 0] },
+        },
+      },
       { $match: matchConditions.length ? { $and: matchConditions } : {} },
       {
         $project: {
@@ -447,7 +439,9 @@ export const getReceivedApplications = async (
     );
   } catch (err) {
     console.log("❌ Error in getReceivedApplications:", err);
-    return res.status(404).json(new ApiError(500, "Failed to fetch received applications"));
+    return res
+      .status(404)
+      .json(new ApiError(500, "Failed to fetch received applications"));
   }
 };
 

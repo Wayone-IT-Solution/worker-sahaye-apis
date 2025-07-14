@@ -5,8 +5,11 @@ import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { extractImageUrl } from "../../admin/community/community.controller";
-import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
-import { SkilledCandidate, VerificationStatus } from './../../modals/skilledcandidate.model';
+import {
+  SkilledCandidate,
+  VerificationStatus,
+} from "./../../modals/skilledcandidate.model";
+import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
 
 const SkilledCandidateService = new CommonService(SkilledCandidate);
 
@@ -26,34 +29,36 @@ export class SkilledCandidateController {
           .json(new ApiError(400, "Document are required."));
       }
 
-      const existingVerificationRecord: any = await SkilledCandidate.findOne({ user });
+      const existingVerificationRecord: any = await SkilledCandidate.findOne({
+        user,
+      });
       if (existingVerificationRecord) {
         const s3Key = document.split(".com/")[1];
         await deleteFromS3(s3Key);
-        return res.status(404).json(new ApiError(404, "Skilled Candidate Doc already exists"));
-      }
-
-      const alreadyBadgeEarned = await CandidateBrandingBadge.findOne({
-        user,
-        badge: "skilled_candidate",
-      });
-
-      if (alreadyBadgeEarned) {
-        const s3Key = document.split(".com/")[1];
-        await deleteFromS3(s3Key);
         return res
-          .status(200)
-          .json(new ApiResponse(200, alreadyBadgeEarned, "You have already earned this badge."));
+          .status(404)
+          .json(new ApiError(404, "Skilled Candidate Doc already exists"));
       }
       const result = await SkilledCandidateService.create({ user, document });
       if (!result) {
         return res
           .status(500)
-          .json(new ApiError(500, "Something went wrong while creating Skilled Candidate."));
+          .json(
+            new ApiError(
+              500,
+              "Something went wrong while creating Skilled Candidate."
+            )
+          );
       }
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Skilled Candidate submitted successfully."));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            "Skilled Candidate submitted successfully."
+          )
+        );
     } catch (err) {
       next(err);
     }
@@ -65,56 +70,58 @@ export class SkilledCandidateController {
     next: NextFunction
   ) {
     try {
-      const pipeline = [{
-        $lookup: {
-          from: "users",
-          localField: "user",
-          foreignField: "_id",
-          as: "userDetails",
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
         },
-      },
-      { $unwind: "$userDetails" },
-      {
-        $lookup: {
-          from: "fileuploads",
-          let: { userId: "$userDetails._id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ["$userId", "$$userId"] },
-                    { $eq: ["$tag", "profilePic"] },
-                  ],
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
                 },
               },
-            },
-            { $sort: { createdAt: -1 } },
-            { $limit: 1 },
-          ],
-          as: "profilePicFile",
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
         },
-      },
-      {
-        $unwind: {
-          path: "$profilePicFile",
-          preserveNullAndEmptyArrays: true,
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
         },
-      },
-      {
-        $project: {
-          _id: 1,
-          status: 1,
-          remarks: 1,
-          document: 1,
-          createdAt: 1,
-          verifiedAt: 1,
-          userEmail: "$userDetails.email",
-          userName: "$userDetails.fullName",
-          userMobile: "$userDetails.mobile",
-          profilePicUrl: "$profilePicFile.url",
+        {
+          $project: {
+            _id: 1,
+            status: 1,
+            remarks: 1,
+            document: 1,
+            createdAt: 1,
+            verifiedAt: 1,
+            userEmail: "$userDetails.email",
+            userName: "$userDetails.fullName",
+            userMobile: "$userDetails.mobile",
+            profilePicUrl: "$profilePicFile.url",
+          },
         },
-      }]
+      ];
       const result = await SkilledCandidateService.getAll(req.query, pipeline);
       return res
         .status(200)
@@ -169,47 +176,44 @@ export class SkilledCandidateController {
     next: NextFunction
   ) {
     try {
+      const { id, role } = (req as any).user;
       const verificationId = req.params.id;
       if (!mongoose.Types.ObjectId.isValid(verificationId))
-        return res.status(400).json(new ApiError(400, "Invalid Skilled Candidate doc ID"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid Skilled Candidate doc ID"));
 
-      const existingVerificationRecord: any = await SkilledCandidateService.getById(
-        verificationId
-      );
+      const existingVerificationRecord: any =
+        await SkilledCandidateService.getById(verificationId);
       if (!existingVerificationRecord)
-        return res.status(404).json(new ApiError(404, "Skilled Candidate Doc not found"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Skilled Candidate Doc not found"));
 
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED)
-        return res.status(404).json(new ApiError(404, "Skilled Candidate already approved"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Skilled Candidate already approved"));
 
-      const { status, remarks, document } = req.body;
+      const { status, remarks, document, slug } = req.body;
       const normalizedData = {
         remarks: remarks?.trim() || existingVerificationRecord.remarks || "",
-        status: status?.toLowerCase() || existingVerificationRecord.status || "pending",
-        document: await extractImageUrl(document, existingVerificationRecord.document),
+        status:
+          status?.toLowerCase() ||
+          existingVerificationRecord.status ||
+          "pending",
+        document: await extractImageUrl(
+          document,
+          existingVerificationRecord.document
+        ),
       };
 
-      if (status === VerificationStatus.APPROVED) {
-        const existingBadge = await CandidateBrandingBadge.findOne({
-          user: existingVerificationRecord.user,
-          badge: "skilled_candidate",
+      if (status === VerificationStatus.APPROVED && role === "admin") {
+        await checkAndAssignBadge(existingVerificationRecord.user, slug, {
+          assignIfNotExists: true,
+          user: { id, role },
         });
-        if (existingBadge) {
-          existingBadge.status = "active";
-          existingBadge.earnedBy = "manual";
-          existingBadge.assignedAt = new Date();
-          await existingBadge.save();
-        } else {
-          await CandidateBrandingBadge.create({
-            status: "active",
-            earnedBy: "manual",
-            assignedAt: new Date(),
-            badge: "skilled_candidate",
-            user: existingVerificationRecord.user,
-          });
-        }
       }
-
       const result = await SkilledCandidateService.updateById(
         verificationId,
         normalizedData
@@ -234,18 +238,26 @@ export class SkilledCandidateController {
     try {
       const verificationId = req.params.id;
       if (!mongoose.Types.ObjectId.isValid(verificationId))
-        return res.status(400).json(new ApiError(400, "Invalid Skilled Candidate doc ID"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid Skilled Candidate doc ID"));
 
-      const existingVerificationRecord: any = await SkilledCandidateService.getById(
-        verificationId
-      );
+      const existingVerificationRecord: any =
+        await SkilledCandidateService.getById(verificationId);
       if (!existingVerificationRecord)
-        return res.status(404).json(new ApiError(404, "Skilled Candidate Doc not found"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Skilled Candidate Doc not found"));
 
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED) {
-        return res.status(400).json(
-          new ApiError(400, "Skilled Candidate is already approved and cannot be deleted or modified.")
-        );
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              "Skilled Candidate is already approved and cannot be deleted or modified."
+            )
+          );
       }
       const result = await SkilledCandidateService.deleteById(req.params.id);
       if (!result)

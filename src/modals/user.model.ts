@@ -232,7 +232,7 @@ const userSchema = new Schema<IUser>(
       notifications: {
         sms: { type: Boolean, default: false },
         push: { type: Boolean, default: true },
-        email: { type: Boolean, default: true },
+        email: { type: Boolean, default: false },
         frequency: {
           type: String,
           enum: ["immediate", "daily", "weekly"],
@@ -255,7 +255,7 @@ const userSchema = new Schema<IUser>(
     pointsEarned: { type: Number, default: 0 },
     referralCode: { type: String, unique: true },
     referredCode: { type: String, unique: true },
-    referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    referredBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

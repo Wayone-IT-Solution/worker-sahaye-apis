@@ -121,6 +121,7 @@ export class PoliceVerificationController {
             remarks: 1,
             document: 1,
             createdAt: 1,
+            updatedAt: 1,
             verifiedAt: 1,
             userEmail: "$userDetails.email",
             userName: "$userDetails.fullName",

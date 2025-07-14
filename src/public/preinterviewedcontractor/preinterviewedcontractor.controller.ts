@@ -103,6 +103,7 @@ export class PreInterviewedContractorController {
             _id: 1,
             status: 1,
             createdAt: 1,
+            updatedAt: 1,
             verifiedAt: 1,
             userEmail: "$userDetails.email",
             userMobile: "$userDetails.mobile",

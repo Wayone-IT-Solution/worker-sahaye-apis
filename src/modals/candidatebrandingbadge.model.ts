@@ -5,8 +5,8 @@ export interface ICandidateBrandingBadge extends Document {
   metaData?: any;
   assignedAt: Date;
   user: Types.ObjectId;
+  earnedBy: "manual" | "system";
   status: "active" | "pending" | "rejected";
-  earnedBy: "subscription" | "manual" | "system";
 }
 
 const CandidateBrandingBadgeSchema = new Schema<ICandidateBrandingBadge>(
@@ -19,7 +19,7 @@ const CandidateBrandingBadgeSchema = new Schema<ICandidateBrandingBadge>(
     earnedBy: {
       type: String,
       required: true,
-      enum: ["subscription", "manual", "system"],
+      enum: ["manual", "system"],
     },
     status: {
       type: String,

@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteTopRecruiterById))
   .post("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowAllExcept(["admin", "agent", "worker"] as any),
     asyncHandler(createTopRecruiter))
   .patch("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowAllExcept(["admin", "agent", "worker"] as any),
     asyncHandler(getTopRecruiterDetails));
 
 export default router;

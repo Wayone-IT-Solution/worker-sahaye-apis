@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteReliablePayerById))
   .post("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowAllExcept(["admin", "agent", "worker"] as any),
     asyncHandler(createReliablePayer))
   .patch("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowAllExcept(["admin", "agent", "worker"] as any),
     asyncHandler(getReliablePayerDetails));
 
 export default router;

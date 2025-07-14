@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { BestPracticesFacilityController } from "./bestpracticesfacility.controller";
-import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin, isEmployer } from "../../middlewares/authMiddleware";
 
 const {
   createBestPracticesFacility,
@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteBestPracticesFacilityById))
   .post("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    isEmployer,
     asyncHandler(createBestPracticesFacility))
   .patch("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    isEmployer,
     asyncHandler(getBestPracticesFacilityDetails));
 
 export default router;

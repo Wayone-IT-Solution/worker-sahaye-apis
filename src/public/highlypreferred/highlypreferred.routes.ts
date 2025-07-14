@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HighlyPreferredController } from "./highlypreferred.controller";
-import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin, isEmployer } from "../../middlewares/authMiddleware";
 
 const {
   createHighlyPreferred,
@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteHighlyPreferredById))
   .post("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    isEmployer,
     asyncHandler(createHighlyPreferred))
   .patch("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    isEmployer,
     asyncHandler(getHighlyPreferredDetails));
 
 export default router;

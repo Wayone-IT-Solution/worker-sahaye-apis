@@ -24,11 +24,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deletePreInterviewedContractorById))
   .post("/",
     authenticateToken,
-    allowOnly(["employer", "contractor"] as any),
+    allowOnly(["contractor"] as any),
     asyncHandler(createPreInterviewedContractor))
   .patch("/",
     authenticateToken,
-    allowOnly(["employer", "contractor"] as any),
+    allowOnly(["contractor"] as any),
     asyncHandler(getPreInterviewedContractorDetails));
 
 export default router;

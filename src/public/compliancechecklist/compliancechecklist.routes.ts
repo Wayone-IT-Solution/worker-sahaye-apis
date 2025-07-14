@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteComplianceChecklistById))
   .post("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowAllExcept(["admin", "agent", "worker"] as any),
     asyncHandler(createComplianceChecklist))
   .patch("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowAllExcept(["admin", "agent", "worker"] as any),
     asyncHandler(getComplianceChecklistDetails));
 
 export default router;

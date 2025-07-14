@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { SafeWorkplaceController } from "./safeworkplace.controller";
-import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { allowOnly, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
   createSafeWorkplace,
@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteSafeWorkplaceById))
   .post("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowOnly(["employer"] as any),
     asyncHandler(createSafeWorkplace))
   .patch("/",
     authenticateToken,
-    allowAllExcept(["admin", "agent"] as any),
+    allowOnly(["employer"] as any),
     asyncHandler(getSafeWorkplaceDetails));
 
 export default router;

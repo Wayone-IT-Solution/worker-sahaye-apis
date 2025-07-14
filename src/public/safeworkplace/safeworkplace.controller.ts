@@ -24,7 +24,7 @@ export class SafeWorkplaceController {
           .status(404)
           .json(new ApiError(404, "Safe WorkPlace Doc already exists"));
       }
-      const result = await SafeWorkplaceService.create({ user });
+      const result = await SafeWorkplaceService.create({ user, ...req.body });
       if (!result) {
         return res
           .status(404)
@@ -58,6 +58,12 @@ export class SafeWorkplaceController {
             localField: "user",
             foreignField: "_id",
             as: "userDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {

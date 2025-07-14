@@ -22,7 +22,7 @@ export class PreInterviewedContractorController {
       const existingVerificationRecord: any = await PreInterviewedContractor.findOne({
         user,
       });
-      if (existingVerificationRecord && document) {
+      if (existingVerificationRecord) {
         return res
           .status(404)
           .json(new ApiError(404, "Pre Interviewed Contractor Doc already exists"));

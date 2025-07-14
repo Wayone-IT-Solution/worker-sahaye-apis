@@ -1,6 +1,6 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { allowOnly, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin, isContractor } from "../../middlewares/authMiddleware";
 import { PreInterviewedContractorController } from "./preinterviewedcontractor.controller";
 
 const {
@@ -24,11 +24,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deletePreInterviewedContractorById))
   .post("/",
     authenticateToken,
-    allowOnly(["contractor"] as any),
+    isContractor,
     asyncHandler(createPreInterviewedContractor))
   .patch("/",
     authenticateToken,
-    allowOnly(["contractor"] as any),
+    isContractor,
     asyncHandler(getPreInterviewedContractorDetails));
 
 export default router;

@@ -24,7 +24,7 @@ export class BestPracticesFacilityController {
           .status(404)
           .json(new ApiError(404, "Best Practice & Facility Doc already exists"));
       }
-      const result = await BestPracticesFacilityService.create({ user });
+      const result = await BestPracticesFacilityService.create({ user, ...req.body });
       if (!result) {
         return res
           .status(404)
@@ -58,6 +58,12 @@ export class BestPracticesFacilityController {
             localField: "user",
             foreignField: "_id",
             as: "userDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {

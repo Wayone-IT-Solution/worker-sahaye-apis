@@ -24,7 +24,7 @@ export class ComplianceChecklistController {
           .status(404)
           .json(new ApiError(404, "Compliance Checklist Doc already exists"));
       }
-      const result = await ComplianceChecklistService.create({ user });
+      const result = await ComplianceChecklistService.create({ user, ...req.body });
       if (!result) {
         return res
           .status(404)
@@ -58,6 +58,12 @@ export class ComplianceChecklistController {
             localField: "user",
             foreignField: "_id",
             as: "userDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {

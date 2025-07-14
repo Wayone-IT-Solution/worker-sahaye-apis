@@ -24,7 +24,7 @@ export class TrustedPartnerController {
           .status(404)
           .json(new ApiError(404, "Trusted Partner Doc already exists"));
       }
-      const result = await TrustedPartnerService.create({ user });
+      const result = await TrustedPartnerService.create({ user, ...req.body });
       if (!result) {
         return res
           .status(404)
@@ -58,6 +58,12 @@ export class TrustedPartnerController {
             localField: "user",
             foreignField: "_id",
             as: "userDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {

@@ -61,6 +61,12 @@ export class TopRecruiterController {
           },
         },
         {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
           $lookup: {
             from: "fileuploads",
             let: { userId: "$userDetails._id" },
@@ -90,6 +96,7 @@ export class TopRecruiterController {
         {
           $project: {
             _id: 1,
+            score: 1,
             status: 1,
             updatedAt: 1,
             createdAt: 1,

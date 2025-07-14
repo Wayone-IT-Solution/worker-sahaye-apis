@@ -24,7 +24,7 @@ export class ReliablePayerController {
           .status(404)
           .json(new ApiError(404, "Reliable Payer Doc already exists"));
       }
-      const result = await ReliablePayerService.create({ user });
+      const result = await ReliablePayerService.create({ user, ...req.body });
       if (!result) {
         return res
           .status(404)
@@ -58,6 +58,12 @@ export class ReliablePayerController {
             localField: "user",
             foreignField: "_id",
             as: "userDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {

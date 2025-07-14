@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { TrustedPartnerController } from "./trustedpartner.controller";
-import { allowOnly, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin, isContractor } from "../../middlewares/authMiddleware";
 
 const {
   createTrustedPartner,
@@ -27,11 +27,11 @@ router
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteTrustedPartnerById))
   .post("/",
     authenticateToken,
-    allowOnly(["contractor"] as any),
+    isContractor,
     asyncHandler(createTrustedPartner))
   .patch("/",
     authenticateToken,
-    allowOnly(["contractor"] as any),
+    isContractor,
     asyncHandler(getTrustedPartnerDetails));
 
 export default router;

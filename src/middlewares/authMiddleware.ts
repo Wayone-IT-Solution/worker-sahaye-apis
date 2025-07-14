@@ -63,101 +63,101 @@ export const authenticateToken = (
  */
 export const allowAllExcept =
   (...rolesToBlock: Role[]) =>
-  (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { user } = req;
+    (req: AuthenticatedRequest, res: Response, next: NextFunction): any => {
+      const { user } = req;
 
-    if (!user) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized access. User not found.",
-      });
-    }
+      if (!user) {
+        return res.status(401).json({
+          status: false,
+          message: "Unauthorized access. User not found.",
+        });
+      }
 
-    if (rolesToBlock.includes(user.role)) {
-      return res.status(403).json({
-        status: false,
-        message: `Access restricted. '${capitalize(
-          user.role
-        )}' role is not permitted on this route.`,
-      });
-    }
+      if (rolesToBlock.includes(user.role)) {
+        return res.status(403).json({
+          status: false,
+          message: `Access restricted. '${capitalize(
+            user.role
+          )}' role is not permitted on this route.`,
+        });
+      }
 
-    next();
-  };
+      next();
+    };
 
 /**
  * Allow only the listed roles
  */
 export const allowOnly =
   (...allowedRoles: Role[]) =>
-  (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { user } = req;
+    (req: AuthenticatedRequest, res: Response, next: NextFunction): any => {
+      const { user } = req;
 
-    if (!user) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized access. User not found.",
-      });
-    }
+      if (!user) {
+        return res.status(401).json({
+          status: false,
+          message: "Unauthorized access. User not found.",
+        });
+      }
 
-    if (!allowedRoles.includes(user.role)) {
-      return res.status(403).json({
-        status: false,
-        message: `Access denied. Only [${allowedRoles
-          .map(capitalize)
-          .join(", ")}] roles are allowed.`,
-        yourRole: user.role,
-      });
-    }
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({
+          status: false,
+          message: `Access denied. Only [${allowedRoles
+            .map(capitalize)
+            .join(", ")}] roles are allowed.`,
+          yourRole: user.role,
+        });
+      }
 
-    next();
-  };
+      next();
+    };
 
 /**
  * Middleware to check if the user has a specific role and exists in the DB
  */
 export const checkRole: any =
   (requiredRole: Role) =>
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { user } = req;
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+      const { user } = req;
 
-    if (!user) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized access. User not found.",
-      });
-    }
+      if (!user) {
+        return res.status(401).json({
+          status: false,
+          message: "Unauthorized access. User not found.",
+        });
+      }
 
-    if (user.role !== requiredRole) {
-      return res.status(403).json({
-        status: false,
-        message: `Access denied. '${capitalize(
-          user.role
-        )}' role cannot access this route.`,
-        expectedRole: requiredRole,
-        yourRole: user.role,
-      });
-    }
+      if (user.role !== requiredRole) {
+        return res.status(403).json({
+          status: false,
+          message: `Access denied. '${capitalize(
+            user.role
+          )}' role cannot access this route.`,
+          expectedRole: requiredRole,
+          yourRole: user.role,
+        });
+      }
 
-    const Model: any = getModelByRole(user.role);
+      const Model: any = getModelByRole(user.role);
 
-    if (!Model) {
-      return res.status(500).json({
-        status: false,
-        message: "Internal error. Unable to resolve user role model.",
-      });
-    }
+      if (!Model) {
+        return res.status(500).json({
+          status: false,
+          message: "Internal error. Unable to resolve user role model.",
+        });
+      }
 
-    const existingUser = await Model.findById(user.id);
-    if (!existingUser) {
-      return res.status(404).json({
-        status: false,
-        message: `${capitalize(requiredRole)} account not found in the system.`,
-      });
-    }
+      const existingUser = await Model.findById(user.id);
+      if (!existingUser) {
+        return res.status(404).json({
+          status: false,
+          message: `${capitalize(requiredRole)} account not found in the system.`,
+        });
+      }
 
-    next();
-  };
+      next();
+    };
 
 // Utility: Map role to respective model
 const getModelByRole = (role: Role) => {

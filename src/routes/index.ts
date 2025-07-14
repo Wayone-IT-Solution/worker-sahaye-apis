@@ -37,23 +37,32 @@ import fileUploadRoutes from "../public/fileupload/fileupload.routes";
 import abuseReportRoutes from "../public/abusereport/abusereport.routes";
 import endorsementRoutes from "../public/endorsement/endorsement.routes";
 import loanRequestRoutes from "../public/loanrequest/loanrequest.routes";
+import topRecruiterRoutes from "../public/toprecruiter/toprecruiter.routes"
 import contentBlockRoutes from "../public/contentblock/contentblock.routes";
 import courseReviewRoutes from "../public/coursereview/coursereview.routes";
 import forumCommentRoutes from "../public/forumcomment/forumcomment.routes";
+import fastResponderRoutes from "../public/fastresponder/fastresponder.routes"
 import preInterviewDRoutes from "../public/preinterviewd/preinterviewd.routes";
 import trainedWorkerRoutes from "../public/trainedworker/trainedworker.routes";
+import safeWorkplaceRoutes from "../public/safeworkplace/safeworkplace.routes";
+import reliablePayerRoutes from "../public/reliablepayer/reliablepayer.routes";
+import trustedPartnerRoutes from "../public/trustedpartner/trustedpartner.routes"
 import userPreferenceRoutes from "../public/userpreference/userpreference.routes";
 import jobApplicationRoutes from "../public/jobapplication/jobapplication.routes";
 import jobRequirementRoutes from "../public/jobrequirement/jobrequirement.routes";
 import gratuityRecordRoutes from "../public/gratuityrecord/gratuityrecord.routes";
 import postEngagementRoutes from "../public/postengagement/postengagement.routes";
+import highlyPreferredRoutes from "../public/highlypreferred/highlypreferred.routes"
 import communityMemberRoutes from "../public/communitymember/communitymember.routes";
 import employerFeedbackRoutes from "../public/employerfeedback/employerfeedback.routes";
 import virtualHRRequestRoutes from "../public/virtualhrrequest/virtualhrrequest.routes";
 import skilledCandidateRoutes from "../public/skilledcandidate/skilledcandidate.routes";
 import unifiedServcieRequestRoutes from "../public/unifiedrequest/unifiedrequest.routes";
 import policeVerificationRoutes from "../public/policeverification/policeverification.routes";
+import complianceChecklistRoutes from "../public/compliancechecklist/compliancechecklist.routes";
+import bestPracticesFacilityRoutes from "../public/bestpracticesfacility/bestpracticesfacility.routes";
 import candidateBrandingBadgeRoutes from "../public/candidatebrandingbadge/candidatebrandingbadge.routes";
+import preInterviewedContractorRoutes from "../public/preinterviewedcontractor/preinterviewedcontractor.routes";
 
 // Create main router
 const router = Router();
@@ -90,73 +99,28 @@ router.use("/loanrequest", loanRequestRoutes);
 router.use("/contentblock", contentBlockRoutes);
 router.use("/coursereview", courseReviewRoutes);
 router.use("/forumcomment", forumCommentRoutes);
+router.use("/toprecruiter", topRecruiterRoutes);
 router.use("/preinterviewd", preInterviewDRoutes);
+router.use("/fastresponder", fastResponderRoutes);
 router.use("/trainedworker", trainedWorkerRoutes);
+router.use("/reliablepayer", reliablePayerRoutes);
+router.use("/safeworkplace", safeWorkplaceRoutes);
 router.use("/gratuityrecord", gratuityRecordRoutes);
 router.use("/jobapplication", jobApplicationRoutes);
 router.use("/jobrequirement", jobRequirementRoutes);
 router.use("/postengagement", postEngagementRoutes);
 router.use("/userpreference", userPreferenceRoutes);
+router.use("/trustedpartner", trustedPartnerRoutes);
+router.use("/highlypreferred", highlyPreferredRoutes);
 router.use("/communitymember", communityMemberRoutes);
 router.use("/skilledcandidate", skilledCandidateRoutes);
 router.use("/employerfeedback", employerFeedbackRoutes);
 router.use("/virtualhrrequest", virtualHRRequestRoutes);
 router.use("/policeverification", policeVerificationRoutes);
+router.use("/compliancechecklist", complianceChecklistRoutes);
 router.use("/unifiedservicerequest", unifiedServcieRequestRoutes);
+router.use("/bestpracticesfacility", bestPracticesFacilityRoutes);
 router.use("/candidatebrandingbadge", candidateBrandingBadgeRoutes);
+router.use("/preinterviewedcontractor", preInterviewedContractorRoutes);
 
 export default router;
-
-// import fs from "fs";
-// import path from "path";
-// import { Router } from "express";
-// import { config } from "../config/config";
-
-// const router = Router();
-
-// // Get full route path like /admin/job
-// const getRoutePath = (baseDir: string, filePath: string): string => {
-//   const relativePath = path
-//     .dirname(filePath)
-//     .replace(baseDir, "")
-//     .split(path.sep)
-//     .filter(Boolean)
-//     .join("/");
-
-//   const baseFolderName = path.basename(baseDir);
-//   return `/${baseFolderName}${relativePath ? `/${relativePath}` : ""}`;
-// };
-
-// // Register routes recursively from a base folder
-// const registerRoutesRecursively = (baseDir: string) => {
-//   fs.readdirSync(baseDir, { withFileTypes: true }).forEach((entry) => {
-//     const fullPath = path.join(baseDir, entry.name);
-
-//     if (entry.isDirectory()) {
-//       registerRoutesRecursively(fullPath);
-//     } else if (entry.isFile() && entry.name.endsWith(".routes.ts")) {
-//       try {
-//         const routeModule = require(fullPath);
-//         const routeExport = routeModule.default;
-
-//         if (routeExport && typeof routeExport === "function") {
-//           const routePath = getRoutePath(baseDir, fullPath);
-//           router.use(routePath, routeExport);
-
-//           if (config.env === "development")
-//             console.info(`✅ Mounted /api${routePath} → ${entry.name}`);
-//         } else
-//           console.log(`⚠️ Skipped ${entry.name}: No valid default export`);
-//       } catch (err) {
-//         console.log(`❌ Failed to register ${entry.name}:`, err);
-//       }
-//     }
-//   });
-// };
-
-// // Paths for admin and public
-// const srcPath = path.resolve(__dirname, "..");
-// registerRoutesRecursively(path.join(srcPath, "admin"));
-// registerRoutesRecursively(path.join(srcPath, "public"));
-
-// export default router;

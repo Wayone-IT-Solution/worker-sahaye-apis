@@ -105,19 +105,52 @@ export class CandidateBrandingBadgeController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $project: {
             _id: 1,
             badge: 1,
             status: 1,
-            metaData: 1,
             earnedBy: 1,
             createdAt: 1,
+            udpatedAt: 1,
             assignedAt: 1,
-            "userDetails.email": 1,
-            "userDetails.mobile": 1,
-            "userDetails.fullName": 1,
+            userEmail: "$userDetails.email",
+            userName: "$userDetails.fullName",
+            userMobile: "$userDetails.mobile",
+            profilePicUrl: "$profilePicFile.url",
           },
         },
       ];

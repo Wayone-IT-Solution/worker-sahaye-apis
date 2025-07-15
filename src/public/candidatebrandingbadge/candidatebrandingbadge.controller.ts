@@ -43,8 +43,8 @@ export const checkAndAssignBadge = async (
     } else {
       await CandidateBrandingBadge.create({
         user: userId,
-        badge: badge._id,
         status: "active",
+        badge: badge.name,
         earnedBy: "manual",
         assignedAt: new Date(),
         metaData: options?.extraData || {},

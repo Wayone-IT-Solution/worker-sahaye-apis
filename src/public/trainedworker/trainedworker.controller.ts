@@ -261,7 +261,7 @@ export class TrainedWorkerController {
           document,
           existingVerificationRecord.document
         ),
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
         courseEnrollmentId:
           courseEnrollmentId?.trim() ||
           existingVerificationRecord.courseEnrollmentId ||

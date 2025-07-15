@@ -218,7 +218,7 @@ export class PoliceVerificationController {
           document,
           existingVerificationRecord.document
         ),
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
       if (status === VerificationStatus.APPROVED && role === "admin") {
         await checkAndAssignBadge(existingVerificationRecord.user, slug, {

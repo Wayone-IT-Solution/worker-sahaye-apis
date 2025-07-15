@@ -217,7 +217,7 @@ export class PreInterviewedController {
           document,
           existingVerificationRecord.document
         ),
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {

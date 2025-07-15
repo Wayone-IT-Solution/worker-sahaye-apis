@@ -22,7 +22,7 @@ export class ComplianceChecklistController {
       if (existingVerificationRecord) {
         return res
           .status(404)
-          .json(new ApiError(404, "Compliance Checklist Doc already exists"));
+          .json(new ApiError(404, "Compliance Pro Doc already exists"));
       }
       const result = await ComplianceChecklistService.create({ user, ...req.body });
       if (!result) {
@@ -31,14 +31,14 @@ export class ComplianceChecklistController {
           .json(
             new ApiError(
               404,
-              "Something went wrong while creating Compliance Checklist."
+              "Something went wrong while creating Compliance Pro."
             )
           );
       }
       return res
         .status(201)
         .json(
-          new ApiResponse(201, result, "Compliance Checklist submitted successfully.")
+          new ApiResponse(201, result, "Compliance Pro submitted successfully.")
         );
     } catch (err) {
       next(err);
@@ -126,7 +126,7 @@ export class ComplianceChecklistController {
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Compliance Checklist not found"));
+          .json(new ApiError(404, "Compliance Pro not found"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -146,7 +146,7 @@ export class ComplianceChecklistController {
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Compliance Checklist not found"));
+          .json(new ApiError(404, "Compliance Pro not found"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -166,25 +166,25 @@ export class ComplianceChecklistController {
       if (!mongoose.Types.ObjectId.isValid(verificationId))
         return res
           .status(400)
-          .json(new ApiError(400, "Invalid Compliance Checklist doc ID"));
+          .json(new ApiError(400, "Invalid Compliance Pro doc ID"));
 
       const existingVerificationRecord: any =
         await ComplianceChecklistService.getById(verificationId);
       if (!existingVerificationRecord)
         return res
           .status(404)
-          .json(new ApiError(404, "Compliance Checklist Doc not found"));
+          .json(new ApiError(404, "Compliance Pro Doc not found"));
 
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED)
         return res
           .status(404)
-          .json(new ApiError(404, "Compliance Checklist already approved"));
+          .json(new ApiError(404, "Compliance Pro already approved"));
 
       const { status, slug } = req.body;
 
       const normalizedData = {
         status,
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {
@@ -200,7 +200,7 @@ export class ComplianceChecklistController {
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to update Compliance Checklist"));
+          .json(new ApiError(404, "Failed to update Compliance Pro"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Updated successfully"));
@@ -219,14 +219,14 @@ export class ComplianceChecklistController {
       if (!mongoose.Types.ObjectId.isValid(verificationId))
         return res
           .status(400)
-          .json(new ApiError(400, "Invalid Compliance Checklist doc ID"));
+          .json(new ApiError(400, "Invalid Compliance Pro doc ID"));
 
       const existingVerificationRecord: any =
         await ComplianceChecklistService.getById(verificationId);
       if (!existingVerificationRecord)
         return res
           .status(404)
-          .json(new ApiError(404, "Compliance Checklist Doc not found"));
+          .json(new ApiError(404, "Compliance Pro Doc not found"));
 
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED) {
         return res
@@ -234,7 +234,7 @@ export class ComplianceChecklistController {
           .json(
             new ApiError(
               400,
-              "Compliance Checklist is already approved and cannot be deleted or modified."
+              "Compliance Pro is already approved and cannot be deleted or modified."
             )
           );
       }
@@ -242,7 +242,7 @@ export class ComplianceChecklistController {
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to delete Compliance Checklist"));
+          .json(new ApiError(404, "Failed to delete Compliance Pro"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));

@@ -7,6 +7,7 @@ import {
 import mongoose, { Types } from "mongoose";
 import admin from "../utils/firebase";
 import { config } from "../config/config";
+import Admin from "../modals/admin.model";
 import { User } from "../modals/user.model";
 import { sendSMS } from "../utils/smsService";
 import ApiResponse from "../utils/ApiResponse";
@@ -66,7 +67,7 @@ export const NotificationService = {
       // Fetch sender and recipient
       const [recipient, senderUser] = await Promise.all([
         User.findById(toUserId).lean(),
-        sender.role !== "admin" ? User.findById(sender.id).lean() : User.findById(sender.id).lean(),
+        sender.role !== "admin" ? User.findById(sender.id).lean() : Admin.findById(sender.id).lean(),
       ]);
 
       if (!recipient) throw new Error(`Recipient not found: ${toUserId}`);

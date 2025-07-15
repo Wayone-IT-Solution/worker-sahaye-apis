@@ -188,7 +188,7 @@ export class TopRecruiterController {
         score,
         status,
         behaviors,
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {

@@ -192,7 +192,7 @@ export class PreInterviewedContractorController {
           status?.toLowerCase() ||
           existingVerificationRecord.status ||
           "pending",
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {

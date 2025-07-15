@@ -184,7 +184,7 @@ export class ReliablePayerController {
 
       const normalizedData = {
         status,
-        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
+        verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {

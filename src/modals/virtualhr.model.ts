@@ -13,7 +13,6 @@ export interface IVirtualHR extends Document {
   experienceInYears: number;
   languagesSpoken: string[];
   preferredIndustries: string[];
-  workingHours: { from: string; to: string };
   communicationModes: ("Google Meet" | "Phone Call" | "WhatsApp" | "Zoom" | string)[];
 }
 
@@ -55,10 +54,6 @@ const VirtualHRSchema = new Schema<IVirtualHR>(
     preferredIndustries: {
       type: [String],
       default: [],
-    },
-    workingHours: {
-      from: { type: String, required: true },
-      to: { type: String, required: true },
     },
     availableDays: {
       type: [String],

@@ -6,6 +6,7 @@ import {
   dynamicUpload,
   s3UploaderMiddleware,
 } from "../../middlewares/s3FileUploadMiddleware";
+import { authorizeFeature } from "../../middlewares/enrollMiddleware";
 
 const {
   createUnifiedRequest,
@@ -21,15 +22,17 @@ router
   .post(
     "/",
     authenticateToken,
+    authorizeFeature("support_service"),
     dynamicUpload([{ name: "document", maxCount: 1 }]),
     s3UploaderMiddleware("document"),
     asyncHandler(createUnifiedRequest)
   )
-  .get("/", authenticateToken, asyncHandler(getAllUnifiedRequests))
+  .get("/", authenticateToken, authorizeFeature("support_service"), asyncHandler(getAllUnifiedRequests))
   .get("/:id", authenticateToken, asyncHandler(getUnifiedRequestById))
   .put(
     "/:id",
     authenticateToken,
+    authorizeFeature("support_service"),
     dynamicUpload([{ name: "document", maxCount: 1 }]),
     s3UploaderMiddleware("document"),
     asyncHandler(updateUnifiedRequestById)

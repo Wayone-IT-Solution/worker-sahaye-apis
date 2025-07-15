@@ -2,6 +2,7 @@ import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { BulkHiringController } from "./bulkhiring.controller";
 import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authorizeFeature } from "../../middlewares/enrollMiddleware";
 
 const {
   createBulkHiring,
@@ -14,10 +15,10 @@ const {
 const router = express.Router();
 
 router
-  .post("/", authenticateToken, asyncHandler(createBulkHiring))
-  .get("/", authenticateToken, asyncHandler(getAllBulkHirings))
+  .post("/", authenticateToken, authorizeFeature("bulk_hiring"), asyncHandler(createBulkHiring))
+  .get("/", authenticateToken, authorizeFeature("bulk_hiring"), asyncHandler(getAllBulkHirings))
   .get("/:id", authenticateToken, asyncHandler(getBulkHiringById))
-  .put("/:id", authenticateToken, asyncHandler(updateBulkHiringById))
+  .put("/:id", authenticateToken, authorizeFeature("bulk_hiring"), asyncHandler(updateBulkHiringById))
   .delete("/:id", authenticateToken, asyncHandler(deleteBulkHiringById));
 
 export default router;

@@ -3,6 +3,7 @@ import { Badge } from "../../modals/badge.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
 
 const badgeService = new CommonService(Badge);
 
@@ -28,6 +29,35 @@ export class BadgeController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllUserBadges(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { role, id: userId } = (req as any).user;
+      const allRoleBadges = await Badge.find({ userTypes: role });
+      let userBadgeRequests = [];
+      userBadgeRequests = await CandidateBrandingBadge.find(
+        { user: userId },
+        { badge: 1, status: 1 }
+      );
+      const badgeStatusMap = new Map<string, string>();
+      userBadgeRequests.forEach((item) => {
+        badgeStatusMap.set(item.badge, item.status);
+      });
+      const badgeList = allRoleBadges.map((badge) => {
+        const badgeName = badge.name;
+        const rawStatus = badgeStatusMap.get(badgeName);
+        const status = rawStatus === "pending"
+          ? "requested"
+          : rawStatus || "pending";
+        return { ...badge.toJSON(), status };
+      });
+      return res
+        .status(200)
+        .json(new ApiResponse(200, badgeList, "Badges fetched successfully"));
     } catch (err) {
       next(err);
     }

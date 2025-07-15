@@ -1,20 +1,12 @@
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
 import { ContentBlock } from "../../modals/contentblock.model";
+import { SubscriptionPlan } from "../../modals/subscriptionplan.model";
 
 const ContentBlockService = new CommonService(ContentBlock);
-
-// const checkContentAccess = (
-//   userRole: string,
-//   access: "free" | "paid" | "premium"
-// ): boolean => {
-//   if (access === "free") return true;
-//   if (access === "paid" && ["paid", "premium"].includes(userRole)) return true;
-//   if (access === "premium" && userRole === "premium") return true;
-//   return false;
-// };
 
 export const createContentBlock = async (
   req: Request,
@@ -51,31 +43,44 @@ export const getAllContentBlocks = async (
   }
 };
 
-// Get by key (with access control)
 export const getContentBlockByKey = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    // const key = req.params.key;
-    // const userRole = (req as any)?.user?.subscription || "free";
-    // const block = await ContentBlock.findOne({ key });
-    // if (!block)
-    //   return res.status(404).json(new ApiError(404, "Content block not found"));
-    // if (!checkContentAccess(userRole, block.access)) {
-    //   return res
-    //     .status(403)
-    //     .json(
-    //       new ApiError(
-    //         403,
-    //         `Upgrade to ${block.access} plan to access this content`
-    //       )
-    //     );
-    // }
-    // return res
-    //   .status(200)
-    //   .json(new ApiResponse(200, block, "Content block fetched"));
+    let enrolled = true;
+    const key = req.params.key;
+    const user = (req as any).user;
+
+    const block = await ContentBlock.findOne({ key });
+    if (!block) return res.status(404).json(new ApiError(404, "Content block not found"));
+
+    const enrolledPlan = await EnrolledPlan.findOne({ user: user.id, status: "active" });
+
+    if (!enrolledPlan?.plan) enrolled = false
+    const now = new Date();
+    if (enrolledPlan && enrolledPlan.expiredAt && now > enrolledPlan.expiredAt) {
+      enrolled = false
+    }
+    let plan;
+    if (enrolledPlan) {
+      plan = await SubscriptionPlan.findById(enrolledPlan.plan).populate("features", "key");
+      if (!plan) enrolled = false
+    }
+
+    if (plan?.features) {
+      const allowedFeatureKeys = plan.features.map((f: any) => f.key);
+      enrolled = allowedFeatureKeys.includes(key);
+    }
+
+    return res.status(200).json(new ApiResponse(200, {
+      enrolled,
+      reason: enrolled
+        ? "Access granted"
+        : "Access denied: This content is not included in your current plan.",
+      content: block
+    }));
   } catch (error) {
     return next(new ApiError(500, "Failed to fetch content block", error));
   }

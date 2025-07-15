@@ -9,6 +9,7 @@ const {
   getBadgeById,
   updateBadgeById,
   deleteBadgeById,
+  getAllUserBadges,
 } = BadgeController;
 BadgeController;
 
@@ -16,6 +17,7 @@ const router = express.Router();
 
 router
   .get("/", authenticateToken, asyncHandler(getAllBadges))
+  .patch("/", authenticateToken, asyncHandler(getAllUserBadges))
   .post("/", authenticateToken, isAdmin, asyncHandler(createBadge))
   .get("/:id", authenticateToken, isAdmin, asyncHandler(getBadgeById))
   .put("/:id", authenticateToken, isAdmin, asyncHandler(updateBadgeById))

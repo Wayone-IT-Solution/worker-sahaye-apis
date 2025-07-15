@@ -120,6 +120,7 @@ export class PreInterviewedController {
             remarks: 1,
             document: 1,
             createdAt: 1,
+            updatedAt: 1,
             verifiedAt: 1,
             interviewedAt: 1,
             userEmail: "$userDetails.email",
@@ -216,6 +217,7 @@ export class PreInterviewedController {
           document,
           existingVerificationRecord.document
         ),
+        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {

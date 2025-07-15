@@ -56,6 +56,7 @@ const NotificationSchema = new Schema<INotification>(
         "job-applied",
         "job-expiring",
         "course-added",
+        "badge-earned",
         "course-enrolled",
         "subscription-renewal",
         "subscription-expiring",

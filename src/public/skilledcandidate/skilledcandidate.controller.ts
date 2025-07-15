@@ -113,6 +113,7 @@ export class SkilledCandidateController {
             status: 1,
             remarks: 1,
             document: 1,
+            updatdAt: 1,
             createdAt: 1,
             verifiedAt: 1,
             userEmail: "$userDetails.email",
@@ -206,6 +207,7 @@ export class SkilledCandidateController {
           document,
           existingVerificationRecord.document
         ),
+        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
       };
 
       if (status === VerificationStatus.APPROVED && role === "admin") {

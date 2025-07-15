@@ -160,6 +160,7 @@ export class TrainedWorkerController {
             remarks: 1,
             document: 1,
             createdAt: 1,
+            updatedAt: 1,
             verifiedAt: 1,
             courseId: "$courseDetails._id",
             userEmail: "$userDetails.email",
@@ -260,6 +261,7 @@ export class TrainedWorkerController {
           document,
           existingVerificationRecord.document
         ),
+        verifiedAt: status === VerificationStatus.APPROVED && new Date(),
         courseEnrollmentId:
           courseEnrollmentId?.trim() ||
           existingVerificationRecord.courseEnrollmentId ||

@@ -34,32 +34,47 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Logging Middleware
-app.use(
-  (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const startTime = process.hrtime();
-    res.on("finish", () => {
-      const fetchStatus = () => {
-        if (res.statusCode >= 500) return colors.red(`${res.statusCode}`);
-        else if (res.statusCode >= 400)
-          return colors.yellow(`${res.statusCode}`);
-        else if (res.statusCode >= 300) return colors.cyan(`${res.statusCode}`);
-        else if (res.statusCode >= 200)
-          return colors.green(`${res.statusCode}`);
-        else return colors.white(`${res.statusCode}`);
-      };
-      const diff = process.hrtime(startTime);
-      const responseTime = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
-      logger.info(
-        `${"METHOD:".blue} ${req.method.yellow} - ${"URL:".blue} ${
-          req.originalUrl.yellow
-        } - ${"STATUS:".blue} ${fetchStatus()} - ${"Response Time:".blue} ${
-          responseTime.magenta
-        } ${"ms".magenta}`
-      );
-    });
-    next();
-  }
-);
+import mongoose from "mongoose";
+
+// Add to your global middleware stack
+app.use(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  (req as any).mongoSession = session;
+
+  const startTime = process.hrtime();
+
+  res.on("finish", async () => {
+    const diff = process.hrtime(startTime);
+    const responseTime = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+
+    const fetchStatus = () => {
+      if (res.statusCode >= 500) return colors.red(`${res.statusCode}`);
+      if (res.statusCode >= 400) return colors.yellow(`${res.statusCode}`);
+      if (res.statusCode >= 300) return colors.cyan(`${res.statusCode}`);
+      if (res.statusCode >= 200) return colors.green(`${res.statusCode}`);
+      return colors.white(`${res.statusCode}`);
+    };
+
+    // ✅ Auto-commit transaction for 2xx responses
+    try {
+      if (res.statusCode >= 200 && res.statusCode < 400)
+        await session.commitTransaction();
+      else await session.abortTransaction();
+    } catch (err) {
+      console.log("❌ Error finalizing transaction:", err);
+    } finally {
+      session.endSession();
+    }
+
+    logger.info(
+      `${"METHOD:".blue} ${req.method.yellow} - ${"URL:".blue} ${req.originalUrl.yellow
+      } - ${"STATUS:".blue} ${fetchStatus()} - ${"Response Time:".blue} ${responseTime.magenta
+      } ${"ms".magenta}`
+    );
+  });
+  next();
+});
 
 // Handle activity logger
 app.use(activityLogger);

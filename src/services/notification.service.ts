@@ -66,7 +66,7 @@ export const NotificationService = {
       // Fetch sender and recipient
       const [recipient, senderUser] = await Promise.all([
         User.findById(toUserId).lean(),
-        User.findById(sender.id).lean(),
+        sender.role !== "admin" ? User.findById(sender.id).lean() : User.findById(sender.id).lean(),
       ]);
 
       if (!recipient) throw new Error(`Recipient not found: ${toUserId}`);
@@ -341,6 +341,7 @@ export const getAllNotifications = async (
           createdAt: 1,
           to: {
             _id: 1,
+            name: 1,
             email: 1,
             status: 1,
             mobile: 1,
@@ -350,6 +351,7 @@ export const getAllNotifications = async (
           },
           from: {
             _id: 1,
+            name: 1,
             email: 1,
             status: 1,
             mobile: 1,

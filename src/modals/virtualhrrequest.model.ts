@@ -26,7 +26,7 @@ export interface IVirtualHRRequest extends Document {
   jobDescriptionUrl?: string;
   assignedBy?: Types.ObjectId;
   cancellationReason?: string;
-  assignedHRId?: Types.ObjectId;
+  assignedTo?: Types.ObjectId;
   status: VirtualHRRequestStatus;
   duration: { from: Date; to: Date };
   workingHours: { from: string; to: string };
@@ -101,7 +101,7 @@ const VirtualHRRequestSchema = new Schema<IVirtualHRRequest>(
       enum: Object.values(VirtualHRRequestStatus),
       default: VirtualHRRequestStatus.PENDING,
     },
-    assignedHRId: {
+    assignedTo: {
       type: Schema.Types.ObjectId,
       ref: "VirtualHR",
     },

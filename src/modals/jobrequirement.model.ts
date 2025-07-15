@@ -31,7 +31,7 @@ export interface IJobRequirement extends Document {
   cancellationReason?: string;
   specialInstructions?: string;
   status: JobRequirementStatus;
-  assignedRecruiterId?: Types.ObjectId;
+  assignedTo?: Types.ObjectId;
   workingHours: { from: string; to: string };
   employmentType: "Full-Time" | "Part-Time" | "Contractual" | "Freelance" | string;
 }
@@ -106,7 +106,7 @@ const JobRequirementSchema = new Schema<IJobRequirement>(
       enum: Object.values(JobRequirementStatus),
       default: JobRequirementStatus.PENDING,
     },
-    assignedRecruiterId: {
+    assignedTo: {
       type: Schema.Types.ObjectId,
       ref: "VirtualHR",
     },

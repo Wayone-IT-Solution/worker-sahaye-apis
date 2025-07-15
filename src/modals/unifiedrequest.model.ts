@@ -8,7 +8,7 @@ export enum CommunicationMode {
 }
 
 export enum UnifiedRequestStatus {
-  OPEN = "Open",
+  PENDING = "Pending",
   ASSIGNED = "Assigned",
   COMPLETED = "Completed",
   CANCELLED = "Cancelled",
@@ -121,7 +121,7 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     status: {
       type: String,
       enum: Object.values(UnifiedRequestStatus),
-      default: UnifiedRequestStatus.OPEN,
+      default: UnifiedRequestStatus.PENDING,
       index: true,
     },
   },

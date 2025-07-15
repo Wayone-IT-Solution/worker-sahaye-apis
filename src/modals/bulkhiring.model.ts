@@ -10,10 +10,10 @@ export enum JobOpeningTime {
 
 export enum BulkHiringStatus {
   PENDING = "Pending",
-  IN_REVIEW = "In Review",
   ASSIGNED = "Assigned",
   COMPLETED = "Completed",
   CANCELLED = "Cancelled",
+  IN_PROGRESS = "In Progress",
 }
 
 export interface IBulkHiringRequest extends Document {

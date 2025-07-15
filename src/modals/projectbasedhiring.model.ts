@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
 export enum ProjectHiringStatus {
-  OPEN = "Open",
+  PENDING = "Pending",
   ASSIGNED = "Assigned",
   COMPLETED = "Completed",
   CANCELLED = "Cancelled",
@@ -93,7 +93,7 @@ const ProjectBasedHiringSchema = new Schema<IProjectBasedHiring>(
     status: {
       type: String,
       enum: Object.values(ProjectHiringStatus),
-      default: ProjectHiringStatus.OPEN,
+      default: ProjectHiringStatus.PENDING,
     },
     isActive: {
       type: Boolean,

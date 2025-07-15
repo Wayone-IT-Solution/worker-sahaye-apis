@@ -90,7 +90,6 @@ export class BadgeController {
 
       const badgeList = allRoleBadges.map((badge) => {
         const status = statusMap.get(badge.slug);
-        console.log(status)
         const updatedStatus = status && status === "pending" ? "requested" : status || "pending";
         return { ...badge, status: updatedStatus };
       });

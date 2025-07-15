@@ -61,7 +61,7 @@ export class BadgeController {
         'top_recruiter': TopRecruiter,
         'reliable_payer': ReliablePayer,
         'safe_workplace': SafeWorkplace,
-        "fast_responders": FastResponder,
+        "fast_responder": FastResponder,
         "trusted_partner": TrustedPartner,
         'highly_preferred': HighlyPreferred,
         "police_verified": PoliceVerification,
@@ -90,6 +90,7 @@ export class BadgeController {
 
       const badgeList = allRoleBadges.map((badge) => {
         const status = statusMap.get(badge.slug);
+        console.log(status)
         const updatedStatus = status && status === "pending" ? "requested" : status || "pending";
         return { ...badge, status: updatedStatus };
       });

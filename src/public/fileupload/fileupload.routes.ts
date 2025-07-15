@@ -12,6 +12,7 @@ const {
   getAllFileUploads,
   deleteFileUploadById,
   getAllAdminFileUploads,
+  deleteFileUploadByAdminId,
 } = FileUploadController;
 
 const router = express.Router();
@@ -32,5 +33,6 @@ router.post(
 router.get("/", authenticateToken, asyncHandler(getAllFileUploads));
 router.delete("/", authenticateToken, asyncHandler(deleteFileUploadById));
 router.get("/all", authenticateToken, asyncHandler(getAllAdminFileUploads));
+router.delete("/all/:id", authenticateToken, asyncHandler(deleteFileUploadByAdminId));
 
 export default router;

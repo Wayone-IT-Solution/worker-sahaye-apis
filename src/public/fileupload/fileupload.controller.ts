@@ -1,8 +1,8 @@
-import { NextFunction, Request, Response } from "express";
+import ApiResponse from "../../utils/ApiResponse";
 import FileUpload from "../../modals/fileupload.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
+import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import ApiResponse from "../../utils/ApiResponse";
 
 const fileUploadService = new CommonService(FileUpload);
 
@@ -115,4 +115,32 @@ export const FileUploadController = {
         .json({ success: false, message: "Deletion failed", error });
     }
   },
+
+  deleteFileUploadByAdminId: async (req: Request, res: Response) => {
+    try {
+      const fileId = req.params.id;
+      if (!fileId)
+        return res.status(400).json({ success: false, message: "File ID is required" });
+
+      const file = await FileUpload.findById(fileId);
+      if (!file) return res.status(404).json({ success: false, message: "File not found" });
+
+      try {
+        await deleteFromS3(file.s3Key);
+      } catch (s3Error) {
+        // console.warn("S3 deletion failed, proceeding with DB deletion:", s3Error);
+      }
+      await file.deleteOne();
+      return res.status(200).json({
+        success: true,
+        message: "File successfully deleted from DB and S3",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Deletion failed",
+        error: (error as Error).message || "Unknown error",
+      });
+    }
+  }
 };

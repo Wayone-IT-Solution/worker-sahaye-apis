@@ -3,7 +3,19 @@ import { Badge } from "../../modals/badge.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
+import { TopRecruiter } from "../../modals/toprecruiter.model";
+import { FastResponder } from "../../modals/fastresponder.model";
+import { ReliablePayer } from "../../modals/reliablepayer.model";
+import { SafeWorkplace } from "../../modals/safeworkplace.model";
+import { TrainedWorker } from "../../modals/trainedworker.model";
+import { PreInterviewed } from "../../modals/preinterviewd.model";
+import { TrustedPartner } from "../../modals/trustedpartner.model";
+import { HighlyPreferred } from "../../modals/highlypreferred.model";
+import { SkilledCandidate } from "../../modals/skilledcandidate.model";
+import { PoliceVerification } from "../../modals/policeverification.model";
+import { ComplianceChecklist } from "../../modals/compliancechecklist.model";
+import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model";
+import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 
 const badgeService = new CommonService(Badge);
 
@@ -37,23 +49,49 @@ export class BadgeController {
   static async getAllUserBadges(req: Request, res: Response, next: NextFunction) {
     try {
       const { role, id: userId } = (req as any).user;
-      const allRoleBadges = await Badge.find({ userTypes: role });
-      let userBadgeRequests = [];
-      userBadgeRequests = await CandidateBrandingBadge.find(
-        { user: userId },
-        { badge: 1, status: 1 }
-      );
-      const badgeStatusMap = new Map<string, string>();
-      userBadgeRequests.forEach((item) => {
-        badgeStatusMap.set(item.badge, item.status);
+      const allRoleBadges = await Badge.find({ userTypes: role }).lean();
+      const badgeIdToKeyMap = new Map<string, string>();
+      allRoleBadges.forEach((badge) => {
+        badgeIdToKeyMap.set(badge.slug, badge.name);
       });
+      const statusMap = new Map<string, string>();
+
+      // Define badge.key → model map for pending requests
+      const pendingBadgeModels: Record<string, any> = {
+        'top_recruiter': TopRecruiter,
+        'reliable_payer': ReliablePayer,
+        'safe_workplace': SafeWorkplace,
+        "fast_responders": FastResponder,
+        "trusted_partner": TrustedPartner,
+        'highly_preferred': HighlyPreferred,
+        "police_verified": PoliceVerification,
+        "skilled_candidate": SkilledCandidate,
+        'compliance_pro': ComplianceChecklist,
+        "trained_by_worker_sahaye": TrainedWorker,
+        "pre_interviewed_candidate": PreInterviewed,
+        'best_facility__practices': BestPracticesFacility,
+        "pre_screened_contractor": PreInterviewedContractor,
+      };
+
+      // Fetch statuses only for models included in current badge list
+      const pendingResults = await Promise.all(
+        Object.entries(pendingBadgeModels)
+          .filter(([badgeKey]) => badgeIdToKeyMap.has(badgeKey)) // ✅ Only relevant keys
+          .map(async ([badgeKey, Model]) => {
+            const record = await Model.findOne({ user: userId }, { status: 1 }).lean();
+            return record ? { key: badgeKey, status: record.status } : null;
+          })
+      );
+
+      // Merge into statusMap only if not already present
+      pendingResults.filter(Boolean).forEach(({ key, status }: any) => {
+        if (!statusMap.has(key)) statusMap.set(key, status);
+      });
+
       const badgeList = allRoleBadges.map((badge) => {
-        const badgeName = badge.name;
-        const rawStatus = badgeStatusMap.get(badgeName);
-        const status = rawStatus === "pending"
-          ? "requested"
-          : rawStatus || "pending";
-        return { ...badge.toJSON(), status };
+        const status = statusMap.get(badge.slug);
+        const updatedStatus = status && status === "pending" ? "requested" : status || "pending";
+        return { ...badge, status: updatedStatus };
       });
       return res
         .status(200)

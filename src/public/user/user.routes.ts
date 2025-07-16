@@ -33,7 +33,7 @@ userRouter.post(
   authenticateToken,
   asyncHandler(getAllNotifications)
 );
-userRouter.get(
+userRouter.patch(
   "/all/notifications-stats",
   authenticateToken,
   asyncHandler(getNotificationStats)

@@ -247,28 +247,41 @@ export const getAllNotifications = async (
     const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
     const limitNumber = Math.max(parseInt(limit as string, 10) || 10, 10);
 
-    const targetUserId = queryUser || user?.id;
+    // Safe check for userId from query or logged-in user
+    const rawUserId = queryUser || user?.id;
     const targetRole = queryUser ? queryRole : user?.role;
 
-    if (!targetUserId || !targetRole)
+    // This is the fix
+    if (!rawUserId || typeof rawUserId !== "string" || !mongoose.isValidObjectId(rawUserId)) {
       return res
         .status(400)
-        .json(new ApiResponse(400, null, "Missing user identification."));
+        .json(
+          new ApiResponse(
+            400,
+            null,
+            `Invalid or missing user ID. Received: ${rawUserId}`
+          )
+        );
+    }
+
+    if (!targetRole) {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Missing role for user."));
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(rawUserId as string);
 
     const matchStage =
       user?.role === "admin" && !queryUser
         ? {}
-        : {
-          "to.user": new mongoose.Types.ObjectId(targetUserId),
-          "to.role": targetRole,
-        };
+        : { "to.user": userObjectId, "to.role": targetRole };
 
     const notifications = await Notification.aggregate([
       { $match: matchStage },
       { $sort: { createdAt: -1 } },
       { $skip: (pageNumber - 1) * limitNumber },
       { $limit: limitNumber },
-      // Lookup for TO user (Admin/User/Agent/VirtualHR)
       {
         $lookup: {
           from: "users",
@@ -301,8 +314,6 @@ export const getAllNotifications = async (
           as: "toVirtualHR",
         },
       },
-
-      // Lookup for FROM user (Admin/User/Agent/VirtualHR)
       {
         $lookup: {
           from: "users",
@@ -447,7 +458,6 @@ export const getAllNotifications = async (
     ]);
 
     const total = await Notification.countDocuments(matchStage);
-
     const data = paginationResult(
       pageNumber,
       limitNumber,

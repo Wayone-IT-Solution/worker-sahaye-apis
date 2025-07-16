@@ -6,6 +6,9 @@ import { CommonService } from "../../services/common.services";
 import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
 import mongoose from "mongoose";
+import { sendDualNotification } from "../../services/notification.service";
+import { UserType } from "../../modals/notification.model";
+import { User } from "../../modals/user.model";
 
 const JobService = new CommonService(Job);
 
@@ -479,6 +482,7 @@ export class JobController {
     next: NextFunction
   ) {
     try {
+      const { id, role } = (req as any).user;
       const { status } = req.body;
       if (!status)
         return res.status(400).json(new ApiError(400, "Status is required"));
@@ -488,6 +492,25 @@ export class JobController {
         return res
           .status(404)
           .json(new ApiError(404, "Failed to update job status"));
+
+      if (result?.status !== status) {
+        const [jobDoc, userDoc]: any = await Promise.all([
+          Job.findById(req.params.id).select("status title postedBy"),
+          User.findById(result.postedBy).select("fullName email mobile"),
+        ]);
+        await sendDualNotification({
+          type: "job-status-update",
+          context: {
+            status: status,
+            jobTitle: jobDoc?.title,
+            userName: userDoc.fullName,
+          },
+          senderId: id,
+          receiverId: userDoc._id,
+          senderRole: UserType.ADMIN,
+          receiverRole: userDoc.userType,
+        });
+      }
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Job status updated successfully"));

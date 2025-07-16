@@ -1,5 +1,3 @@
-import { NotificationType } from "../modals/notification.model";
-
 type TemplateContext = Record<string, string | number>;
 
 interface NotificationTemplate {
@@ -12,213 +10,162 @@ interface DualNotificationTemplate {
   receiver: (ctx?: TemplateContext) => NotificationTemplate;
 }
 
+function formatStatus(status?: any): any {
+  switch (status) {
+    case "hired": return "Hired";
+    case "applied": return "Applied";
+    case "offered": return "Offered";
+    case "rejected": return "Rejected";
+    case "withdrawn": return "Withdrawn";
+    case "shortlisted": return "Shortlisted";
+    case "under_review": return "Under Review";
+    case "interview": return "Interview Scheduled";
+    case "offer_declined": return "Offer Declined";
+    case "offer_accepted": return "Offer Accepted";
+    default: return status || "Updated";
+  }
+}
+
+function formatConnectionStatus(status?: any): {
+  action: string;
+  description: string;
+  receiverMessage: string;
+} {
+  switch (status) {
+    case "pending":
+      return {
+        action: "Request Sent",
+        description: "sent a connection request to",
+        receiverMessage: "sent you a connection request",
+      };
+    case "accepted":
+      return {
+        action: "Accepted",
+        description: "accepted the connection request from",
+        receiverMessage: "accepted your connection request",
+      };
+    case "cancelled":
+      return {
+        action: "Cancelled",
+        description: "cancelled the connection request to",
+        receiverMessage: "cancelled the connection request",
+      };
+    case "removed":
+      return {
+        action: "Removed",
+        description: "removed the connection with",
+        receiverMessage: "removed the connection with you",
+      };
+    default:
+      return {
+        action: "Updated",
+        description: "updated the connection status for",
+        receiverMessage: "updated the connection status",
+      };
+  }
+}
+
 export const NotificationMessages: Record<
-  NotificationType,
+  string,
   DualNotificationTemplate
 > = {
-  "job-posted": {
+  "application-status-update": {
     sender: (ctx) => ({
-      title: "Job Posted Successfully",
-      message: `Your job "${ctx?.jobTitle || "Untitled"
-        }" has been posted successfully.`,
+      title: `Application marked as "${formatStatus(ctx?.status)}"`,
+      message: `You updated ${ctx?.userName || "the candidate"}'s application for the job "${ctx?.jobTitle || "Untitled"}" to "${formatStatus(ctx?.status)}".`,
     }),
     receiver: (ctx) => ({
-      title: "New Job Alert",
-      message: `A new job "${ctx?.jobTitle || "Untitled"
-        }" has just been posted and matches your preferences.`,
+      title: `Update on your application for "${ctx?.jobTitle || "the job"}"`,
+      message: `Your application has been updated to "${formatStatus(ctx?.status)}". Stay tuned for further updates.`,
     }),
   },
 
   "badge-earned": {
     sender: (ctx) => ({
-      title: "Badge Assigned",
-      message: `You assigned the badge "${ctx?.badgeName || "Unknown Badge"
-        }" to ${ctx?.userName || "a user"}.`,
+      title: `Badge Assigned: ${ctx?.badgeName}`,
+      message: `You have assigned the badge "${ctx?.badgeName}" to ${ctx?.userName}.`,
     }),
     receiver: (ctx) => ({
-      title: "You've Earned a Badge!",
-      message: `Congratulations! You've been awarded the "${ctx?.badgeName || "a new"
-        }" badge.`,
+      title: `You've Earned a Badge! 🎉`,
+      message: `You've been awarded the "${ctx?.badgeName}" badge.`,
     }),
   },
 
-  "job-applied": {
+  "task-status-update": {
     sender: (ctx) => ({
-      title: "Application Submitted",
-      message: `You successfully applied for the job "${ctx?.jobTitle || "Untitled"
-        }".`,
+      title: `Task "${ctx?.taskTitle}" is now "${ctx?.status}"`,
+      message: `You've updated the task assigned to ${ctx?.assigneeName} as "${ctx?.status}".`,
     }),
     receiver: (ctx) => ({
-      title: "New Job Application",
-      message: `${ctx?.applicantName || "A user"} has applied for your job "${ctx?.jobTitle || "Untitled"
-        }".`,
+      title: `Update on: "${ctx?.taskTitle}"`,
+      message: `The task "${ctx?.taskTitle}" assigned to you is now marked as "${ctx?.status}".`,
     }),
   },
 
-  "job-expiring": {
+  "job-status-update": {
     sender: (ctx) => ({
-      title: "Job Posting Expiring",
-      message: `Your job "${ctx?.jobTitle}" will expire on ${ctx?.expiryDate || "soon"
-        }.`,
+      title: `Job marked as "${ctx?.status}"`,
+      message: `You updated the job "${ctx?.jobTitle || "Untitled"}" to "${ctx?.status}".`,
     }),
     receiver: (ctx) => ({
-      title: "Job Expiring Soon",
-      message: `The job "${ctx?.jobTitle}" is expiring on ${ctx?.expiryDate || "soon"
-        }. Apply before it closes!`,
+      title: `Job "${ctx?.jobTitle}" is now "${ctx?.status}"`,
+      message:
+        ctx?.status === "open"
+          ? `The job "${ctx?.jobTitle}" is now open for applications.`
+          : ctx?.status === "draft"
+            ? `The job "${ctx?.jobTitle}" has been saved as a draft.`
+            : ctx?.status === "paused"
+              ? `The job "${ctx?.jobTitle}" is currently paused and not accepting new applications.`
+              : ctx?.status === "filled"
+                ? `The job "${ctx?.jobTitle}" has been filled. Thank you for applying.`
+                : ctx?.status === "closed"
+                  ? `The job "${ctx?.jobTitle}" has been closed.`
+                  : ctx?.status === "expired"
+                    ? `The job "${ctx?.jobTitle}" has expired and is no longer available.`
+                    : ctx?.status === "rejected"
+                      ? `The job "${ctx?.jobTitle}" was rejected during review.`
+                      : ctx?.status === "pending-approval"
+                        ? `The job "${ctx?.jobTitle}" is pending approval and will be reviewed shortly.`
+                        : `The job "${ctx?.jobTitle}" status has been updated.`,
     }),
   },
 
-  "virtual-hr-assigned": {
-    sender: (ctx) => ({
-      title: "You Assigned a Virtual HR",
-      message: `You have successfully assigned ${ctx?.hrName} to the Virtual HR request for ${ctx?.companyName || "a client"}.`,
-    }),
-    receiver: (ctx) => ({
-      title: "You've Been Assigned as a Virtual HR",
-      message: `Hi ${ctx?.hrName}, you have been assigned to handle a Virtual HR request from ${ctx?.companyName}.`,
-    }),
-  },
-
-  "bulk-hiring-assigned": {
-    sender: (ctx) => ({
-      title: "Bulk Hiring Request Assigned",
-      message: `You have successfully assigned the bulk hiring request for ${ctx?.numberOfWorkers || "multiple"} workers at ${ctx?.location || "a specified location"}.`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Hiring Request Assigned",
-      message: `You’ve been assigned a bulk hiring request for ${ctx?.numberOfWorkers || "multiple"} workers at ${ctx?.location || "a specified location"}.`,
-    }),
-  },
-
-  "job-requirement-assigned": {
-    sender: (ctx) => ({
-      title: "Job Requirement Assigned",
-      message: `You have successfully assigned a Virtual HR to the job requirement: "${ctx?.designation}".`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Job Assignment",
-      message: `You have been assigned to the job: "${ctx?.designation}" located at ${ctx?.preferredLocation}.`,
-    }),
-  },
-
-  "unified-service-request-assigned": {
-    sender: (ctx) => ({
-      title: "Service Request Assigned",
-      message: `You have successfully assigned a Virtual HR to the service request: "${ctx?.exclusiveService}".`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Service Assignment",
-      message: `You have been assigned to a new service request: "${ctx?.exclusiveService}" from ${ctx?.companyName}.`,
-    }),
-  },
-
-  "project-assigned": {
-    sender: (ctx) => ({
-      title: "Project Hiring Assigned",
-      message: `You have successfully assigned a Virtual HR to the project "${ctx?.projectTitle}".`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Project Assignment",
-      message: `You have been assigned to the project "${ctx?.projectTitle}". Please review the details and take action.`,
-    }),
-  },
-
-  "course-added": {
-    sender: (ctx) => ({
-      title: "Course Added",
-      message: `You successfully added the course "${ctx?.courseName || "Untitled"
-        }".`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Course Available",
-      message: `A new course "${ctx?.courseName || "Untitled"
-        }" is now available for enrollment.`,
-    }),
-  },
-
-  "course-enrolled": {
-    sender: (ctx) => ({
-      title: "User Enrolled in Course",
-      message: `${ctx?.userName || "A user"} enrolled in your course "${ctx?.courseName || "Untitled"
-        }".`,
-    }),
-    receiver: (ctx) => ({
-      title: "Enrollment Confirmed",
-      message: `You're now enrolled in the course "${ctx?.courseName || "Untitled"
-        }".`,
-    }),
-  },
-
-  "subscription-renewal": {
-    sender: (ctx) => ({
-      title: "Subscription Renewed for User",
-      message: `${ctx?.userName || "A user"} renewed their ${ctx?.planName || "plan"
-        } subscription.`,
-    }),
-    receiver: (ctx) => ({
-      title: "Subscription Renewed",
-      message: `Your ${ctx?.planName || "plan"
-        } subscription was successfully renewed.`,
-    }),
-  },
-
-  "subscription-expiring": {
-    sender: (ctx) => ({
-      title: "User Subscription Expiring",
-      message: `${ctx?.userName || "A user"}'s subscription is expiring on ${ctx?.expiryDate || "soon"
-        }.`,
-    }),
-    receiver: (ctx) => ({
-      title: "Subscription Expiring Soon",
-      message: `Your subscription will expire on ${ctx?.expiryDate || "soon"
-        }. Renew soon to avoid service interruption.`,
-    }),
-  },
-
-  "new-community-post": {
-    sender: (ctx) => ({
-      title: "Community Post Created",
-      message: `You created a new post: "${ctx?.postTitle || "Untitled"}".`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Community Post",
-      message: `${ctx?.userName || "Someone"} posted in the community: "${ctx?.postTitle || "Untitled"
-        }".`,
-    }),
-  },
-
-  "reply-on-post": {
-    sender: (ctx) => ({
-      title: "Reply Sent",
-      message: `You replied to the post: "${ctx?.postTitle || "Untitled"}".`,
-    }),
-    receiver: (ctx) => ({
-      title: "New Reply on Your Post",
-      message: `${ctx?.userName || "Someone"} replied to your post: "${ctx?.postTitle || "Untitled"
-        }".`,
-    }),
+  "connection-request-update": {
+    sender: (ctx) => {
+      const formatted = formatConnectionStatus(ctx?.status);
+      return {
+        title: `Connection ${formatted.action}`,
+        message: `You have ${formatted.description} ${ctx?.receiverName || "a user"}.`,
+      };
+    },
+    receiver: (ctx) => {
+      const formatted = formatConnectionStatus(ctx?.status);
+      return {
+        title: `Connection ${formatted.action}`,
+        message: `${ctx?.senderName || "Someone"} has ${formatted.receiverMessage} you.`,
+      };
+    },
   },
 
   "admin-message": {
     sender: (ctx) => ({
-      title: "Admin Message Sent",
-      message: `You sent a message to ${ctx?.userName || "a user"}.`,
+      title: `Message Sent to ${ctx?.userName}`,
+      message: `You sent a message to ${ctx?.userName} regarding "${ctx?.topic || "account updates"}".`,
     }),
     receiver: (ctx) => ({
-      title: "Message from Admin",
-      message: `${ctx?.adminName || "Admin"} sent you a message: "${ctx?.message || "Please review your account."
-        }"`,
+      title: `📬 New Message from Admin`,
+      message: `${ctx?.adminName || "Admin"} sent you a message: "${ctx?.message || "Please check your account."}"`,
     }),
   },
 
   "general-alert": {
     sender: (ctx) => ({
       title: ctx?.title || "System Alert",
-      message: ctx?.message || "System-wide message sent.",
+      message: ctx?.message || "A global message has been sent.",
     }),
     receiver: (ctx) => ({
-      title: ctx?.title || "Alert",
-      message: ctx?.message || "You have a new alert.",
+      title: ctx?.title || "📢 Alert",
+      message: ctx?.message || "You have a new important alert.",
     }),
   },
 };

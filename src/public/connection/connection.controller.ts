@@ -10,6 +10,7 @@ import {
 import { User } from "../../modals/user.model";
 import FileUpload from "../../modals/fileupload.model";
 import { CommonService } from "../../services/common.services";
+import { sendDualNotification } from "../../services/notification.service";
 
 const connectionService = new CommonService(ConnectionModel);
 
@@ -92,6 +93,24 @@ export const createConnection = async (
     }
 
     const newConn = await ConnectionModel.create({ requester, recipient });
+    const [senderDoc, receiverDoc] = await Promise.all([
+      User.findById(requester).select("fullName userType").lean(),
+      User.findById(recipient).select("fullName userType").lean(),
+    ]);
+    if (senderDoc && receiverDoc) {
+      await sendDualNotification({
+        type: "connection-request-update",
+        context: {
+          senderName: senderDoc.fullName,
+          status: ConnectionStatus.PENDING,
+          receiverName: receiverDoc.fullName,
+        },
+        senderId: requester,
+        receiverId: recipient,
+        senderRole: senderDoc.userType,
+        receiverRole: receiverDoc.userType,
+      });
+    }
     return res
       .status(201)
       .json(
@@ -494,6 +513,27 @@ export const updateConnectionById = async (
     existingConnection.status = ConnectionStatus.ACCEPTED;
     await existingConnection.save();
 
+    // 🔍 Fetch both users
+    const [requester, recipient]: any = await Promise.all([
+      User.findById(existingConnection.requester).select("fullName userType"),
+      User.findById(existingConnection.recipient).select("fullName userType"),
+    ]);
+
+    if (recipient && requester) {
+      await sendDualNotification({
+        type: "connection-request-update",
+        context: {
+          status: ConnectionStatus.ACCEPTED,
+          senderName: recipient.fullName,
+          receiverName: requester.fullName,
+        },
+        senderId: recipient._id.toString(),
+        receiverId: requester._id.toString(),
+        senderRole: recipient.userType,
+        receiverRole: requester.userType,
+      });
+    }
+
     const updated = await ConnectionModel.findById(id)
       .populate("requester", "fullName email")
       .populate("recipient", "fullName email")
@@ -537,11 +577,34 @@ export const removeConnectionById = async (
         .json(new ApiError(404, "Connection not found or unauthorized."));
     }
 
+    const isRequester = connection.requester.toString() === user;
+    const senderId = isRequester ? connection.requester : connection.recipient;
+    const receiverId = isRequester ? connection.recipient : connection.requester;
+
+    const [senderDoc, receiverDoc] = await Promise.all([
+      User.findById(senderId).select("fullName userType").lean(),
+      User.findById(receiverId).select("fullName userType").lean(),
+    ]);
+
     if (connection.status === ConnectionStatus.PENDING)
       connection.status = ConnectionStatus.CANCELLED;
     else connection.status = ConnectionStatus.REMOVED;
     await connection.save();
 
+    if (senderDoc && receiverDoc) {
+      await sendDualNotification({
+        type: "connection-request-update",
+        context: {
+          status: connection.status,
+          senderName: senderDoc.fullName,
+          receiverName: receiverDoc.fullName,
+        },
+        senderRole: senderDoc.userType,
+        senderId: senderDoc._id.toString(),
+        receiverRole: receiverDoc.userType,
+        receiverId: receiverDoc._id.toString(),
+      });
+    }
     return res
       .status(200)
       .json(

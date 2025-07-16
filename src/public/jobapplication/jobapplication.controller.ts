@@ -88,14 +88,15 @@ export const applyToJob = async (
 
     if (jobDoc && receiver._id)
       await sendDualNotification({
-        type: "job-applied",
+        type: "application-status-update",
         context: {
           jobTitle: jobDoc?.title,
-          applicantName: userDoc.fullName,
+          userName: userDoc.fullName,
+          status: ApplicationStatus.APPLIED,
         },
         senderId: applicantId,
-        senderRole: UserType.WORKER,
         receiverId: receiver._id,
+        senderRole: UserType.WORKER,
         receiverRole: receiver.userType,
       });
     return res
@@ -537,6 +538,27 @@ export const handleOfferAccepted = async (
     });
     await app.save();
 
+    const [jobDoc, userDoc]: any = await Promise.all([
+      Job.findById(app.job).select("status title postedBy"),
+      User.findById(applicantId).select("fullName email mobile"),
+    ]);
+
+    const receiver = await User.findById(jobDoc?.postedBy).select("_id userType");
+    if (jobDoc && receiver?._id) {
+      await sendDualNotification({
+        type: "application-status-update",
+        context: {
+          jobTitle: jobDoc?.title,
+          userName: userDoc.fullName,
+          status: ApplicationStatus.OFFERACCEPTED,
+        },
+        senderId: applicantId,
+        senderRole: UserType.WORKER,
+        receiverRole: receiver.userType,
+        receiverId: (receiver._id as any),
+      });
+    }
+
     return res
       .status(200)
       .json(
@@ -650,6 +672,27 @@ export const withdrawApplication = async (
 
     await app.save();
 
+    const [jobDoc, userDoc]: any = await Promise.all([
+      Job.findById(app.job).select("status title postedBy"),
+      User.findById(applicantId).select("fullName email mobile"),
+    ]);
+
+    const receiver = await User.findById(jobDoc?.postedBy).select("_id userType");
+    if (jobDoc && receiver?._id) {
+      await sendDualNotification({
+        type: "application-status-update",
+        context: {
+          jobTitle: jobDoc?.title,
+          userName: userDoc.fullName,
+          status: ApplicationStatus.WITHDRAWN,
+        },
+        senderId: applicantId,
+        senderRole: UserType.WORKER,
+        receiverRole: receiver.userType,
+        receiverId: (receiver._id as any),
+      });
+    }
+
     return res
       .status(200)
       .json(
@@ -752,6 +795,27 @@ export const updateStatusByEmployer = async (
     });
 
     await app.save();
+
+    const [jobDoc, userDoc]: any = await Promise.all([
+      Job.findById(app.job).select("status title postedBy"),
+      User.findById(employerId).select("fullName email mobile"),
+    ]);
+
+    const receiver = await User.findById(jobDoc?.postedBy).select("_id userType");
+    if (jobDoc && receiver?._id) {
+      await sendDualNotification({
+        type: "application-status-update",
+        context: {
+          status: status,
+          jobTitle: jobDoc?.title,
+          userName: userDoc.fullName,
+        },
+        senderId: employerId,
+        senderRole: UserType.EMPLOYER,
+        receiverRole: receiver.userType,
+        receiverId: (receiver._id as any),
+      });
+    }
 
     return res
       .status(200)

@@ -276,12 +276,13 @@ export class VirtualHRRequestController {
       if (status === VirtualHRRequestStatus.ASSIGNED && role === "admin") {
         const userDetails = await User.findById(request.userId);
         const hrDetails = await VirtualHR.findById({ _id: assignedTo });
-        if (userDetails) {
+        if (userDetails && hrDetails) {
           await sendSingleNotification({
-            type: "virtual-hr-assigned",
+            type: "task-status-update",
             context: {
-              hrName: (hrDetails?.name as any),
-              companyName: request?.companyName
+              status: status,
+              assigneeName: hrDetails?.name,
+              taskTitle: request.companyName + " (Virtual HR Hiring)",
             },
             toRole: userDetails.userType,
             toUserId: (request.userId as any),

@@ -6,6 +6,7 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { BulkHiringRequest, BulkHiringStatus } from "../../modals/bulkhiring.model";
+import { VirtualHR } from "../../modals/virtualhr.model";
 
 const bulkHiringService = new CommonService(BulkHiringRequest);
 
@@ -226,15 +227,17 @@ export class BulkHiringController {
 
       if (status === BulkHiringStatus.ASSIGNED && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        if (userDetails) {
+        const hrDetails = await VirtualHR.findById(assignedTo);
+        if (userDetails && hrDetails) {
           await sendSingleNotification({
-            type: "bulk-hiring-assigned",
+            type: "task-status-update",
             context: {
-              numberOfWorkers: request?.numberOfWorkers,
-              location: request?.location
+              status: status,
+              taskTitle: "Bulk Hiring",
+              assigneeName: hrDetails?.name
             },
             toRole: userDetails.userType,
-            toUserId: (request.userId as any),
+            toUserId: (userDetails?._id as any),
             fromUser: { id: adminId, role: role },
           });
         }

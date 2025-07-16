@@ -6,35 +6,17 @@ export enum UserType {
   WORKER = "worker",
   EMPLOYER = "employer",
   CONTRACTOR = "contractor",
+  VIRTUAL_HR = "virtual_hr",
 }
-
-export type NotificationType =
-  | "job-posted"
-  | "job-applied"
-  | "job-expiring"
-  | "course-added"
-  | "badge-earned"
-  | "reply-on-post"
-  | "admin-message"
-  | "general-alert"
-  | "job-requirement-assigned"
-  | "unified-service-request-assigned"
-  | "course-enrolled"
-  | "project-assigned"
-  | "bulk-hiring-assigned"
-  | "virtual-hr-assigned"
-  | "new-community-post"
-  | "subscription-renewal"
-  | "subscription-expiring";
 
 /** Read/Delivery status */
 export type NotificationStatus = "unread" | "read" | "deleted";
 
 /** Notification Document Interface */
 export interface INotification extends Document {
+  type: string;
   title: string;
   message: string;
-  type: NotificationType;
   status: NotificationStatus;
   from?: {
     role: UserType;
@@ -52,31 +34,9 @@ export interface INotification extends Document {
 /** Notification Schema */
 const NotificationSchema = new Schema<INotification>(
   {
+    type: { type: String, required: true },
     title: { type: String, required: true, trim: true },
     message: { type: String, required: true, trim: true },
-    type: {
-      type: String,
-      enum: [
-        "job-posted",
-        "job-applied",
-        "job-expiring",
-        "course-added",
-        "badge-earned",
-        "course-enrolled",
-        "subscription-renewal",
-        "subscription-expiring",
-        "job-requirement-assigned",
-        "bulk-hiring-assigned",
-        "new-community-post",
-        "reply-on-post",
-        "admin-message",
-        "unified-service-request-assigned",
-        "project-assigned",
-        "general-alert",
-        "virtual-hr-assigned",
-      ],
-      required: true,
-    },
     status: {
       type: String,
       enum: ["unread", "read", "deleted"],

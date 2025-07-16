@@ -1,40 +1,44 @@
-import nodemailer from "nodemailer";
 import { config } from "../config/config";
+import nodemailer, { Transporter } from "nodemailer";
 
 interface EmailPayload {
     to: string;
-    from: any;
+    from: {
+        name?: string;
+        email?: string;
+    };
+    subject: string;
     text: string;
     html?: string;
-    subject: string;
 }
 
 export async function sendEmail({ to, from, subject, text, html }: EmailPayload) {
-    try {
-        if (!to || !subject || !text) {
-            throw new Error("Missing required fields: to, subject, or text");
-        }
+    const { name = "Notification Service", email = config.email.from } = from || {};
 
-        const transporter = nodemailer.createTransport({
+    if (!to || !subject || !text)
+        console.log("❌ Email Validation Error: Missing required fields.");
+
+    let transporter: Transporter;
+
+    try {
+        transporter = nodemailer.createTransport({
             service: config.email.service,
             auth: {
                 user: config.email.user,
                 pass: config.email.pass,
             },
         });
-
-        const info = await transporter.sendMail({
-            from: `"${from.name}" <${from.email}>`,
+        const mailOptions = {
+            from: `"${name}" <${email}>`,
             to,
             subject,
             text,
-            html,
-        });
+            html: html || `<p>${text}</p>`, // fallback to simple HTML if not provided
+        };
 
-        if (!info.messageId) {
-            throw new Error("Failed to get message ID from email service.");
-        }
+        const info = await transporter.sendMail(mailOptions);
 
+        if (!info?.messageId) console.log("❌ Email Send Failed: No message ID returned.");
         console.log("📧 Email sent successfully:", {
             to,
             messageId: info.messageId,
@@ -43,13 +47,11 @@ export async function sendEmail({ to, from, subject, text, html }: EmailPayload)
         });
 
         return info;
-    } catch (err: any) {
-        console.log("❌ Email Send Error:", {
+    } catch (error: any) {
+        console.log("❌ Email Send Error", {
             to,
             subject,
-            error: err?.message || err,
+            error: error?.message || error,
         });
-
-        throw new Error("Failed to send email. Please try again later.");
     }
 }

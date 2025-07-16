@@ -6,6 +6,7 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { ProjectBasedHiring, ProjectHiringStatus } from "../../modals/projectbasedhiring.model";
+import { VirtualHR } from "../../modals/virtualhr.model";
 
 const projectBasedHiringService = new CommonService(ProjectBasedHiring);
 
@@ -247,13 +248,18 @@ export class ProjectHiringController {
 
       if (status === ProjectHiringStatus.ASSIGNED && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        if (userDetails) {
+        const hrDetails = await VirtualHR.findById(assignedTo);
+        if (userDetails && hrDetails) {
           await sendSingleNotification({
-            type: "project-assigned",
+            type: "task-status-update",
             toRole: userDetails.userType,
             toUserId: (request.userId as any),
             fromUser: { id: adminId, role: role },
-            context: { projectTitle: request.projectTitle },
+            context: {
+              status: status,
+              assigneeName: hrDetails?.name,
+              taskTitle: request?.projectTitle + " (Project Based Hiring)",
+            },
           });
         }
       }

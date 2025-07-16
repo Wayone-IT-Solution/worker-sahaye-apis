@@ -8,6 +8,7 @@ import { CommonService } from "../../services/common.services";
 import { JobRequirement, JobRequirementStatus } from "../../modals/jobrequirement.model";
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
+import { VirtualHR } from "../../modals/virtualhr.model";
 
 const jobRequirementService = new CommonService(JobRequirement);
 
@@ -274,15 +275,17 @@ export class JobRequirementController {
 
       if (status === JobRequirementStatus.ASSIGNED && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        if (userDetails) {
+        const hrDetails = await VirtualHR.findById(assignedTo);
+        if (userDetails && hrDetails) {
           await sendSingleNotification({
+            type: "task-status-update",
             toRole: userDetails.userType,
-            type: "job-requirement-assigned",
             toUserId: (request.userId as any),
             fromUser: { id: adminId, role: role },
             context: {
-              designation: request.designation,
-              preferredLocation: request.preferredLocation,
+              status: status,
+              taskTitle: "On Demand Hiring",
+              assigneeName: hrDetails?.name
             },
           });
         }

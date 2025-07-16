@@ -8,6 +8,7 @@ import { UnifiedRequestStatus, UnifiedServiceRequest } from "../../modals/unifie
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { User } from "../../modals/user.model";
+import { VirtualHR } from "../../modals/virtualhr.model";
 
 const unifiedRequestService = new CommonService(UnifiedServiceRequest);
 
@@ -309,15 +310,17 @@ export class UnifiedRequestController {
 
       if (status === UnifiedRequestStatus.ASSIGNED && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        if (userDetails) {
+        const hrDetails = await VirtualHR.findById(assignedTo);
+        if (userDetails && hrDetails) {
           await sendSingleNotification({
+            type: "task-status-update",
             toRole: userDetails.userType,
-            type: "unified-service-request-assigned",
             toUserId: (request.userId as any),
             fromUser: { id: adminId, role: role },
             context: {
-              exclusiveService: request.exclusiveService,
-              companyName: request.companyName,
+              status: status,
+              assigneeName: hrDetails?.name,
+              taskTitle: request?.companyName + " (Exclusive Services)",
             },
           });
         }

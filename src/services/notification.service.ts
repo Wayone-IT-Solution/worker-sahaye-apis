@@ -2,41 +2,42 @@ import { NotificationMessages } from "./../config/notificationMessages";
 import {
   UserType,
   Notification,
-  NotificationType,
 } from "../modals/notification.model";
 import mongoose, { Types } from "mongoose";
 import admin from "../utils/firebase";
 import { config } from "../config/config";
 import Admin from "../modals/admin.model";
+import Agent from "../modals/agent.model";
 import { User } from "../modals/user.model";
 import { sendSMS } from "../utils/smsService";
 import ApiResponse from "../utils/ApiResponse";
 import { sendEmail } from "../utils/emailService";
 import { paginationResult } from "../utils/helper";
+import { VirtualHR } from "../modals/virtualhr.model";
 import { Request, Response, NextFunction } from "express";
 
 interface SendNotificationOptions {
+  type: string;
   title: string;
   message: string;
   toUserId: string;
   toRole: UserType;
-  type: NotificationType;
   fromUser?: { id: string; role: UserType };
 }
 
 interface DualNotifyOptions {
+  type: string;
   senderId: string;
   receiverId: string;
   senderRole: UserType;
-  type: NotificationType;
   receiverRole: UserType;
   context: Record<string, string | number>;
 }
 
 interface SingleNotifyOptions {
+  type: string;
   toUserId: string;
   toRole: UserType;
-  type: NotificationType;
   direction?: "sender" | "receiver";
   context: Record<string, string | number>;
   fromUser?: { id: string; role: UserType };
@@ -64,23 +65,40 @@ export const NotificationService = {
         from: { user: new Types.ObjectId(sender.id), role: sender.role },
       });
 
+      const resolveUserByRole = async (id: string, role: UserType) => {
+        switch (role) {
+          case "admin":
+            return Admin.findById(id).lean();
+          case "agent":
+            return Agent.findById(id).lean();
+          case "virtual_hr":
+            return VirtualHR.findById(id).lean();
+          case "worker":
+          case "employer":
+          case "contractor":
+          default:
+            return User.findById(id).lean();
+        }
+      };
+
       // Fetch sender and recipient
-      const [recipient, senderUser] = await Promise.all([
-        User.findById(toUserId).lean(),
-        sender.role !== "admin" ? User.findById(sender.id).lean() : Admin.findById(sender.id).lean(),
+      const [recipient, senderUser]: any = await Promise.all([
+        resolveUserByRole(toUserId, toRole),
+        resolveUserByRole(sender.id, sender.role),
       ]);
 
       if (!recipient) throw new Error(`Recipient not found: ${toUserId}`);
       if (!senderUser) throw new Error(`Sender not found: ${sender.id}`);
 
-      const preferences = recipient?.preferences?.notifications || {};
+      const isUserRole = ["worker", "contractor", "employer"].includes(toRole);
+      const preferences = isUserRole ? recipient?.preferences?.notifications || {} : {};
       const smsAllowed = preferences.sms !== false;
       const pushAllowed = preferences.push !== false;
-      const emailAllowed = preferences.email !== false;
-
-      const { fcmToken, mobile, email } = recipient;
+      const emailAllowed =
+        isUserRole ? preferences.email !== false : true; // Always true for non-user roles
 
       const tasks: Promise<any>[] = [];
+      const { fcmToken, mobile, email }: any = recipient;
 
       // --- Push Notification ---
       if (pushAllowed && fcmToken && admin) {
@@ -109,7 +127,7 @@ export const NotificationService = {
       }
 
       // --- Email Notification ---
-      // if (emailAllowed && email && config.email.enabled) {
+      // if (emailAllowed && email && config?.email?.enabled) {
       //   tasks.push(
       //     sendEmail({
       //       to: email,
@@ -117,8 +135,8 @@ export const NotificationService = {
       //       text: message,
       //       html: `<p>${message}</p>`,
       //       from: {
-      //         name: senderUser.fullName || "Notification Service",
-      //         email: senderUser.email || config.email.from,
+      //         name: senderUser?.fullName || senderUser?.name || "Notification Service",
+      //         email: senderUser?.email || config?.email?.from,
       //       },
       //     })
       //       .then(() => {
@@ -156,7 +174,7 @@ export const NotificationService = {
       if (!notification) throw err;
     }
     return notification;
-  },
+  }
 };
 
 export async function sendDualNotification({
@@ -240,14 +258,17 @@ export const getAllNotifications = async (
     const matchStage =
       user?.role === "admin" && !queryUser
         ? {}
-        : { "to.user": new mongoose.Types.ObjectId(targetUserId) };
+        : {
+          "to.user": new mongoose.Types.ObjectId(targetUserId),
+          "to.role": targetRole,
+        };
 
     const notifications = await Notification.aggregate([
       { $match: matchStage },
       { $sort: { createdAt: -1 } },
       { $skip: (pageNumber - 1) * limitNumber },
       { $limit: limitNumber },
-      // Lookup to user details
+      // Lookup for TO user (Admin/User/Agent/VirtualHR)
       {
         $lookup: {
           from: "users",
@@ -256,7 +277,32 @@ export const getAllNotifications = async (
           as: "toUser",
         },
       },
-      // Lookup from user details
+      {
+        $lookup: {
+          from: "admins",
+          localField: "to.user",
+          foreignField: "_id",
+          as: "toAdmin",
+        },
+      },
+      {
+        $lookup: {
+          from: "agents",
+          localField: "to.user",
+          foreignField: "_id",
+          as: "toAgent",
+        },
+      },
+      {
+        $lookup: {
+          from: "virtualhrs",
+          localField: "to.user",
+          foreignField: "_id",
+          as: "toVirtualHR",
+        },
+      },
+
+      // Lookup for FROM user (Admin/User/Agent/VirtualHR)
       {
         $lookup: {
           from: "users",
@@ -265,8 +311,30 @@ export const getAllNotifications = async (
           as: "fromUser",
         },
       },
-
-      // Lookup profile image for "to.user"
+      {
+        $lookup: {
+          from: "admins",
+          localField: "from.user",
+          foreignField: "_id",
+          as: "fromAdmin",
+        },
+      },
+      {
+        $lookup: {
+          from: "agents",
+          localField: "from.user",
+          foreignField: "_id",
+          as: "fromAgent",
+        },
+      },
+      {
+        $lookup: {
+          from: "virtualhrs",
+          localField: "from.user",
+          foreignField: "_id",
+          as: "fromVirtualHR",
+        },
+      },
       {
         $lookup: {
           from: "fileuploads",
@@ -288,8 +356,6 @@ export const getAllNotifications = async (
           as: "toProfilePic",
         },
       },
-
-      // Lookup profile image for "from.user"
       {
         $lookup: {
           from: "fileuploads",
@@ -311,21 +377,37 @@ export const getAllNotifications = async (
           as: "fromProfilePic",
         },
       },
-
-      // Merge user & profile into final shape
       {
         $addFields: {
           to: {
             $mergeObjects: [
               { role: "$to.role" },
-              { $arrayElemAt: ["$toUser", 0] },
+              {
+                $first: {
+                  $concatArrays: [
+                    "$toUser",
+                    "$toAdmin",
+                    "$toAgent",
+                    "$toVirtualHR",
+                  ],
+                },
+              },
               { profilePic: { $arrayElemAt: ["$toProfilePic.url", 0] } },
             ],
           },
           from: {
             $mergeObjects: [
               { role: "$from.role" },
-              { $arrayElemAt: ["$fromUser", 0] },
+              {
+                $first: {
+                  $concatArrays: [
+                    "$fromUser",
+                    "$fromAdmin",
+                    "$fromAgent",
+                    "$fromVirtualHR",
+                  ],
+                },
+              },
               { profilePic: { $arrayElemAt: ["$fromProfilePic.url", 0] } },
             ],
           },
@@ -373,17 +455,15 @@ export const getAllNotifications = async (
       notifications
     );
 
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          data,
-          notifications.length
-            ? "Notifications fetched successfully."
-            : "No notifications found."
-        )
-      );
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        data,
+        notifications.length
+          ? "Notifications fetched successfully."
+          : "No notifications found."
+      )
+    );
   } catch (error) {
     next(error);
   }
@@ -395,8 +475,12 @@ export const markNotificationRead = async (
   next: NextFunction
 ) => {
   try {
-    const { id: userId } = req.user || {};
+    const { id: userId, role } = req.user || {};
     const { notificationId, markAll } = req.query;
+
+    if (!userId || !role)
+      return res.status(400).json(new ApiResponse(400, null, "Missing user information."));
+
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     // =====================
@@ -404,18 +488,26 @@ export const markNotificationRead = async (
     // =====================
     if (markAll === "true") {
       const result = await Notification.updateMany(
-        { "to.user": userObjectId, status: "unread" },
-        { $set: { status: "read", readAt: new Date() } }
+        {
+          "to.user": userObjectId,
+          "to.role": role,
+          status: "unread",
+        },
+        {
+          $set: {
+            status: "read",
+            readAt: new Date(),
+          },
+        }
       );
-      return res
-        .status(200)
-        .json(
-          new ApiResponse(
-            200,
-            { modifiedCount: result.modifiedCount },
-            `${result.modifiedCount} notifications marked as read.`
-          )
-        );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          { modifiedCount: result.modifiedCount },
+          `${result.modifiedCount} notifications marked as read.`
+        )
+      );
     }
 
     // =====================
@@ -431,33 +523,31 @@ export const markNotificationRead = async (
       {
         _id: new mongoose.Types.ObjectId(notificationId as string),
         "to.user": userObjectId,
+        "to.role": role,
         status: { $ne: "read" },
       },
-      { $set: { status: "read", readAt: new Date() } },
+      {
+        $set: {
+          status: "read",
+          readAt: new Date(),
+        },
+      },
       { new: true }
     );
 
     if (!updated) {
-      return res
-        .status(404)
-        .json(
-          new ApiResponse(
-            404,
-            null,
-            "Notification not found or already marked as read."
-          )
-        );
-    }
-
-    return res
-      .status(200)
-      .json(
+      return res.status(404).json(
         new ApiResponse(
-          200,
-          updated,
-          "Notification marked as read successfully."
+          404,
+          null,
+          "Notification not found or already marked as read."
         )
       );
+    }
+
+    return res.status(200).json(
+      new ApiResponse(200, updated, "Notification marked as read successfully.")
+    );
   } catch (error) {
     next(error);
   }
@@ -470,21 +560,32 @@ export const getNotificationStats = async (
 ) => {
   try {
     const { user } = req;
-    const { user: queryUser } = req.query;
+    const { user: queryUser, role: queryRole } = req.query;
 
-    const targetUserId = queryUser || user?.id;
+    const targetUserId = (queryUser as string) || user?.id;
+    const targetUserRole = (queryRole as string) || user?.role;
 
-    if (!targetUserId) {
+    if (!targetUserId || !targetUserRole) {
       return res
         .status(400)
-        .json(new ApiResponse(400, null, "User ID is required."));
+        .json(new ApiResponse(400, null, "User ID and role are required."));
     }
 
-    const userObjectId = new mongoose.Types.ObjectId(targetUserId as string);
+    const userObjectId = new mongoose.Types.ObjectId(targetUserId);
 
     const stats = await Notification.aggregate([
-      { $match: { "to.user": userObjectId } },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
+      {
+        $match: {
+          "to.user": userObjectId,
+          "to.role": targetUserRole,
+        },
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     const mapped = stats.reduce(
@@ -500,12 +601,9 @@ export const getNotificationStats = async (
         total: 0,
       }
     );
-
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(200, mapped, "Notification stats fetched successfully.")
-      );
+    return res.status(200).json(
+      new ApiResponse(200, mapped, "Notification stats fetched successfully.")
+    );
   } catch (error) {
     next(error);
   }

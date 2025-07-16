@@ -1,7 +1,7 @@
 import { Schema, model, Document } from "mongoose";
 
 export interface IContentBlock extends Document {
-  key: string;
+  key: "epf_support" | "lwf_support" | "esic_support";
   title: string;
   sections: {
     heading: string;
@@ -13,11 +13,15 @@ export interface IContentBlock extends Document {
 
 const ContentBlockSchema = new Schema<IContentBlock>(
   {
-    title: { type: String, required: true },
+    title: {
+      type: String,
+      required: true,
+      enum: ["epf_support", "lwf_support", "esic_support"],
+    },
     key: { type: String, required: true, unique: true },
     access: {
       type: String,
-      default: "free",
+      default: "paid",
       enum: ["free", "paid", "premium"],
     },
     sections: [

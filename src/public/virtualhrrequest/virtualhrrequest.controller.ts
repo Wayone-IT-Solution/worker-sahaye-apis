@@ -1,11 +1,14 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
+import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { deleteFromS3 } from "../../config/s3Uploader";
+import { VirtualHR } from "../../modals/virtualhr.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import { VirtualHRRequest } from "../../modals/virtualhrrequest.model";
 import { extractImageUrl } from "../../admin/community/community.controller";
+import { sendSingleNotification } from "../../services/notification.service";
+import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
 
 const virtualHRRequestService = new CommonService(VirtualHRRequest);
 
@@ -80,7 +83,34 @@ export class VirtualHRRequestController {
   ) {
     try {
       const { id: userId, role } = (req as any).user;
-      const result = await virtualHRRequestService.getAll({ ...req.query, ...(role === "admin" ? {} : userId) });
+      const pipeline: any[] = [
+        {
+          $lookup: {
+            from: "virtualhrs",
+            localField: "assignedTo",
+            foreignField: "_id",
+            as: "assignedTo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$assignedTo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            __v: 0,
+            "assignedTo.__v": 0,
+            "assignedTo.createdAt": 0,
+            "assignedTo.updatedAt": 0,
+            updatedAt: 0,
+          },
+        },
+      ];
+
+      const filters = { ...req.query, ...(role === "admin" ? {} : { userId }) };
+      const result = await virtualHRRequestService.getAll(filters, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -193,6 +223,88 @@ export class VirtualHRRequestController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Virtual HR request deleted successfully."));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async assignVirtualHR(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const requestId = req.params.id;
+      const { id: adminId, role } = (req as any).user;
+      const { assignedTo, note, status } = req.body;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(requestId) ||
+        (!mongoose.Types.ObjectId.isValid(assignedTo) && status !== VirtualHRRequestStatus.CANCELLED)
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid request or Virtual HR ID."));
+      }
+
+      const request = await VirtualHRRequest.findById(requestId);
+      if (!request) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Virtual HR request not found."));
+      }
+
+      // ✅ Allow only certain statuses
+      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `Cannot assign request with status '${request.status}'.`
+          )
+        );
+      }
+
+      // ✅ Check if already assigned
+      if (request.assignedTo) {
+        return res
+          .status(409)
+          .json(
+            new ApiError(409, "This request is already assigned to a Virtual HR.")
+          );
+      }
+
+      if (status === VirtualHRRequestStatus.ASSIGNED && role === "admin") {
+        const userDetails = await User.findById(request.userId);
+        const hrDetails = await VirtualHR.findById({ _id: assignedTo });
+        if (userDetails) {
+          await sendSingleNotification({
+            type: "virtual-hr-assigned",
+            context: {
+              hrName: (hrDetails?.name as any),
+              companyName: request?.companyName
+            },
+            toRole: userDetails.userType,
+            toUserId: (request.userId as any),
+            fromUser: { id: adminId, role: role },
+          });
+        }
+      }
+      request.status = status;
+      request.assignedBy = adminId;
+      request.assignedAt = new Date();
+      request.assignedTo = assignedTo;
+      request.cancellationReason = status === VirtualHRRequestStatus.CANCELLED ? note : "";
+
+      await request.save();
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            request,
+            `Request assigned successfully to Virtual HR.`
+          )
+        );
     } catch (err) {
       next(err);
     }

@@ -117,7 +117,7 @@ const BulkHiringRequestSchema = new Schema<IBulkHiringRequest>(
     // Assignment workflow
     assignedTo: {
       type: Schema.Types.ObjectId,
-      ref: "User", // or "Contractor" / "Agency"
+      ref: "VirtualHR",
     },
     assignedBy: {
       type: Schema.Types.ObjectId,

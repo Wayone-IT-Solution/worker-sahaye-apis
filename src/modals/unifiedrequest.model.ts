@@ -27,6 +27,7 @@ export interface IUnifiedServiceRequest extends Document {
   companyName: string;
   mobileNumber: string;
   contactPerson: string;
+  userId: Types.ObjectId;
   preferredDateTime: Date;
   exclusiveService: string;
   briefDescription: string;
@@ -46,6 +47,12 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
       type: String,
       required: true,
       trim: true,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
     },
     contactPerson: {
       type: String,

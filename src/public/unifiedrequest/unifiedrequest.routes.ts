@@ -1,14 +1,12 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken } from "../../middlewares/authMiddleware";
-import { UnifiedRequestController } from "./unifiedrequest.controller";
-import {
-  dynamicUpload,
-  s3UploaderMiddleware,
-} from "../../middlewares/s3FileUploadMiddleware";
 import { authorizeFeature } from "../../middlewares/enrollMiddleware";
+import { UnifiedRequestController } from "./unifiedrequest.controller";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { dynamicUpload, s3UploaderMiddleware, } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
+  assignVirtualHR,
   createUnifiedRequest,
   getAllUnifiedRequests,
   getUnifiedRequestById,
@@ -37,6 +35,12 @@ router
     s3UploaderMiddleware("document"),
     asyncHandler(updateUnifiedRequestById)
   )
-  .delete("/:id", authenticateToken, asyncHandler(deleteUnifiedRequestById));
+  .delete("/:id", authenticateToken, asyncHandler(deleteUnifiedRequestById))
+  .post(
+    "/:id/assign",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(assignVirtualHR)
+  );
 
 export default router;

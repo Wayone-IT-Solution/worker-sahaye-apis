@@ -1,11 +1,12 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import { authorizeFeature } from "../../middlewares/enrollMiddleware";
 import { VirtualHRRequestController } from "./virtualhrrequest.controller";
 import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
+  assignVirtualHR,
   createVirtualHRRequest,
   getAllVirtualHRRequests,
   getVirtualHRRequestById,
@@ -30,5 +31,11 @@ router
     s3UploaderMiddleware("document"),
     asyncHandler(updateVirtualHRRequestById))
   .delete("/:id", authenticateToken, asyncHandler(deleteVirtualHRRequestById))
+  .post(
+    "/:id/assign",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(assignVirtualHR)
+  );
 
 export default router;

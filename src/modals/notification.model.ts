@@ -17,7 +17,12 @@ export type NotificationType =
   | "reply-on-post"
   | "admin-message"
   | "general-alert"
+  | "job-requirement-assigned"
+  | "unified-service-request-assigned"
   | "course-enrolled"
+  | "project-assigned"
+  | "bulk-hiring-assigned"
+  | "virtual-hr-assigned"
   | "new-community-post"
   | "subscription-renewal"
   | "subscription-expiring";
@@ -60,10 +65,15 @@ const NotificationSchema = new Schema<INotification>(
         "course-enrolled",
         "subscription-renewal",
         "subscription-expiring",
+        "job-requirement-assigned",
+        "bulk-hiring-assigned",
         "new-community-post",
         "reply-on-post",
         "admin-message",
+        "unified-service-request-assigned",
+        "project-assigned",
         "general-alert",
+        "virtual-hr-assigned",
       ],
       required: true,
     },

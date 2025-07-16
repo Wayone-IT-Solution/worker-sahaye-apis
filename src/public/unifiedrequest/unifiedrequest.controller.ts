@@ -4,8 +4,10 @@ import ApiResponse from "../../utils/ApiResponse";
 import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import { UnifiedServiceRequest } from "../../modals/unifiedrequest.model";
+import { UnifiedRequestStatus, UnifiedServiceRequest } from "../../modals/unifiedrequest.model";
 import { extractImageUrl } from "../../admin/community/community.controller";
+import { sendSingleNotification } from "../../services/notification.service";
+import { User } from "../../modals/user.model";
 
 const unifiedRequestService = new CommonService(UnifiedServiceRequest);
 
@@ -90,10 +92,34 @@ export class UnifiedRequestController {
   ) {
     try {
       const { id: userId, role } = (req as any).user;
-      const result = await unifiedRequestService.getAll({
-        ...req.query,
-        ...(role === "admin" ? {} : userId),
-      });
+      const pipeline: any[] = [
+        {
+          $lookup: {
+            from: "virtualhrs",
+            localField: "assignedTo",
+            foreignField: "_id",
+            as: "assignedTo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$assignedTo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            __v: 0,
+            "assignedTo.__v": 0,
+            "assignedTo.createdAt": 0,
+            "assignedTo.updatedAt": 0,
+            updatedAt: 0,
+          },
+        },
+      ];
+
+      const filters = { ...req.query, ...(role === "admin" ? {} : { userId }) };
+      const result = await unifiedRequestService.getAll(filters, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -148,8 +174,7 @@ export class UnifiedRequestController {
           .json(
             new ApiError(
               403,
-              `Cannot update request with status '${
-                record.status
+              `Cannot update request with status '${record.status
               }'. Allowed statuses: ${allowedStatuses.join(", ")}.`
             )
           );
@@ -217,8 +242,7 @@ export class UnifiedRequestController {
           .json(
             new ApiError(
               403,
-              `Cannot delete request with status '${
-                record.status
+              `Cannot delete request with status '${record.status
               }'. Allowed statuses: ${allowedStatuses.join(", ")}.`
             )
           );
@@ -232,6 +256,86 @@ export class UnifiedRequestController {
             200,
             result,
             "Unified Service Request deleted successfully."
+          )
+        );
+    } catch (err) {
+      next(err);
+    }
+  }
+  static async assignVirtualHR(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const requestId = req.params.id;
+      const { id: adminId, role } = (req as any).user;
+      const { assignedTo, note, status } = req.body;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(requestId) ||
+        (!mongoose.Types.ObjectId.isValid(assignedTo) && status !== UnifiedRequestStatus.CANCELLED)
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid request or Exclusive Service ID."));
+      }
+
+      const request = await UnifiedServiceRequest.findById(requestId);
+      if (!request) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Exclusive Service Doc not found."));
+      }
+
+      // ✅ Allow only certain statuses
+      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `Cannot assign request with status '${request.status}'.`
+          )
+        );
+      }
+
+      // ✅ Check if already assigned
+      if (request.assignedTo) {
+        return res
+          .status(409)
+          .json(
+            new ApiError(409, "This request is already assigned to a Virtual HR.")
+          );
+      }
+
+      if (status === UnifiedRequestStatus.ASSIGNED && role === "admin") {
+        const userDetails = await User.findById(request.userId);
+        if (userDetails) {
+          await sendSingleNotification({
+            toRole: userDetails.userType,
+            type: "unified-service-request-assigned",
+            toUserId: (request.userId as any),
+            fromUser: { id: adminId, role: role },
+            context: {
+              exclusiveService: request.exclusiveService,
+              companyName: request.companyName,
+            },
+          });
+        }
+      }
+      request.status = status;
+      request.assignedBy = adminId;
+      request.assignedAt = new Date();
+      request.assignedTo = assignedTo;
+      request.cancellationReason = status === UnifiedRequestStatus.CANCELLED ? note : "";
+
+      await request.save();
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            request,
+            `Request assigned successfully to Virtual HR.`
           )
         );
     } catch (err) {

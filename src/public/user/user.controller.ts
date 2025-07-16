@@ -49,6 +49,10 @@ export class UserController {
         privacyPolicyAccepted,
       };
 
+      const mobileExist = await User.findOne({ mobile });
+      if (!mobileExist)
+        return res.status(400).json(new ApiError(400, "Phone Number Already Exist!"));
+
       // 2. Handle referral (if any) before creating referralCode
       if (referralCode) {
         const referrer = await User.findOne({ referralCode });

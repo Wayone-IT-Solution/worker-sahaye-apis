@@ -122,6 +122,73 @@ export class PreInterviewedContractorController {
     }
   }
 
+  static async getAllPreInterviewedContractorsForUser(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            status: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            verifiedAt: 1,
+            userEmail: "$userDetails.email",
+            userMobile: "$userDetails.mobile",
+            userName: "$userDetails.fullName",
+            userProfile: "$userDetails.profile",
+            profilePicUrl: "$profilePicFile.url",
+          },
+        },
+      ];
+      const result = await PreInterviewedContractorService.getAll({ ...req.query, status: "approved" }, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getPreInterviewedContractorById(
     req: Request,
     res: Response,

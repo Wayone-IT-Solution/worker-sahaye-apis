@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken, isAdmin, isContractor } from "../../middlewares/authMiddleware";
 import { PreInterviewedContractorController } from "./preinterviewedcontractor.controller";
+import { authenticateToken, isAdmin, isContractor, isEmployer } from "../../middlewares/authMiddleware";
 
 const {
   createPreInterviewedContractor,
@@ -9,13 +9,15 @@ const {
   getPreInterviewedContractorById,
   updatePreInterviewedContractorById,
   deletePreInterviewedContractorById,
-  getPreInterviewedContractorDetails
+  getPreInterviewedContractorDetails,
+  getAllPreInterviewedContractorsForUser
 } = PreInterviewedContractorController;
 
 const router = express.Router();
 
 router
   .get("/", authenticateToken, isAdmin, asyncHandler(getAllPreInterviewedContractors))
+  .get("/contractors", authenticateToken, isEmployer, asyncHandler(getAllPreInterviewedContractorsForUser))
   .get("/:id", authenticateToken, isAdmin, asyncHandler(getPreInterviewedContractorById))
   .put("/:id",
     authenticateToken,

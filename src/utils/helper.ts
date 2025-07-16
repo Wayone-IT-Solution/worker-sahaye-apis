@@ -16,8 +16,10 @@ export const getPipeline = (
     status,
     userId,
     endDate,
+    isActive,
     postedBy,
     assignee,
+    userType,
     createdBy,
     startDate,
     community,
@@ -42,6 +44,7 @@ export const getPipeline = (
   if (type) match.type = type;
   if (status) match.status = status;
   if (_id) match._id = safeObjectId(_id);
+  if (userType) match.userType = userType;
   if (user) match.user = safeObjectId(user);
   if (userId) match.userId = safeObjectId(userId);
   if (postedBy) match.postedBy = safeObjectId(postedBy);
@@ -50,6 +53,7 @@ export const getPipeline = (
   if (community) match.community = safeObjectId(community);
   if (countryId) match.countryId = safeObjectId(countryId);
   if (applicantId) match.applicant = safeObjectId(applicantId);
+  if (isActive) match.isActive = { $in: [true, "true", "active", 1] };
 
   if (startDate || endDate) {
     match.createdAt = {};

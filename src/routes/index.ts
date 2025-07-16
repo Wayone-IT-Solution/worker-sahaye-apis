@@ -10,6 +10,7 @@ import { Router } from "express";
 // ADMIN FOLDER
 import badgeRoutes from "../admin/badge/badge.routes";
 import adminRoutes from "../admin/admin/admin.routes";
+import bannerRoutes from "../admin/banner/banner.routes";
 import coursesRoutes from "../admin/courses/courses.routes";
 import supportRoutes from "../admin/support/support.routes";
 import communityRoutes from "../admin/community/community.routes";
@@ -70,6 +71,7 @@ const router = Router();
 // ROUTE MOUNTS
 router.use("/admin", adminRoutes);
 router.use("/badge", badgeRoutes);
+router.use("/banner", bannerRoutes);
 router.use("/courses", coursesRoutes);
 router.use("/support", supportRoutes);
 router.use("/community", communityRoutes);

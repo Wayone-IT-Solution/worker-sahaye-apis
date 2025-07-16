@@ -20,7 +20,21 @@ import {
   CommunityMember,
 } from "../../modals/communitymember.model";
 import Ticket from "../../modals/ticket.model";
+import { Badge } from "../../modals/badge.model";
 import { ForumPost } from "../../modals/forumpost.model";
+import { TopRecruiter } from "../../modals/toprecruiter.model";
+import { FastResponder } from "../../modals/fastresponder.model";
+import { ReliablePayer } from "../../modals/reliablepayer.model";
+import { SafeWorkplace } from "../../modals/safeworkplace.model";
+import { TrainedWorker } from "../../modals/trainedworker.model";
+import { PreInterviewed } from "../../modals/preinterviewd.model";
+import { TrustedPartner } from "../../modals/trustedpartner.model";
+import { HighlyPreferred } from "../../modals/highlypreferred.model";
+import { SkilledCandidate } from "../../modals/skilledcandidate.model";
+import { PoliceVerification } from "../../modals/policeverification.model";
+import { ComplianceChecklist } from "../../modals/compliancechecklist.model";
+import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model";
+import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 
 export class DashboardController {
   static async getDashboardStats(
@@ -329,6 +343,85 @@ export class DashboardController {
       );
       return res.status(200).json(
         new ApiResponse(200, counts, "Active user type counts fetched")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getCurrentStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userTypes = ["worker", "employer", "contractor"];
+      const counts = await Promise.all(
+        userTypes.map(async (type) => {
+          const count = await User.countDocuments({ userType: type, status: "active" });
+          return { title: type, count };
+        })
+      );
+      const { role, id: userId } = (req as any).user;
+
+      const allRoleBadges = await Badge.find({ userTypes: role }).lean();
+      const totalBadges = allRoleBadges.length;
+
+      const badgeIdToKeyMap = new Map<string, string>();
+      allRoleBadges.forEach((badge) => {
+        badgeIdToKeyMap.set(badge.slug, badge.name);
+      });
+
+      const statusMap = new Map<string, string>();
+      const pendingBadgeModels: Record<string, any> = {
+        "top_recruiter": TopRecruiter,
+        "reliable_payer": ReliablePayer,
+        "safe_workplace": SafeWorkplace,
+        "fast_responder": FastResponder,
+        "trusted_partner": TrustedPartner,
+        "highly_preferred": HighlyPreferred,
+        "police_verified": PoliceVerification,
+        "skilled_candidate": SkilledCandidate,
+        "compliance_pro": ComplianceChecklist,
+        "trained_by_worker_sahaye": TrainedWorker,
+        "pre_interviewed_candidate": PreInterviewed,
+        "best_facility__practices": BestPracticesFacility,
+        "pre_screened_contractor": PreInterviewedContractor,
+      };
+
+      const pendingResults = await Promise.all(
+        Object.entries(pendingBadgeModels)
+          .filter(([badgeKey]) => badgeIdToKeyMap.has(badgeKey))
+          .map(async ([badgeKey, Model]) => {
+            const record = await Model.findOne({ user: userId }, { status: 1 }).lean();
+            return record ? { key: badgeKey, status: record.status } : null;
+          })
+      );
+
+      pendingResults.filter(Boolean).forEach(({ key, status }: any) => {
+        if (!statusMap.has(key)) statusMap.set(key, status);
+      });
+
+      let approvedCount = 0;
+
+      const badgeList = allRoleBadges.map((badge) => {
+        const status = statusMap.get(badge.slug);
+        const updatedStatus = status && status === "pending" ? "requested" : status || "pending";
+
+        if (updatedStatus === "approved") approvedCount += 1;
+        return { ...badge, status: updatedStatus };
+      });
+
+      const approvedBadges = badgeList
+        .filter((badge: any) => badge.status === "approved")
+        .map(({ _id, name }) => ({ _id, name }));
+
+      const percentage = totalBadges === 0 ? 0 : parseFloat(((approvedCount / totalBadges) * 100).toFixed(2));
+      const data = {
+        counts,
+        percentage,
+        total: totalBadges,
+        badges: approvedBadges,
+        approved: approvedCount,
+      };
+      return res.status(200).json(
+        new ApiResponse(200, data, "Active user type counts fetched")
       );
     } catch (err) {
       next(err);

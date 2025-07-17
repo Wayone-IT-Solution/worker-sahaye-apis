@@ -84,8 +84,7 @@ export class UserController {
           new ApiResponse(
             201,
             newUser,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${userType.charAt(0).toUpperCase() + userType.slice(1)
             } created successfully`
           )
         );
@@ -152,8 +151,7 @@ export class UserController {
           new ApiResponse(
             200,
             result,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${userType.charAt(0).toUpperCase() + userType.slice(1)
             } updated successfully`
           )
         );

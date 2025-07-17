@@ -345,4 +345,54 @@ export class UnifiedRequestController {
       next(err);
     }
   }
+
+  static async updateStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { status } = req.body;
+      const requestId = req.params.id;
+      const { id: updaterId, role } = (req as any).user;
+
+      const request = await UnifiedServiceRequest.findById(requestId);
+      if (!request)
+        return res.status(404).json(new ApiError(404, "Support Service Request not found."));
+
+      const currentStatus = request.status;
+
+      if (status === UnifiedRequestStatus.IN_PROGRESS) {
+        if (currentStatus !== UnifiedRequestStatus.ASSIGNED) {
+          return res.status(400).json(new ApiError(400, "Request must be assigned before starting progress."));
+        }
+        request.status = UnifiedRequestStatus.IN_PROGRESS;
+      } else if (status === UnifiedRequestStatus.COMPLETED) {
+        if (currentStatus !== UnifiedRequestStatus.IN_PROGRESS) {
+          return res.status(400).json(new ApiError(400, "Request must be in progress to complete."));
+        }
+        request.status = UnifiedRequestStatus.COMPLETED;
+        request.completedAt = new Date();
+      } else {
+        return res.status(400).json(new ApiError(400, "Invalid status update."));
+      }
+
+      await request.save();
+      // Send notification to user
+      const user = await User.findById(request.userId);
+      const hrDetails = await VirtualHR.findById({ _id: request.assignedTo });
+      if (user && hrDetails) {
+        await sendSingleNotification({
+          type: "task-status-update",
+          context: {
+            status: status,
+            assigneeName: hrDetails?.name,
+            taskTitle: request?.companyName + " (Exclusive Services)",
+          },
+          toRole: user.userType,
+          toUserId: (user._id as any),
+          fromUser: { id: updaterId, role },
+        });
+      }
+      return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
+    } catch (err) {
+      next(err);
+    }
+  }
 }

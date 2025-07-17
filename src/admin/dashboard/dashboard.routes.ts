@@ -7,7 +7,9 @@ const {
     getCurrentStats,
     getDashboardStats,
     getUserTypeCounts,
+    getBadgeStatusCounts,
     getJobApplicationsStats,
+    getServicesStatusCounts,
     getCustomerSupportDetails,
     getYearlyRevenueComparison,
 } = DashboardController;
@@ -33,6 +35,18 @@ router.get(
     authenticateToken,
     isAdmin,
     asyncHandler(getCustomerSupportDetails)
+);
+router.get(
+    "/badge-count",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(getBadgeStatusCounts)
+);
+router.get(
+    "/service-count",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(getServicesStatusCounts)
 );
 router.get(
     "/user-stats",

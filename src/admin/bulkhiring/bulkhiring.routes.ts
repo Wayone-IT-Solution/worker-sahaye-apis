@@ -5,6 +5,7 @@ import { authorizeFeature } from "../../middlewares/enrollMiddleware";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
+  updateStatus,
   assignVirtualHR,
   createBulkHiring,
   getAllBulkHirings,
@@ -26,6 +27,11 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(assignVirtualHR)
-  );
+  )
+  .patch(
+    "/:id/update-status",
+    authenticateToken,
+    asyncHandler(updateStatus)
+  )
 
 export default router;

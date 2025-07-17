@@ -6,6 +6,7 @@ import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import { dynamicUpload, s3UploaderMiddleware, } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
+  updateStatus,
   assignVirtualHR,
   createUnifiedRequest,
   getAllUnifiedRequests,
@@ -41,6 +42,11 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(assignVirtualHR)
-  );
+  )
+  .patch(
+    "/:id/update-status",
+    authenticateToken,
+    asyncHandler(updateStatus)
+  )
 
 export default router;

@@ -27,14 +27,19 @@ import { FastResponder } from "../../modals/fastresponder.model";
 import { ReliablePayer } from "../../modals/reliablepayer.model";
 import { SafeWorkplace } from "../../modals/safeworkplace.model";
 import { TrainedWorker } from "../../modals/trainedworker.model";
+import { BulkHiringRequest } from "../../modals/bulkhiring.model";
 import { PreInterviewed } from "../../modals/preinterviewd.model";
+import { JobRequirement } from "../../modals/jobrequirement.model";
 import { TrustedPartner } from "../../modals/trustedpartner.model";
 import { HighlyPreferred } from "../../modals/highlypreferred.model";
 import { SkilledCandidate } from "../../modals/skilledcandidate.model";
+import { UnifiedServiceRequest } from "../../modals/unifiedrequest.model";
+import { ProjectBasedHiring } from "../../modals/projectbasedhiring.model";
 import { PoliceVerification } from "../../modals/policeverification.model";
 import { ComplianceChecklist } from "../../modals/compliancechecklist.model";
 import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model";
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
+import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
 
 export class DashboardController {
   static async getDashboardStats(
@@ -558,6 +563,154 @@ export class DashboardController {
           "Yearly revenue data fetched"
         )
       );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getBadgeStatusCounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate, endDate } = req.query;
+
+      const start = startDate && isValid(new Date(startDate as string))
+        ? startOfDay(parseISO(startDate as string))
+        : undefined;
+
+      const end = endDate && isValid(new Date(endDate as string))
+        ? endOfDay(parseISO(endDate as string))
+        : undefined;
+
+      const models: Record<string, any> = {
+        "top_recruiter": TopRecruiter,
+        "reliable_payer": ReliablePayer,
+        "safe_workplace": SafeWorkplace,
+        "fast_responder": FastResponder,
+        "trusted_partner": TrustedPartner,
+        "highly_preferred": HighlyPreferred,
+        "police_verified": PoliceVerification,
+        "skilled_candidate": SkilledCandidate,
+        "compliance_pro": ComplianceChecklist,
+        "trained_by_worker_sahaye": TrainedWorker,
+        "pre_interviewed_candidate": PreInterviewed,
+        "best_facility__practices": BestPracticesFacility,
+        "pre_screened_contractor": PreInterviewedContractor,
+      };
+
+      const results: Record<string, Record<string, number>> = {};
+
+      await Promise.all(
+        Object.entries(models).map(async ([key, Model]) => {
+          const statusCount: Record<string, number> = {
+            pending: 0,
+            approved: 0,
+            rejected: 0,
+          };
+
+          if (start && end) {
+            // PENDING: based on createdAt
+            const pendingCount = await Model.countDocuments({
+              status: "pending",
+              createdAt: { $gte: start, $lte: end },
+            });
+
+            // APPROVED: based on verifiedAt
+            const approvedCount = await Model.countDocuments({
+              status: "approved",
+              verifiedAt: { $gte: start, $lte: end },
+            });
+
+            // REJECTED: based on updatedAt
+            const rejectedCount = await Model.countDocuments({
+              status: "rejected",
+              updatedAt: { $gte: start, $lte: end },
+            });
+
+            statusCount.pending = pendingCount;
+            statusCount.approved = approvedCount;
+            statusCount.rejected = rejectedCount;
+          } else {
+            // No date filter: use overall status counts
+            const counts = await Model.aggregate([
+              { $group: { _id: "$status", count: { $sum: 1 } } },
+            ]);
+            counts.forEach(({ _id, count }: any) => {
+              if (_id in statusCount) statusCount[_id] = count;
+            });
+          }
+
+          results[key] = statusCount;
+        })
+      );
+
+      return res.status(200).json(new ApiResponse(200, results, "Badge status counts fetched"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getServicesStatusCounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate, endDate } = req.query;
+
+      const start = startDate && isValid(new Date(startDate as string))
+        ? startOfDay(parseISO(startDate as string))
+        : undefined;
+
+      const end = endDate && isValid(new Date(endDate as string))
+        ? endOfDay(parseISO(endDate as string))
+        : undefined;
+
+      const models: Record<string, any> = {
+        "bulk_hiring": BulkHiringRequest,
+        "on_demand_hiring": JobRequirement,
+        "virtual_hr_hiring": VirtualHRRequest,
+        "support_service": UnifiedServiceRequest,
+        "project_based_hiring": ProjectBasedHiring,
+      };
+
+      const results: Record<string, Record<VirtualHRRequestStatus, number>> = {};
+
+      await Promise.all(
+        Object.entries(models).map(async ([key, Model]) => {
+          const statusCount: Record<VirtualHRRequestStatus, number> = {
+            [VirtualHRRequestStatus.PENDING]: 0,
+            [VirtualHRRequestStatus.ASSIGNED]: 0,
+            [VirtualHRRequestStatus.IN_PROGRESS]: 0,
+            [VirtualHRRequestStatus.COMPLETED]: 0,
+            [VirtualHRRequestStatus.CANCELLED]: 0,
+          };
+
+          if (start && end) {
+            const [pending, assigned, inProgress, completed, cancelled] = await Promise.all([
+              Model.countDocuments({ status: "Pending", createdAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ status: "Assigned", assignedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ status: "In Progress", updatedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ status: "Completed", completedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ status: "Cancelled", updatedAt: { $gte: start, $lte: end } }),
+            ]);
+
+            statusCount[VirtualHRRequestStatus.PENDING] = pending;
+            statusCount[VirtualHRRequestStatus.ASSIGNED] = assigned;
+            statusCount[VirtualHRRequestStatus.IN_PROGRESS] = inProgress;
+            statusCount[VirtualHRRequestStatus.COMPLETED] = completed;
+            statusCount[VirtualHRRequestStatus.CANCELLED] = cancelled;
+          } else {
+            const counts = await Model.aggregate([
+              { $group: { _id: "$status", count: { $sum: 1 } } },
+            ]);
+
+            counts.forEach(({ _id, count }: any) => {
+              if (_id in statusCount) {
+                statusCount[_id as VirtualHRRequestStatus] = count;
+              }
+            });
+          }
+
+          results[key] = statusCount;
+        })
+      );
+
+      return res.status(200).json(new ApiResponse(200, results, "Services status counts fetched"));
     } catch (err) {
       next(err);
     }

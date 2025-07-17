@@ -5,6 +5,7 @@ import { ProjectHiringController } from "./projectbasedhiring.controller";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
+  updateStatus,
   assignVirtualHR,
   createProjectHiring,
   getAllProjectHirings,
@@ -26,6 +27,11 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(assignVirtualHR)
-  );
+  )
+  .patch(
+    "/:id/update-status",
+    authenticateToken,
+    asyncHandler(updateStatus)
+  )
 
 export default router;

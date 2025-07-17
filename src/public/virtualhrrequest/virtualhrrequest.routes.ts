@@ -1,11 +1,12 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import { authorizeFeature } from "../../middlewares/enrollMiddleware";
 import { VirtualHRRequestController } from "./virtualhrrequest.controller";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
+  updateStatus,
   assignVirtualHR,
   createVirtualHRRequest,
   getAllVirtualHRRequests,
@@ -36,6 +37,11 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(assignVirtualHR)
-  );
+  )
+  .patch(
+    "/:id/update-status",
+    authenticateToken,
+    asyncHandler(updateStatus)
+  )
 
 export default router;

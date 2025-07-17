@@ -221,7 +221,7 @@ export class BulkHiringController {
         return res
           .status(409)
           .json(
-            new ApiError(409, "This request is already assigned to a Virtual HR.")
+            new ApiError(409, "This request is already assigned to a Bulk Hiring.")
           );
       }
 
@@ -255,9 +255,59 @@ export class BulkHiringController {
           new ApiResponse(
             200,
             request,
-            `Request assigned successfully to Virtual HR.`
+            `Request assigned successfully to Bulk Hiring.`
           )
         );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async updateStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { status } = req.body;
+      const requestId = req.params.id;
+      const { id: updaterId, role } = (req as any).user;
+
+      const request = await BulkHiringRequest.findById(requestId);
+      if (!request)
+        return res.status(404).json(new ApiError(404, "Bulk Hiring request not found."));
+
+      const currentStatus = request.status;
+
+      if (status === BulkHiringStatus.IN_PROGRESS) {
+        if (currentStatus !== BulkHiringStatus.ASSIGNED) {
+          return res.status(400).json(new ApiError(400, "Request must be assigned before starting progress."));
+        }
+        request.status = BulkHiringStatus.IN_PROGRESS;
+      } else if (status === BulkHiringStatus.COMPLETED) {
+        if (currentStatus !== BulkHiringStatus.IN_PROGRESS) {
+          return res.status(400).json(new ApiError(400, "Request must be in progress to complete."));
+        }
+        request.status = BulkHiringStatus.COMPLETED;
+        request.completedAt = new Date();
+      } else {
+        return res.status(400).json(new ApiError(400, "Invalid status update."));
+      }
+
+      await request.save();
+      // Send notification to user
+      const user = await User.findById(request.userId);
+      const hrDetails = await VirtualHR.findById(request.assignedTo);
+      if (user && hrDetails) {
+        await sendSingleNotification({
+          type: "task-status-update",
+          context: {
+            status: status,
+            taskTitle: "Bulk Hiring",
+            assigneeName: hrDetails?.name
+          },
+          toRole: user.userType,
+          toUserId: (user._id as any),
+          fromUser: { id: updaterId, role },
+        });
+      }
+      return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
     } catch (err) {
       next(err);
     }

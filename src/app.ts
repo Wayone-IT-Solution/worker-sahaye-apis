@@ -14,6 +14,9 @@ import { activityLogger } from "./middlewares/activityLogger";
 import { notFoundHandler } from "./middlewares/notFounHandler";
 import { globalErrorHandler } from "./middlewares/errorHandler";
 
+// CRON JOBS
+import "./cron/deleteRejectedBadges";
+
 const app = express();
 
 app.use(ipBlocker);

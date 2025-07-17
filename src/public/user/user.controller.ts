@@ -5,7 +5,12 @@ import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
-import { UserStatus, UserType, User, generateReferralCode } from "../../modals/user.model";
+import {
+  UserStatus,
+  UserType,
+  User,
+  generateReferralCode,
+} from "../../modals/user.model";
 import {
   EnrolledPlan,
   PlanEnrollmentStatus,
@@ -37,7 +42,9 @@ export class UserController {
 
       // 1. Validation (basic example)
       if (!email || !mobile || !fullName || !userType) {
-        return res.status(400).json(new ApiError(400, "Missing required fields"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Missing required fields"));
       }
 
       const userData: any = {
@@ -50,14 +57,18 @@ export class UserController {
       };
 
       const mobileExist = await User.findOne({ mobile });
-      if (!mobileExist)
-        return res.status(400).json(new ApiError(400, "Phone Number Already Exist!"));
+      if (mobileExist)
+        return res
+          .status(400)
+          .json(new ApiError(400, "Phone Number Already Exist!"));
 
       // 2. Handle referral (if any) before creating referralCode
       if (referralCode) {
         const referrer = await User.findOne({ referralCode });
         if (!referrer)
-          return res.status(400).json(new ApiError(400, "Invalid referral code"));
+          return res
+            .status(400)
+            .json(new ApiError(400, "Invalid referral code"));
         userData.referredBy = referrer._id;
         userData.referredCode = referralCode;
         await referrer.updateOne({ $inc: { pointsEarned: 50 } });
@@ -67,23 +78,23 @@ export class UserController {
       newUser.referralCode = generateReferralCode(newUser._id);
       await newUser.save();
 
-      return res.status(201).json(
-        new ApiResponse(
-          201,
-          newUser,
-          `${userType.charAt(0).toUpperCase() + userType.slice(1)} created successfully`
-        )
-      );
+      return res
+        .status(201)
+        .json(
+          new ApiResponse(
+            201,
+            newUser,
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
+            } created successfully`
+          )
+        );
     } catch (error) {
       next(error);
     }
   }
 
-  static async deleteUserById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async deleteUserById(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: user, role } = (req as any).user;
       if (role === "admin")
@@ -93,9 +104,7 @@ export class UserController {
 
       const result = await userService.deleteById(req.params.id || user);
       if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Failed to delete city"));
+        return res.status(404).json(new ApiError(404, "Failed to delete city"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));
@@ -143,7 +152,8 @@ export class UserController {
           new ApiResponse(
             200,
             result,
-            `${userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
             } updated successfully`
           )
         );
@@ -192,12 +202,12 @@ export class UserController {
               $mergeObjects: [
                 "$$ROOT",
                 {
-                  profilePic: "$profilePic.url"
-                }
-              ]
-            }
-          }
-        }
+                  profilePic: "$profilePic.url",
+                },
+              ],
+            },
+          },
+        },
       ];
 
       const result = await userService.getAll(req.query, pipeline);
@@ -209,11 +219,7 @@ export class UserController {
     }
   }
 
-  static async getAllOtps(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getAllOtps(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await otpService.getAll(req.query);
       return res
@@ -247,7 +253,10 @@ export class UserController {
         });
       }
 
-      const otpCode = mobile.toString() === "6397228522" ? "123456" : Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCode =
+        mobile.toString() === "6397228522"
+          ? "123456"
+          : Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
 
       // Save or update OTP
@@ -467,9 +476,7 @@ export class UserController {
       let role;
       if (endorsement) {
         role =
-          endorsement.endorsedBy.toString() === userId
-            ? "sender"
-            : "receiver";
+          endorsement.endorsedBy.toString() === userId ? "sender" : "receiver";
       }
 
       const responseData: any = {
@@ -516,7 +523,6 @@ export class UserController {
       next(error);
     }
   }
-
 
   static async getCurrentUser(
     req: Request,

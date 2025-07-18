@@ -321,7 +321,7 @@ export class ForumPostController {
       const { id: user } = (req as any).user;
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
-      const skip = (page - 1) * limit + 1;
+      const skip = (page - 1) * limit;
 
       const joinedCommunityIds = await CommunityMember.distinct("community", {
         user,

@@ -15,7 +15,9 @@ userRouter.post("/", asyncHandler(UserController.createUser));
 userRouter.delete("/", authenticateToken, asyncHandler(UserController.deleteUserById));
 userRouter.get("/otp/all", asyncHandler(UserController.getAllOtps));
 userRouter.post("/send-otp", asyncHandler(UserController.generateOtp));
+userRouter.post("/admin/send-otp", asyncHandler(UserController.generateAdminOtp));
 userRouter.post("/verify-otp", asyncHandler(UserController.verifyOtp));
+userRouter.post("/admin/verify-otp", asyncHandler(UserController.verifyAdminOtp));
 userRouter.put("/", authenticateToken, asyncHandler(UserController.updateUser));
 userRouter.get(
   "/all",

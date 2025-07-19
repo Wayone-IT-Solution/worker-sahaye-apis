@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "./../../utils/asyncHandler";
 import { DashboardController } from "./dashboard.controller";
-import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
     getCurrentStats,
@@ -57,7 +57,7 @@ router.get(
 router.get(
     "/job-applications",
     authenticateToken,
-    isAdmin,
+    allowAllExcept("worker", "agent"),
     asyncHandler(getJobApplicationsStats)
 );
 

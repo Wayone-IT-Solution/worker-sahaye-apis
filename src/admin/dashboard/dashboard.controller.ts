@@ -261,6 +261,7 @@ export class DashboardController {
     next: NextFunction
   ): Promise<void> {
     try {
+      const { id: userId, role } = (_req as any).user;
       const { startDate: start, endDate: end } = _req.query;
 
       const endDate = end ? new Date(end as string) : new Date();
@@ -292,20 +293,42 @@ export class DashboardController {
         "offer_accepted",
       ];
 
+      const basePipeline = (dateRange: any) => {
+        const pipeline: any[] = [
+          { $match: { createdAt: dateRange, } },
+          {
+            $lookup: {
+              from: "jobs",
+              localField: "job",
+              foreignField: "_id",
+              as: "job",
+            },
+          },
+          { $unwind: "$job" },
+        ];
+        // Apply filter only if not admin
+        if (role !== "admin") {
+          pipeline.push({
+            $match: {
+              "job.createdBy": userId,
+            },
+          });
+        }
+        pipeline.push({
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        });
+        return pipeline;
+      };
+
       const [currentCounts, previousCounts] = await Promise.all([
-        JobApplication.aggregate([
-          { $match: { createdAt: currentRange } },
-          { $group: { _id: "$status", count: { $sum: 1 } } },
-        ]),
-        JobApplication.aggregate([
-          { $match: { createdAt: prevRange } },
-          { $group: { _id: "$status", count: { $sum: 1 } } },
-        ]),
+        JobApplication.aggregate(basePipeline(currentRange)),
+        JobApplication.aggregate(basePipeline(prevRange)),
       ]);
 
-      const currentMap = Object.fromEntries(
-        statuses.map((status) => [status, 0])
-      );
+      const currentMap = Object.fromEntries(statuses.map((s) => [s, 0]));
       const prevMap = { ...currentMap };
 
       currentCounts.forEach(({ _id, count }) => (currentMap[_id] = count));
@@ -333,7 +356,6 @@ export class DashboardController {
         ...result,
       });
     } catch (error) {
-      console.error("Error getting ticket summary:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   }

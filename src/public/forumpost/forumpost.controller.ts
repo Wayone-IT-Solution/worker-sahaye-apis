@@ -503,6 +503,7 @@ export class ForumPostController {
     next: NextFunction
   ) {
     try {
+      const { id: user, role } = (req as any).user;
       const pipeline = [
         // Lookup community details for both admin and user cases
         {
@@ -597,7 +598,7 @@ export class ForumPostController {
           },
         },
       ];
-      const result = await ForumPostService.getAll(req.query, pipeline);
+      const result = await ForumPostService.getAll({ ...req.query, ...(role === "admin" ? {} : { createdBy: user }) }, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

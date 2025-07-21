@@ -8,15 +8,31 @@ export interface ILoanRequest extends Document {
   | "Education Loan";
   createdAt: Date;
   updatedAt: Date;
+
+  assignedAt?: Date;
+  completedAt?: Date;
+  status: LoanRequestStatus;
+  assignedTo?: Types.ObjectId;
+  assignedBy?: Types.ObjectId;
+
   emailId?: string;
   loanNeedDate: Date;
   isHighRisk: boolean;
   companyName: string;
-  user: Types.ObjectId;
   mobileNumber: string;
   currentSalary: number;
+  userId: Types.ObjectId;
+  cancellationReason?: string;
   estimatedLoanEligibility: number;
   salarySlab: "below_3_lakh" | "3_to_5_lakh" | "5_to_10_lakh" | "10_lakh_plus";
+}
+
+export enum LoanRequestStatus {
+  PENDING = "Pending",
+  ASSIGNED = "Assigned",
+  COMPLETED = "Completed",
+  CANCELLED = "Cancelled",
+  IN_PROGRESS = "In Progress",
 }
 
 const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
@@ -33,7 +49,7 @@ const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
       required: true,
     },
 
-    user: {
+    userId: {
       ref: "User",
       index: true,
       required: true,
@@ -52,15 +68,27 @@ const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
       required: true,
     },
 
+    assignedAt: { type: Date },
+    completedAt: { type: Date },
+
+    assignedTo: {
+      type: Schema.Types.ObjectId,
+      ref: "VirtualHR",
+    },
+    assignedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+    },
+    status: {
+      type: String,
+      enum: Object.values(LoanRequestStatus),
+      default: LoanRequestStatus.PENDING,
+      index: true,
+    },
+    cancellationReason: { type: String, maxlength: 1000 },
+
     loanNeedDate: {
       type: Date,
-      required: true,
-      validate: {
-        validator: function (value: Date) {
-          return value > new Date();
-        },
-        message: "Loan date must be in the future",
-      },
     },
 
     mobileNumber: {
@@ -120,8 +148,8 @@ LoanRequestSchema.pre<ILoanRequest>("save", function (next) {
   next();
 });
 
-// 🔎 Index for user-specific loan fetch
-LoanRequestSchema.index({ user: 1 });
+// 🔎 Index for userId-specific loan fetch
+LoanRequestSchema.index({ userId: 1 });
 
 // 📅 Index for loan need date (useful for filtering upcoming loans)
 LoanRequestSchema.index({ loanNeedDate: 1 });
@@ -135,8 +163,8 @@ LoanRequestSchema.index({ isHighRisk: 1 });
 // 📊 Index for salary range queries (e.g., for analytics)
 LoanRequestSchema.index({ currentSalary: 1 });
 
-// 📦 Compound index if you often filter by user + loan type
-LoanRequestSchema.index({ user: 1, loanCategory: 1 });
+// 📦 Compound index if you often filter by userId + loan type
+LoanRequestSchema.index({ userId: 1, loanCategory: 1 });
 
 // 📆 Sorting by creation date
 LoanRequestSchema.index({ createdAt: -1 });

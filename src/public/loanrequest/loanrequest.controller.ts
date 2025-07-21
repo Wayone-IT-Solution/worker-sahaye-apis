@@ -1,12 +1,16 @@
-import { NextFunction, Request, Response } from "express";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
+import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import { LoanRequestModel } from "../../modals/loanrequest.model";
+import { LoanRequestModel, LoanRequestStatus } from "../../modals/loanrequest.model";
 import {
   EnrolledPlan,
   PlanEnrollmentStatus,
 } from "../../modals/enrollplan.model";
+import mongoose from "mongoose";
+import { User } from "../../modals/user.model";
+import { VirtualHR } from "../../modals/virtualhr.model";
+import { sendSingleNotification } from "../../services/notification.service";
 
 const loanRequestService = new CommonService(LoanRequestModel);
 
@@ -24,7 +28,7 @@ export const createLoanRequest = async (req: Request, res: Response) => {
         .status(403)
         .json(new ApiError(403, "You must enroll in a plan to request a loan"));
 
-    const loan = await loanRequestService.create({ ...req.body, user });
+    const loan = await loanRequestService.create({ ...req.body, userId: user });
     if (!loan) {
       return res
         .status(400)
@@ -44,7 +48,7 @@ export const getAllLoanRequests = async (req: Request, res: Response) => {
     if (!user) return res.status(401).json(new ApiError(401, "Unauthorized"));
 
     const enrolled = await EnrolledPlan.findOne({
-      user,
+      userId: user,
       status: PlanEnrollmentStatus.ACTIVE,
     });
     if (!enrolled)
@@ -52,7 +56,7 @@ export const getAllLoanRequests = async (req: Request, res: Response) => {
         .status(403)
         .json(new ApiError(403, "You must enroll in a plan to request a loan"));
 
-    const result = await loanRequestService.getAll({ ...req.query, user });
+    const result = await loanRequestService.getAll({ ...req.query, userId: user });
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -71,7 +75,7 @@ export const getAllRequests = async (
       {
         $lookup: {
           from: "users",
-          localField: "user",
+          localField: "userId",
           foreignField: "_id",
           as: "userDetails",
         },
@@ -79,8 +83,22 @@ export const getAllRequests = async (
       { $unwind: "$userDetails" },
       {
         $lookup: {
+          from: "virtualhrs",
+          localField: "assignedTo",
+          foreignField: "_id",
+          as: "assignedTo",
+        },
+      },
+      {
+        $unwind: {
+          path: "$assignedTo",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
           from: "fileuploads",
-          let: { userId: "$user" },
+          let: { userId: "$userId" },
           pipeline: [
             {
               $match: {
@@ -110,6 +128,8 @@ export const getAllRequests = async (
           loanNeedDate: 1,
           loanCategory: 1,
           currentSalary: 1,
+          "assignedTo.name": 1,
+          "assignedTo.email": 1,
           "userDetails.email": 1,
           "userDetails.mobile": 1,
           "userDetails.fullName": 1,
@@ -122,6 +142,139 @@ export const getAllRequests = async (
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Data fetched successfully"));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const assignVirtualHR = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const requestId = req.params.id;
+    const { id: adminId, role } = (req as any).user;
+    const { assignedTo, note, status } = req.body;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(requestId) ||
+      (!mongoose.Types.ObjectId.isValid(assignedTo) && status !== LoanRequestStatus.CANCELLED)
+    ) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Invalid request or Loan Request Service ID."));
+    }
+
+    const request = await LoanRequestModel.findById(requestId);
+    if (!request) {
+      return res
+        .status(404)
+        .json(new ApiError(404, "Loan Request Service Doc not found."));
+    }
+
+    // ✅ Allow only certain statuses
+    if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+      return res.status(400).json(
+        new ApiError(
+          400,
+          `Cannot assign request with status '${request.status}'.`
+        )
+      );
+    }
+
+    // ✅ Check if already assigned
+    if (request.assignedTo) {
+      return res
+        .status(409)
+        .json(
+          new ApiError(409, "This request is already assigned to a Virtual HR.")
+        );
+    }
+
+    if (status === LoanRequestStatus.ASSIGNED && role === "admin") {
+      const userDetails = await User.findById(request.userId);
+      const hrDetails = await VirtualHR.findById(assignedTo);
+      if (userDetails && hrDetails) {
+        await sendSingleNotification({
+          type: "task-status-update",
+          toRole: userDetails.userType,
+          toUserId: (request.userId as any),
+          fromUser: { id: adminId, role: role },
+          context: {
+            status: status,
+            taskTitle: "Loan Services",
+            assigneeName: hrDetails?.name,
+          },
+        });
+      }
+    }
+    request.status = status;
+    request.assignedBy = adminId;
+    request.assignedAt = new Date();
+    request.assignedTo = assignedTo;
+    request.cancellationReason = status === LoanRequestStatus.CANCELLED ? note : "";
+
+    await request.save();
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          request,
+          `Request assigned successfully to Virtual HR.`
+        )
+      );
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const updateStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status } = req.body;
+    const requestId = req.params.id;
+    const { id: updaterId, role } = (req as any).user;
+
+    const request = await LoanRequestModel.findById(requestId);
+    if (!request)
+      return res.status(404).json(new ApiError(404, "Loan Request not found."));
+
+    const currentStatus = request.status;
+
+    if (status === LoanRequestStatus.IN_PROGRESS) {
+      if (currentStatus !== LoanRequestStatus.ASSIGNED) {
+        return res.status(400).json(new ApiError(400, "Request must be assigned before starting progress."));
+      }
+      request.status = LoanRequestStatus.IN_PROGRESS;
+    } else if (status === LoanRequestStatus.COMPLETED) {
+      if (currentStatus !== LoanRequestStatus.IN_PROGRESS) {
+        return res.status(400).json(new ApiError(400, "Request must be in progress to complete."));
+      }
+      request.status = LoanRequestStatus.COMPLETED;
+      request.completedAt = new Date();
+    } else {
+      return res.status(400).json(new ApiError(400, "Invalid status update."));
+    }
+
+    await request.save();
+    // Send notification to user
+    const user = await User.findById(request.userId);
+    const hrDetails = await VirtualHR.findById({ _id: request.assignedTo });
+    if (user && hrDetails) {
+      await sendSingleNotification({
+        type: "task-status-update",
+        context: {
+          status: status,
+          taskTitle: "Loan Request",
+          assigneeName: hrDetails?.name,
+        },
+        toRole: user.userType,
+        toUserId: (user._id as any),
+        fromUser: { id: updaterId, role },
+      });
+    }
+    return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
   } catch (err) {
     next(err);
   }

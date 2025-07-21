@@ -4,8 +4,10 @@ import jwt, { SignOptions } from "jsonwebtoken";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { getPipeline, paginationResult } from "../../utils/helper";
+import { CommonService } from "../../services/common.services";
 
 const secret = config.jwt.secret;
+const adminService = new CommonService(Admin);
 const expiresIn = config.jwt.expiresIn as SignOptions["expiresIn"];;
 
 /**
@@ -95,24 +97,38 @@ export class AdminController {
     next: NextFunction
   ): Promise<any> {
     try {
-      const { page = 1, limit = 10 }: any = req.query;
-      const { pipeline, options } = getPipeline(req.query);
-
-      const result = await Admin.aggregate(pipeline, options);
-      const { data = [], totalCount = 0 } = result?.[0] || {};
-
-      const respone = {
-        result: data,
-        pagination: {
-          currentPage: page,
-          itemsPerPage: limit,
-          totalItems: totalCount,
-          totalPages: Math.ceil(totalCount / limit),
+      const pipeline = [
+        {
+          $lookup: {
+            from: "roles",
+            localField: "role",
+            foreignField: "_id",
+            as: "roleDetails"
+          }
         },
-      };
+        {
+          $unwind: {
+            path: "$roleDetails",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $addFields: {
+            role: "$roleDetails.name"
+          }
+        },
+        {
+          $project: {
+            password: 0,
+            roleDetails: 0,
+          }
+        }
+      ];
+
+      const result = await adminService.getAll(req.query, pipeline);
       return res
         .status(200)
-        .json(new ApiResponse(200, respone, "Tickets fetched successfully"));
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
     } catch (error) {
       next(error);
     }
@@ -129,10 +145,11 @@ export class AdminController {
         message: "Login successful",
         token: data.token, // Send the token in response
         user: {
-          _id: data.user.id,
-          role: data?.user.role,
-          email: data.user.email,
-          username: data.user.username,
+          _id: data?.user?.id,
+          role: data?.user?.role,
+          email: data?.user?.email,
+          username: data?.user?.username,
+          permissions: data?.user?.permissions,
         },
       });
     } catch (error) {
@@ -153,7 +170,7 @@ export class AdminController {
   ): Promise<void> {
     try {
       const userId = (req as any).user.id; // Extracted from the decoded JWT token
-      const user = await AdminController.getUserById(userId);
+      const user: any = await AdminController.getUserById(userId);
 
       if (!user) {
         res.status(404).json({ message: "User not found" });
@@ -165,9 +182,10 @@ export class AdminController {
         message: "User details fetched successfully",
         user: {
           _id: user._id,
-          role: user.role,
           email: user.email,
-          username: user.username,
+          role: user?.role?.name,
+          username: user?.username,
+          permissions: user?.role?.permissions,
         },
       });
     } catch (error) {
@@ -178,7 +196,10 @@ export class AdminController {
    * Get user details by user ID
    */
   static async getUserById(userId: string) {
-    const user = await Admin.findById({ _id: userId, status: true });
+    const user = await Admin.findById({ _id: userId, status: true }).populate({
+      path: "role",
+      select: "name permissions",
+    });
     return user;
   }
 
@@ -210,14 +231,17 @@ export class AdminController {
   static async loginUser(loginData: { email: string; password: string }) {
     const { email, password } = loginData;
 
-    const user = await Admin.findOne({ email });
+    const user: any = await Admin.findOne({ email }).populate({
+      path: "role",
+      select: "name permissions",
+    });
     if (!user) throw new Error("User not found with this email");
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) throw new Error("Password is incorrect");
 
     const token = jwt.sign(
-      { _id: user._id, email: user.email, role: user.role ?? "admin" },
+      { _id: user._id, email: user.email, role: user?.role?.name },
       secret,
       { expiresIn }
     );
@@ -227,9 +251,10 @@ export class AdminController {
       token,
       user: {
         id: user._id,
-        role: user?.role,
         email: user.email,
+        role: user?.role?.name,
         username: user.username,
+        permissions: user?.role?.permissions,
       },
     };
   }

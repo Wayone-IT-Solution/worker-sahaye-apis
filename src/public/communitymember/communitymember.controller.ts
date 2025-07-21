@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
@@ -19,13 +20,54 @@ export const resetStats = async (communityId: string) => {
     ForumPost.countDocuments({ community: communityId }),
     ForumComment.countDocuments({ community: communityId }),
     CommunityMember.countDocuments({ community: communityId }),
-    CommunityMember.countDocuments({ community: communityId, status: MemberStatus.JOINED }),
+    CommunityMember.countDocuments({
+      community: communityId,
+      status: MemberStatus.JOINED,
+    }),
   ]);
+
+  const getUserTypeCount = async (userType: string) => {
+    const result = await CommunityMember.aggregate([
+      { $match: { community: new Types.ObjectId(communityId) } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "userInfo",
+        },
+      },
+      { $unwind: "$userInfo" },
+      { $match: { "userInfo.userType": userType } },
+      { $count: "count" },
+    ]);
+    return result[0]?.count || 0;
+  };
+
+  const [totalWorkerMembers, totalEmployerMembers, totalContractorMembers] = await Promise.all([
+    getUserTypeCount("worker"),
+    getUserTypeCount("employer"),
+    getUserTypeCount("contractor"),
+  ]);
+
   const updatedCommunity = await Community.findByIdAndUpdate(
     communityId,
-    { $set: { stats: { totalPosts, totalComments, totalMembers, activeMembers } } },
+    {
+      $set: {
+        stats: {
+          totalPosts,
+          totalComments,
+          totalMembers,
+          activeMembers,
+          totalWorkerMembers,
+          totalEmployerMembers,
+          totalContractorMembers,
+        },
+      },
+    },
     { new: true }
   );
+
   if (!updatedCommunity) throw new Error("Community not found");
   return updatedCommunity;
 };

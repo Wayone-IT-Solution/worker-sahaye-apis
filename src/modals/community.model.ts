@@ -37,6 +37,9 @@ export interface ICommunityStats {
   totalMembers: number;
   totalComments: number;
   activeMembers: number;
+  totalWorkerMembers: number;
+  totalEmployerMembers: number;
+  totalContractorMembers: number;
 }
 
 export interface ICommunityLocation {
@@ -118,6 +121,9 @@ const CommunitySchema = new Schema<ICommunity>(
       totalMembers: { type: Number, default: 0 },
       totalComments: { type: Number, default: 0 },
       activeMembers: { type: Number, default: 0 },
+      totalWorkerMembers: { type: Number, default: 0 },
+      totalEmployerMembers: { type: Number, default: 0 },
+      totalContractorMembers: { type: Number, default: 0 },
     },
     tags: [
       {

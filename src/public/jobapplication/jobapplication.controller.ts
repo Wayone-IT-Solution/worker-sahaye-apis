@@ -14,6 +14,39 @@ import { sendDualNotification } from "../../services/notification.service";
 
 const JobApplicationService = new CommonService(JobApplication);
 
+/**
+ * Resets job metrics by jobId.
+ */
+export const resetJobMetrics = async (jobId: string) => {
+  try {
+    const aggregatedMetrics = await JobApplication.aggregate([
+      { $match: { job: new mongoose.Types.ObjectId(jobId) } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]);
+    const defaultMetrics: any = {
+      hired: 0,
+      applied: 0,
+      offered: 0,
+      interview: 0,
+      withdrawn: 0,
+      shortlisted: 0,
+      under_review: 0,
+      offer_declined: 0,
+      offer_accepted: 0,
+    };
+    for (const { _id, count } of aggregatedMetrics) {
+      if (_id in defaultMetrics) {
+        defaultMetrics[_id] = count;
+      }
+    }
+    await Job.findByIdAndUpdate(jobId, {
+      $set: { metrics: defaultMetrics },
+    });
+  } catch (err) {
+    console.log(`❌ Failed to update metrics for jobId ${jobId}:`, err);
+  }
+};
+
 export const applyToJob = async (
   req: Request,
   res: Response,
@@ -99,6 +132,7 @@ export const applyToJob = async (
         senderRole: UserType.WORKER,
         receiverRole: receiver.userType,
       });
+    await resetJobMetrics(job);
     return res
       .status(201)
       .json(
@@ -452,21 +486,76 @@ export const getAllUserApplications = async (
   next: NextFunction
 ) => {
   try {
-    const pipeline = {
-      $project: {
-        job: 1,
-        status: 1,
-        history: 1,
-        resumeUrl: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        applicant: 1,
-        coverLetter: 1,
-        availability: 1,
-        expectedSalary: 1,
-        applicantSnapshot: 1,
+    const pipeline = [
+      {
+        $lookup: {
+          from: "users",
+          localField: "applicant",
+          foreignField: "_id",
+          as: "applicantDetails",
+        },
       },
-    };
+      {
+        $unwind: {
+          path: "$applicantDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "job",
+          foreignField: "_id",
+          as: "jobDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$jobDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "jobDetails.postedBy",
+          foreignField: "_id",
+          as: "postedDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$postedDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          job: 1,
+          status: 1,
+          history: 1,
+          resumeUrl: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          applicant: 1,
+          coverLetter: 1,
+          availability: 1,
+          expectedSalary: 1,
+          applicantSnapshot: 1,
+          jobTitle: "$jobDetails.title",
+          postedByEmail: "$postedDetails.email",
+          jobPosted: "$jobDetails.publishedAt",
+          jobType: "$jobDetails.jobType",
+          postedByMobile: "$postedDetails.mobile",
+          postedByName: "$postedDetails.fullName",
+          applicantEmail: "$applicantDetails.email",
+          postedByUserType: "$postedDetails.userType",
+          applicantMobile: "$applicantDetails.mobile",
+          applicantFullName: "$applicantDetails.fullName",
+          applicantUserType: "$applicantDetails.userType",
+        },
+      },
+    ];
     const apps = await JobApplicationService.getAll(req.query, pipeline);
     return res
       .status(200)
@@ -558,7 +647,7 @@ export const handleOfferAccepted = async (
         receiverId: (receiver._id as any),
       });
     }
-
+    if (app.job) await resetJobMetrics(app.job.toString());
     return res
       .status(200)
       .json(
@@ -671,6 +760,7 @@ export const withdrawApplication = async (
     });
 
     await app.save();
+    if (app.job) await resetJobMetrics(app.job.toString());
 
     const [jobDoc, userDoc]: any = await Promise.all([
       Job.findById(app.job).select("status title postedBy"),
@@ -816,6 +906,7 @@ export const updateStatusByEmployer = async (
         receiverId: (receiver._id as any),
       });
     }
+    if (app.job) await resetJobMetrics(app.job.toString());
 
     return res
       .status(200)
@@ -906,6 +997,8 @@ export const handleInterviewMode = async (
       interviewModeAccepted ?? app.interviewModeAccepted;
 
     await app.save();
+    if (app.job) await resetJobMetrics(app.job.toString());
+
     return res
       .status(200)
       .json(

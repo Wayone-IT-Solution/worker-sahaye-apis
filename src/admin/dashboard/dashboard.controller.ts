@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
@@ -40,6 +41,7 @@ import { ComplianceChecklist } from "../../modals/compliancechecklist.model";
 import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model";
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
+import { LoanRequestModel } from "../../modals/loanrequest.model";
 
 export class DashboardController {
   static async getDashboardStats(
@@ -177,12 +179,12 @@ export class DashboardController {
   }
 
   static async getCustomerSupportDetails(
-    _req: Request,
+    req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     try {
-      const { startDate: start, endDate: end } = _req.query;
+      const { startDate: start, endDate: end, assigneeId } = req.query;
 
       const endDate = end ? new Date(end as string) : new Date();
       const startDate = start ? new Date(start as string) : subDays(endDate, 7);
@@ -209,20 +211,25 @@ export class DashboardController {
         "re_assigned",
       ];
 
+      // 👇 Build match condition dynamically
+      const buildMatchStage = (dateRange: any) => {
+        const match: any = { createdAt: dateRange };
+        if (assigneeId) match["assignee"] = new Types.ObjectId(assigneeId as string);
+        return { $match: match };
+      };
+
       const [currentCounts, previousCounts] = await Promise.all([
         Ticket.aggregate([
-          { $match: { createdAt: currentRange } },
+          buildMatchStage(currentRange),
           { $group: { _id: "$status", count: { $sum: 1 } } },
         ]),
         Ticket.aggregate([
-          { $match: { createdAt: prevRange } },
+          buildMatchStage(prevRange),
           { $group: { _id: "$status", count: { $sum: 1 } } },
         ]),
       ]);
 
-      const currentMap = Object.fromEntries(
-        statuses.map((status) => [status, 0])
-      );
+      const currentMap = Object.fromEntries(statuses.map((status) => [status, 0]));
       const prevMap = { ...currentMap };
 
       currentCounts.forEach(({ _id, count }) => (currentMap[_id] = count));
@@ -232,11 +239,7 @@ export class DashboardController {
         const current = currentMap[status];
         const previous = prevMap[status];
         const percentageChange =
-          previous === 0
-            ? current > 0
-              ? 100
-              : 0
-            : ((current - previous) / previous) * 100;
+          previous === 0 ? (current > 0 ? 100 : 0) : ((current - previous) / previous) * 100;
 
         acc[status] = current;
         acc[`${status}_change`] = parseFloat(percentageChange.toFixed(2));
@@ -672,7 +675,7 @@ export class DashboardController {
 
   static async getServicesStatusCounts(req: Request, res: Response, next: NextFunction) {
     try {
-      const { startDate, endDate } = req.query;
+      const { startDate, endDate, virtualHRId } = req.query;
 
       const start = startDate && isValid(new Date(startDate as string))
         ? startOfDay(parseISO(startDate as string))
@@ -684,6 +687,7 @@ export class DashboardController {
 
       const models: Record<string, any> = {
         "bulk_hiring": BulkHiringRequest,
+        "loan_request": LoanRequestModel,
         "on_demand_hiring": JobRequirement,
         "virtual_hr_hiring": VirtualHRRequest,
         "support_service": UnifiedServiceRequest,
@@ -702,13 +706,16 @@ export class DashboardController {
             [VirtualHRRequestStatus.CANCELLED]: 0,
           };
 
+          const matchBase: any = {};
+          if (virtualHRId) matchBase.assignedTo = virtualHRId;
+
           if (start && end) {
             const [pending, assigned, inProgress, completed, cancelled] = await Promise.all([
-              Model.countDocuments({ status: "Pending", createdAt: { $gte: start, $lte: end } }),
-              Model.countDocuments({ status: "Assigned", assignedAt: { $gte: start, $lte: end } }),
-              Model.countDocuments({ status: "In Progress", updatedAt: { $gte: start, $lte: end } }),
-              Model.countDocuments({ status: "Completed", completedAt: { $gte: start, $lte: end } }),
-              Model.countDocuments({ status: "Cancelled", updatedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ ...matchBase, status: "Pending", createdAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ ...matchBase, status: "Assigned", assignedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ ...matchBase, status: "In Progress", updatedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ ...matchBase, status: "Completed", completedAt: { $gte: start, $lte: end } }),
+              Model.countDocuments({ ...matchBase, status: "Cancelled", updatedAt: { $gte: start, $lte: end } }),
             ]);
 
             statusCount[VirtualHRRequestStatus.PENDING] = pending;
@@ -717,7 +724,9 @@ export class DashboardController {
             statusCount[VirtualHRRequestStatus.COMPLETED] = completed;
             statusCount[VirtualHRRequestStatus.CANCELLED] = cancelled;
           } else {
+            const matchPipeline = virtualHRId ? [{ $match: { virtualHRId } }] : [];
             const counts = await Model.aggregate([
+              ...matchPipeline,
               { $group: { _id: "$status", count: { $sum: 1 } } },
             ]);
 
@@ -727,7 +736,6 @@ export class DashboardController {
               }
             });
           }
-
           results[key] = statusCount;
         })
       );

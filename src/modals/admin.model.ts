@@ -16,7 +16,7 @@ export interface IAdmin extends Document {
   status: Boolean;
   username: string;
   password: string;
-  role: "admin" | "agent";
+  role: Schema.Types.ObjectId;
   comparePassword(password: string): Promise<boolean>;
 }
 
@@ -27,10 +27,9 @@ const adminSchema = new Schema<IAdmin>(
     email: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true },
     role: {
-      type: String,
-      enum: ["admin", "agent"],
-      default: "admin",
+      ref: "Role",
       required: true,
+      type: Schema.Types.ObjectId,
     },
   },
   { timestamps: true }

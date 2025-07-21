@@ -8,6 +8,7 @@
 
 import { Router } from "express";
 // ADMIN FOLDER
+import roleRoutes from "../admin/role/role.routes";
 import badgeRoutes from "../admin/badge/badge.routes";
 import adminRoutes from "../admin/admin/admin.routes";
 import bannerRoutes from "../admin/banner/banner.routes";
@@ -69,6 +70,7 @@ import preInterviewedContractorRoutes from "../public/preinterviewedcontractor/p
 const router = Router();
 
 // ROUTE MOUNTS
+router.use("/role", roleRoutes);
 router.use("/admin", adminRoutes);
 router.use("/badge", badgeRoutes);
 router.use("/banner", bannerRoutes);

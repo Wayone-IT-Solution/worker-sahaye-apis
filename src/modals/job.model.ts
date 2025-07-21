@@ -140,24 +140,6 @@ export interface IApplicationProcess {
   };
 }
 
-export interface IJobMetrics {
-  views: {
-    total: number;
-    unique: number;
-  };
-  applications: {
-    total: number;
-    hired: number;
-    qualified: number;
-    interviewed: number;
-    conversionRate: number;
-  };
-  engagement: {
-    saves: number;
-    shares: number;
-  };
-}
-
 export interface IJob extends Document {
   // Basic Information
   title: string;
@@ -247,7 +229,7 @@ export interface IJob extends Document {
   };
 
   // Analytics & Performance
-  metrics: IJobMetrics;
+  metrics: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -478,24 +460,16 @@ const JobSchema = new Schema<IJob>(
       maxReposts: Number,
       enabled: { type: Boolean, default: false },
     },
-
-    // Analytics & Performance
     metrics: {
-      views: {
-        total: { type: Number, default: 0 },
-        unique: { type: Number, default: 0 },
-      },
-      applications: {
-        total: { type: Number, default: 0 },
-        hired: { type: Number, default: 0 },
-        qualified: { type: Number, default: 0 },
-        interviewed: { type: Number, default: 0 },
-        conversionRate: { type: Number, default: 0 },
-      },
-      engagement: {
-        saves: { type: Number, default: 0 },
-        shares: { type: Number, default: 0 },
-      },
+      hired: { type: Number, default: 0 },
+      applied: { type: Number, default: 0 },
+      offered: { type: Number, default: 0 },
+      interview: { type: Number, default: 0 },
+      withdrawn: { type: Number, default: 0 },
+      shortlisted: { type: Number, default: 0 },
+      under_review: { type: Number, default: 0 },
+      offer_declined: { type: Number, default: 0 },
+      offer_accepted: { type: Number, default: 0 },
     },
   },
   { timestamps: true }
@@ -590,18 +564,6 @@ JobSchema.virtual("daysUntilExpiry").get(function () {
   return Math.max(0, days);
 });
 
-JobSchema.virtual("applicationConversionRate").get(function () {
-  const total = this.metrics?.applications?.total || 0;
-  const hired = this.metrics?.applications?.hired || 0;
-  return total > 0 ? Math.round((hired / total) * 100) : 0;
-});
-
-JobSchema.virtual("viewToApplicationRate").get(function () {
-  const views = this.metrics?.views?.total || 0;
-  const applications = this.metrics?.applications?.total || 0;
-  return views > 0 ? Math.round((applications / views) * 100) : 0;
-});
-
 // MIDDLEWARE
 JobSchema.pre("save", function (next) {
   if (this.salary.max < this.salary.min)
@@ -647,32 +609,6 @@ JobSchema.statics.findSimilar = function (jobId: string, limit = 5) {
     { $match: { _id: { $ne: jobId }, status: JobStatus.OPEN } },
     { $sample: { size: limit } },
   ]);
-};
-
-// Instance methods
-JobSchema.methods.incrementView = function (
-  source?: string,
-  location?: string
-) {
-  this.metrics.views.total += 1;
-  this.metrics.views.unique += 1;
-
-  if (source) {
-    const currentCount = this.metrics.views.bySource.get(source) || 0;
-    this.metrics.views.bySource.set(source, currentCount + 1);
-  }
-
-  if (location) {
-    const currentCount = this.metrics.views.byLocation.get(location) || 0;
-    this.metrics.views.byLocation.set(location, currentCount + 1);
-  }
-
-  return this.save();
-};
-
-JobSchema.methods.addApplication = function () {
-  this.metrics.applications.total += 1;
-  return this.save();
 };
 
 JobSchema.methods.markAsExpired = function () {

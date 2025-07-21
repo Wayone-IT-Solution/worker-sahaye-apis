@@ -103,8 +103,11 @@ export class JobController {
             shortDescription: 1,
             applicationProcess: 1,
             applicationDeadline: 1,
-            profilePicUrl: "$profilePicFile.url",
+            creatorEmail: "$userDetails.email",
             creatorName: "$userDetails.fullName",
+            profilePicUrl: "$profilePicFile.url",
+            creatorMobile: "$userDetails.mobile",
+            creatorUserType: "$userDetails.userType",
           },
         },
       ];

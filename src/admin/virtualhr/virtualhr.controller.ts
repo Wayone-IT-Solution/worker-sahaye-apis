@@ -63,7 +63,7 @@ export class VirtualHRController {
     next: NextFunction
   ) {
     try {
-      const result = await virtualHRService.getById(req.params.id);
+      const result = await virtualHRService.getById(req.params.id, false);
       if (!result)
         return res
           .status(404)

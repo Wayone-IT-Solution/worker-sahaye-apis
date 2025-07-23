@@ -15,6 +15,7 @@ export interface ILoanRequest extends Document {
   assignedTo?: Types.ObjectId;
   assignedBy?: Types.ObjectId;
 
+  history?: any;
   emailId?: string;
   loanNeedDate: Date;
   isHighRisk: boolean;
@@ -61,6 +62,14 @@ const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
       required: true,
       min: [100000, "Salary must be at least ₹1,00,000 annually"],
     },
+
+    history: [
+      {
+        comment: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+        commentedBy: { type: Types.ObjectId, ref: "Admin", required: true },
+      },
+    ],
 
     salarySlab: {
       type: String,

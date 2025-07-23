@@ -1,3 +1,4 @@
+import { subDays } from "date-fns";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
@@ -10,7 +11,8 @@ import {
 import mongoose from "mongoose";
 import { User } from "../../modals/user.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
-import { sendSingleNotification } from "../../services/notification.service";
+import { UserType } from "../../modals/notification.model";
+import { sendDualNotification, sendSingleNotification } from "../../services/notification.service";
 
 const loanRequestService = new CommonService(LoanRequestModel);
 
@@ -23,10 +25,34 @@ export const createLoanRequest = async (req: Request, res: Response) => {
       user,
       status: PlanEnrollmentStatus.ACTIVE,
     });
+
     if (!enrolled)
       return res
         .status(403)
         .json(new ApiError(403, "You must enroll in a plan to request a loan"));
+
+    const { category } = req.body;
+    if (!category)
+      return res
+        .status(400)
+        .json(new ApiError(400, "Loan category is required"));
+
+    // Check for existing loan request in same category within last 15 days
+    const fifteenDaysAgo = subDays(new Date(), 15);
+    const existingRequest = await LoanRequestModel.findOne({
+      category,
+      userId: user,
+      createdAt: { $gte: fifteenDaysAgo },
+    });
+
+    if (existingRequest) {
+      return res.status(429).json(
+        new ApiError(
+          429,
+          `You have already submitted a loan request for "${category}" within the last 15 days. Please wait before submitting another.`
+        )
+      );
+    }
 
     const loan = await loanRequestService.create({ ...req.body, userId: user });
     if (!loan) {
@@ -38,7 +64,7 @@ export const createLoanRequest = async (req: Request, res: Response) => {
       .status(201)
       .json(new ApiResponse(201, loan, "Loan request submitted successfully"));
   } catch (error) {
-    return res.status(500).json({ error: "Could not create loan request" });
+    return res.status(500).json(new ApiError(500, "Could not create loan request"));
   }
 };
 
@@ -275,6 +301,80 @@ export const updateStatus = async (req: Request, res: Response, next: NextFuncti
       });
     }
     return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const addLoanRequestComment = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { comment } = req.body;
+    const { id: loanRequestId } = req.params;
+    const { id: adminId } = (req as any).user;
+
+    if (!comment?.trim()) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Comment is required"));
+    }
+
+    const loanRequest = await LoanRequestModel.findById(loanRequestId);
+    if (!loanRequest)
+      return res.status(404).json(new ApiError(404, "Loan Request not found"));
+
+    // Push comment
+    loanRequest.history.push({
+      comment,
+      commentedBy: adminId,
+      timestamp: new Date(),
+    });
+    await loanRequest.save();
+
+    // Send notification to job poster
+    const userDoc = await User.findById(loanRequest.userId);
+    if (userDoc) {
+      await sendDualNotification({
+        type: "loan-feedback-added",
+        context: {
+          comment,
+          userName: userDoc?.fullName,
+        },
+        senderId: adminId,
+        senderRole: UserType.ADMIN,
+        receiverRole: userDoc.userType,
+        receiverId: (userDoc._id as any),
+      });
+    }
+    return res.status(200).json(
+      new ApiResponse(200, null, "Comment added and user notified")
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const getLoanRequestWithHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const loanRequestId = req.params.id;
+    if (!loanRequestId)
+      return res.status(400).json(new ApiError(400, "Loan Request ID is required"));
+
+    const loanRequest = await LoanRequestModel.findById(loanRequestId)
+      .populate("history.commentedBy", "username email")
+      .lean();
+
+    if (!loanRequest)
+      return res.status(404).json(new ApiError(404, "Loan Request not found"));
+    loanRequest.history = (loanRequest.history || []).sort(
+      (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    return res
+      .status(200)
+      .json(new ApiResponse(200, loanRequest.history, "Loan Request with history fetched"));
   } catch (err) {
     next(err);
   }

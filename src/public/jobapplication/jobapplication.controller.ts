@@ -27,6 +27,7 @@ export const resetJobMetrics = async (jobId: string) => {
       hired: 0,
       applied: 0,
       offered: 0,
+      rejected: 0,
       interview: 0,
       withdrawn: 0,
       shortlisted: 0,

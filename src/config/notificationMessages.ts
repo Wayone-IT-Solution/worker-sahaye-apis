@@ -91,6 +91,28 @@ export const NotificationMessages: Record<
     }),
   },
 
+  "loan-feedback-added": {
+    sender: (ctx) => ({
+      title: `Comment Added on Loan Request`,
+      message: `You added a comment for ${ctx?.userName}'s loan request.`,
+    }),
+    receiver: (ctx) => ({
+      title: `New Feedback on Your Loan Request`,
+      message: `Admin has left a comment: "${ctx?.comment}"`,
+    }),
+  },
+
+  "job-comment-added": {
+    sender: (ctx) => ({
+      title: `Comment Added to Job: ${ctx?.jobTitle}`,
+      message: `You added a comment to the job "${ctx?.jobTitle}" for ${ctx?.userName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `New Admin Comment on Your Job`,
+      message: `An admin added a comment to your job "${ctx?.jobTitle}": "${ctx?.comment}".`,
+    }),
+  },
+
   "task-status-update": {
     sender: (ctx) => ({
       title: `Task "${ctx?.taskTitle}" is now "${ctx?.status}"`,

@@ -6,12 +6,12 @@ import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/au
 const {
     getCurrentStats,
     getDashboardStats,
-    getUserTypeCounts,
     getBadgeStatusCounts,
     getJobApplicationsStats,
     getServicesStatusCounts,
     getCustomerSupportDetails,
     getYearlyRevenueComparison,
+    getUserStatsByTypeAndStatus,
 } = DashboardController;
 
 const router = express.Router();
@@ -52,7 +52,7 @@ router.get(
     "/user-stats",
     authenticateToken,
     isAdmin,
-    asyncHandler(getUserTypeCounts)
+    asyncHandler(getUserStatsByTypeAndStatus)
 );
 router.get(
     "/job-applications",

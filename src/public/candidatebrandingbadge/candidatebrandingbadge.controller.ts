@@ -150,6 +150,7 @@ export class CandidateBrandingBadgeController {
             userEmail: "$userDetails.email",
             userName: "$userDetails.fullName",
             userMobile: "$userDetails.mobile",
+            userType: "$userDetails.userType",
             profilePicUrl: "$profilePicFile.url",
           },
         },

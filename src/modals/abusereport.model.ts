@@ -8,6 +8,7 @@ export interface IAbuseReport extends Document {
   ipAddress?: string;
   description?: string;
   resolutionNotes?: string;
+  coordinates: [number, number];
   reportedBy: mongoose.Types.ObjectId;
   severity: "low" | "medium" | "high" | "critical";
   status: "pending" | "under_review" | "resolved" | "dismissed";
@@ -36,6 +37,10 @@ const AbuseReportSchema = new Schema<IAbuseReport>(
     reviewedAt: { type: Date },
     ipAddress: { type: String },
     resolutionNotes: { type: String },
+    coordinates: {
+      type: [Number],
+      index: "2dsphere",
+    },
   },
   { timestamps: true }
 );

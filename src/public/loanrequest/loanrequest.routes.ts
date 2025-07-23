@@ -6,6 +6,8 @@ import {
   assignVirtualHR,
   createLoanRequest,
   getAllLoanRequests,
+  addLoanRequestComment,
+  getLoanRequestWithHistory
 } from "./loanrequest.controller";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
@@ -14,6 +16,8 @@ const router = Router();
 router.get("/all", authenticateToken, asyncHandler(getAllRequests));
 router.post("/", authenticateToken, asyncHandler(createLoanRequest));
 router.get("/", authenticateToken, asyncHandler(getAllLoanRequests))
+  .put("/add-comment/:id", authenticateToken, asyncHandler(addLoanRequestComment))
+  .patch("/get-comment-history/:id", authenticateToken, asyncHandler(getLoanRequestWithHistory))
   .post(
     "/:id/assign",
     authenticateToken,

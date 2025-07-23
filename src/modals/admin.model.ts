@@ -16,12 +16,14 @@ export interface IAdmin extends Document {
   status: Boolean;
   username: string;
   password: string;
+  employeeCode: string;
   role: Schema.Types.ObjectId;
   comparePassword(password: string): Promise<boolean>;
 }
 
 const adminSchema = new Schema<IAdmin>(
   {
+    employeeCode: { type: String },
     status: { type: Boolean, default: true },
     password: { type: String, required: true },
     email: { type: String, required: true, unique: true },

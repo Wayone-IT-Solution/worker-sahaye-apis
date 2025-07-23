@@ -15,6 +15,7 @@ import { notFoundHandler } from "./middlewares/notFounHandler";
 import { globalErrorHandler } from "./middlewares/errorHandler";
 
 // CRON JOBS
+import "./cron/markExpiredJobs";
 import "./cron/resetJobMetrics";
 import "./cron/communityStatsCron";
 import "./cron/deleteRejectedBadges";

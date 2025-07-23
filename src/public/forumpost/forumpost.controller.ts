@@ -1,4 +1,5 @@
 import ApiError from "../../utils/ApiError";
+import { startOfDay, endOfDay } from "date-fns";
 import ApiResponse from "../../utils/ApiResponse";
 import { UserType } from "../../modals/user.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
@@ -11,6 +12,27 @@ import {
 } from "../../modals/communitymember.model";
 import { resetStats } from "../communitymember/communitymember.controller";
 
+const hiringPatterns: RegExp[] = [
+  /h[!1i¡]*r[!1i¡]*[e3a@u][!1i¡]*[n9gq]/i,                       // hiring, h1ring, h!ring, h¡ring
+  /recru[i1!¡][t+]{1,2}[me3]n[t+]{0,1}/i,                        // recruitment, recru1tment, recru!tment
+  /apply\s+(now|today)?/i,
+  /job\s+(opening|opportunity|alert|role|description)/i,
+  /career\s+(opportunity|fair)/i,
+  /\b(vacanc(y|ies)|openings?|position\s+open)\b/i,
+  /urgent\s+hiring/i,
+  /interview\s+(drive|schedule|tips|walk[- ]?in)/i,
+  /placement\s+(drive|event)/i,
+  /submit\s+(your\s+)?resume/i,
+  /we\s+are\s+hiring/i,
+  /\bremote\s+job\b/i,
+  /work\s+with\s+us/i,
+  /join\s+(our\s+)?team/i,
+  /looking\s+for\s+(candidates|talent)/i,
+  /staffing|freelancer\s+needed|get\s+hired/i,
+  /\btalent\s+acquisition\b/i,
+  /experienced\s+candidates?|fresher\s+welcome/i,
+  /send\s+(your\s+)?resume/i
+];
 const ForumPostService = new CommonService(ForumPost);
 
 export const extractImageUrl = async (input: any) => {
@@ -28,6 +50,7 @@ export class ForumPostController {
     try {
       const { attachments } = req.body;
       const { id: user, role: userType } = (req as any).user;
+
       if (userType === UserType.WORKER) {
         if (attachments && attachments.length > 0) {
           attachments.map(async (file: any) => {
@@ -67,7 +90,35 @@ export class ForumPostController {
           .json(new ApiError(400, "User is not a member of the community"));
       }
 
+      // Check if user has already posted today
+      const todayEnd = endOfDay(new Date());
+      const todayStart = startOfDay(new Date());
+      const alreadyPosted = await ForumPost.findOne({
+        createdBy: communityMember?._id,
+        createdAt: { $gte: todayStart, $lte: todayEnd },
+      });
+      if (alreadyPosted) {
+        if (attachments && attachments.length > 0) {
+          attachments.map(async (file: any) => {
+            await extractImageUrl(file);
+          });
+        }
+        return res
+          .status(429)
+          .json(new ApiError(429, "You can only create one forum post per day."));
+      }
+
+      const handleValidation = (
+        title: string,
+        content: string,
+        tags: string[]
+      ): boolean => {
+        const combined = `${title} ${content} ${tags.join(" ")}`.toLowerCase();
+        return hiringPatterns.some((pattern) => pattern.test(combined));
+      };
+
       const { title, content, tags, community } = req.body;
+      const isBlocked = handleValidation(title, content, tags)
       const data: any = {
         tags,
         title,
@@ -79,6 +130,7 @@ export class ForumPostController {
           s3Key: file.url.split(".com/")[1],
         })),
         createdBy: communityMember?._id,
+        status: isBlocked ? "hiring_content" : "active",
       };
       const result = await ForumPostService.create(data);
       await resetStats(community.toString());

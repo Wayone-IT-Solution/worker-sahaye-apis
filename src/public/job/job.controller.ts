@@ -1,14 +1,14 @@
+import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
+import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { Job, JobStatus } from "../../modals/job.model";
 import { NextFunction, Request, Response } from "express";
+import { UserType } from "../../modals/notification.model";
 import { CommonService } from "../../services/common.services";
 import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
-import mongoose from "mongoose";
 import { sendDualNotification } from "../../services/notification.service";
-import { UserType } from "../../modals/notification.model";
-import { User } from "../../modals/user.model";
 
 const JobService = new CommonService(Job);
 
@@ -19,6 +19,7 @@ export class JobController {
         ...req.body,
         postedBy: (req as any).user.id,
       };
+      delete data.status;
       const result = await JobService.create(data);
       if (!result)
         return res
@@ -451,7 +452,9 @@ export class JobController {
 
   static async updateJobById(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await JobService.updateById(req.params.id, req.body);
+      const data = req.body;
+      delete data.status;
+      const result = await JobService.updateById(req.params.id, data);
       if (!result)
         return res
           .status(404)
@@ -517,6 +520,85 @@ export class JobController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Job status updated successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async addJobComment(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { comment } = req.body;
+      const { id: jobId } = req.params;
+      const { id: adminId } = (req as any).user;
+
+      if (!comment?.trim()) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Comment is required"));
+      }
+
+      const jobDoc = await Job.findById(jobId);
+      if (!jobDoc)
+        return res.status(404).json(new ApiError(404, "Job not found"));
+
+      // Push comment
+      jobDoc.history.push({
+        comment,
+        commentedBy: adminId,
+        timestamp: new Date(),
+      });
+      await jobDoc.save();
+
+      // Send notification to job poster
+      const userDoc = await User.findById(jobDoc.postedBy);
+      if (userDoc) {
+        await sendDualNotification({
+          type: "job-comment-added",
+          context: {
+            comment,
+            jobTitle: jobDoc.title,
+            userName: userDoc.fullName,
+          },
+          senderId: adminId,
+          senderRole: UserType.ADMIN,
+          receiverRole: userDoc.userType,
+          receiverId: (userDoc._id as any)
+        });
+      }
+
+      return res.status(200).json(
+        new ApiResponse(200, null, "Comment added and user notified")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getJobWithHistory(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const jobId = req.params.id;
+      if (!jobId)
+        return res.status(400).json(new ApiError(400, "Job ID is required"));
+
+      const job = await Job.findById(jobId)
+        .populate("postedBy", "fullName email userType")
+        .populate("history.commentedBy", "username email")
+        .lean();
+
+      if (!job) {
+        return res.status(404).json(new ApiError(404, "Job not found"));
+      }
+
+      job.history = (job.history || []).sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      return res
+        .status(200)
+        .json(new ApiResponse(200, job.history, "Job with history fetched"));
     } catch (err) {
       next(err);
     }

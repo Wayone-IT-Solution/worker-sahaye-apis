@@ -363,17 +363,40 @@ export class DashboardController {
     }
   }
 
-  static async getUserTypeCounts(req: Request, res: Response, next: NextFunction) {
+  static async getUserStatsByTypeAndStatus(req: Request, res: Response, next: NextFunction) {
     try {
       const userTypes = ["worker", "employer", "contractor"];
-      const counts = await Promise.all(
-        userTypes.map((type) =>
-          User.countDocuments({ userType: type, status: "active" })
-        )
+
+      let grandActive = 0;
+      let grandInactive = 0;
+      const stats = await Promise.all(
+        userTypes.map(async (type) => {
+          const [active, inactive] = await Promise.all([
+            User.countDocuments({ userType: type, status: "active" }),
+            User.countDocuments({ userType: type, status: "inactive" }),
+          ]);
+
+          grandActive += active;
+          grandInactive += inactive;
+
+          return {
+            userType: type,
+            active,
+            inactive,
+            total: active + inactive,
+          };
+        })
       );
-      return res.status(200).json(
-        new ApiResponse(200, counts, "Active user type counts fetched")
-      );
+      const grandTotal = {
+        active: grandActive,
+        inactive: grandInactive,
+        total: grandActive + grandInactive,
+      };
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(200, { stats, grandTotal }, "User stats by type and total fetched")
+        );
     } catch (err) {
       next(err);
     }

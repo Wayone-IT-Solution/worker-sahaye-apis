@@ -59,7 +59,7 @@ const ForumPostSchema = new Schema<IForumPost>(
       index: true,
       type: String,
       default: "active",
-      enum: ["active", "archived"],
+      enum: ["active", "inactive", "rejected", "hiring_content"],
     },
   },
   { timestamps: true }

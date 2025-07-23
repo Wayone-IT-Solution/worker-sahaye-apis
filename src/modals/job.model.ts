@@ -32,6 +32,12 @@ export enum ExperienceLevel {
   EXECUTIVE = "executive",
 }
 
+export interface IJobHistory {
+  comment: string;
+  timestamp: Date;
+  commentedBy: Types.ObjectId;
+}
+
 export enum JobStatus {
   OPEN = "open",
   DRAFT = "draft",
@@ -140,6 +146,15 @@ export interface IApplicationProcess {
   };
 }
 
+const JobHistorySchema = new Schema<IJobHistory>(
+  {
+    comment: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now },
+    commentedBy: { type: Schema.Types.ObjectId, ref: "Admin", required: true },
+  },
+  { _id: false }
+);
+
 export interface IJob extends Document {
   // Basic Information
   title: string;
@@ -158,6 +173,8 @@ export interface IJob extends Document {
     isRemoteFriendly?: boolean;
     allowsRelocation?: boolean;
   };
+
+  history: IJobHistory[];
 
   // Compensation & Benefits
   salary: {
@@ -332,6 +349,7 @@ const JobSchema = new Schema<IJob>(
       required: true,
       enum: Object.values(Industry),
     },
+    history: [JobHistorySchema],
     workSchedule: {
       endTime: String,
       timezone: String,
@@ -395,8 +413,8 @@ const JobSchema = new Schema<IJob>(
     status: {
       index: true,
       type: String,
-      default: JobStatus.DRAFT,
       enum: Object.values(JobStatus),
+      default: JobStatus.PENDING_APPROVAL,
     },
     priority: {
       index: true,
@@ -464,6 +482,7 @@ const JobSchema = new Schema<IJob>(
       hired: { type: Number, default: 0 },
       applied: { type: Number, default: 0 },
       offered: { type: Number, default: 0 },
+      rejected: { type: Number, default: 0 },
       interview: { type: Number, default: 0 },
       withdrawn: { type: Number, default: 0 },
       shortlisted: { type: Number, default: 0 },

@@ -3,7 +3,6 @@ import { config } from "../../config/config";
 import jwt, { SignOptions } from "jsonwebtoken";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
-import { getPipeline, paginationResult } from "../../utils/helper";
 import { CommonService } from "../../services/common.services";
 
 const secret = config.jwt.secret;
@@ -19,12 +18,13 @@ export class AdminController {
    */
   static async createAdmin(req: Request, res: Response, next: NextFunction) {
     try {
-      const { username, email, password, role, status } = req.body;
+      const { username, employeeCode, email, password, role, status } = req.body;
       const user = await AdminController.createUser({
-        username,
+        role,
         email,
         password,
-        role,
+        username,
+        employeeCode,
         status: status === "active",
       });
       res
@@ -68,10 +68,10 @@ export class AdminController {
   ): Promise<any> {
     try {
       const { id } = req.params;
-      const { username, role, status } = req.body;
+      const { username, role, status, employeeCode } = req.body;
       const updatedUser = await Admin.findByIdAndUpdate(
         id,
-        { username, role, status: status === "active" },
+        { username, role, status: status === "active", employeeCode },
         { new: true, runValidators: true }
       );
 
@@ -207,11 +207,12 @@ export class AdminController {
    * Create a new user
    */
   static async createUser(userData: {
-    username: string;
-    email: string;
-    password: string;
     role: string;
+    email: string;
     status: boolean;
+    username: string;
+    password: string;
+    employeeCode: string;
   }) {
     const { username, email, password, role, status } = userData;
 

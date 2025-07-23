@@ -60,6 +60,7 @@ export class AbuseReportController {
             severity: 1,
             ipAddress: 1,
             reviewedAt: 1,
+            coordinates: 1,
             "userDetails.email": 1,
             "userDetails.mobile": 1,
             "userDetails.fullName": 1,

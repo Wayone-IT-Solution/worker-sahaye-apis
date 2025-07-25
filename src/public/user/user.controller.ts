@@ -383,13 +383,6 @@ export class UserController {
         });
       }
 
-      if (user.userType === UserType.WORKER) {
-        return res.status(404).json({
-          success: false,
-          message: "No Account Found",
-        });
-      }
-
       if (user.status === UserStatus.SUSPENDED) {
         return res.status(403).json({
           success: false,

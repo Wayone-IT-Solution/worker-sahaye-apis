@@ -31,8 +31,8 @@ export const createLoanRequest = async (req: Request, res: Response) => {
         .status(403)
         .json(new ApiError(403, "You must enroll in a plan to request a loan"));
 
-    const { category } = req.body;
-    if (!category)
+    const { loanCategory } = req.body;
+    if (!loanCategory)
       return res
         .status(400)
         .json(new ApiError(400, "Loan category is required"));
@@ -40,7 +40,7 @@ export const createLoanRequest = async (req: Request, res: Response) => {
     // Check for existing loan request in same category within last 15 days
     const fifteenDaysAgo = subDays(new Date(), 15);
     const existingRequest = await LoanRequestModel.findOne({
-      category,
+      loanCategory,
       userId: user,
       createdAt: { $gte: fifteenDaysAgo },
     });
@@ -49,7 +49,7 @@ export const createLoanRequest = async (req: Request, res: Response) => {
       return res.status(429).json(
         new ApiError(
           429,
-          `You have already submitted a loan request for "${category}" within the last 15 days. Please wait before submitting another.`
+          `You have already submitted a loan request for "${loanCategory}" within the last 15 days. Please wait before submitting another.`
         )
       );
     }

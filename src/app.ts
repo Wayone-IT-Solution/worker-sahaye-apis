@@ -15,6 +15,8 @@ import { notFoundHandler } from "./middlewares/notFounHandler";
 import { globalErrorHandler } from "./middlewares/errorHandler";
 
 // CRON JOBS
+import "./cron/slotCleanup";
+// import "./cron/transactionJob";
 import "./cron/markExpiredJobs";
 import "./cron/resetJobMetrics";
 import "./cron/communityStatsCron";

@@ -8,6 +8,7 @@
 
 import { Router } from "express";
 // ADMIN FOLDER
+import slotRoutes from "../admin/slot/slot.routes";
 import roleRoutes from "../admin/role/role.routes";
 import badgeRoutes from "../admin/badge/badge.routes";
 import adminRoutes from "../admin/admin/admin.routes";
@@ -19,6 +20,7 @@ import dashboardRoutes from "../admin/dashboard/dashboard.routes";
 import virtualHRRoutes from "../admin/virtualhr/virtualhr.routes";
 import bulkhiringRoutes from "../admin/bulkhiring/bulkhiring.routes";
 import jobCategoryRoutes from "../admin/jobcategory/jobcategory.routes";
+import assistantRoutes from "../admin/personalassistant/personalassistant.routes"
 import workerCategoryRoutes from "../admin/workercategory/workercategory.routes";
 import subscriptionPlanRoutes from "../admin/subscriptionplan/subscriptionplan.routes";
 import complianceCalendarRoutes from "../admin/compliancecalendar/compliancecalendar.routes";
@@ -71,6 +73,7 @@ const router = Router();
 
 // ROUTE MOUNTS
 router.use("/role", roleRoutes);
+router.use("/slot", slotRoutes);
 router.use("/admin", adminRoutes);
 router.use("/badge", badgeRoutes);
 router.use("/banner", bannerRoutes);
@@ -93,6 +96,7 @@ router.use("/message", messageRoutes);
 router.use("/jobsaved", jobSavedRoutes);
 router.use("/forumpost", forumPostRoutes);
 router.use("/statecity", stateCityRoutes);
+router.use("/assistant", assistantRoutes);
 router.use("/enrollment", enrollmentRoutes);
 router.use("/enrollplan", enrollPlanRoutes);
 router.use("/connection", connectionRoutes);

@@ -159,6 +159,7 @@ export interface IJob extends Document {
   // Basic Information
   title: string;
   category: any;
+  userType: string;
   teamSize?: number;
   description: string;
   shortDescription?: string;
@@ -330,6 +331,14 @@ const JobSchema = new Schema<IJob>(
       index: true,
       default: JobType.FULL_TIME,
       enum: Object.values(JobType),
+    },
+    // Job Details
+    userType: {
+      type: String,
+      index: true,
+      required: true,
+      default: "worker",
+      enum: ["worker", "contractor"],
     },
     workMode: {
       index: true,

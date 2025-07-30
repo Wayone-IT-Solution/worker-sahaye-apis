@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  updateBooking,
   createBooking,
   getUserBookings,
   updateBookingStatus,
@@ -10,6 +11,7 @@ import { authenticateToken, isWorker } from "../../middlewares/authMiddleware";
 
 const router = express.Router();
 
+router.put("/", authenticateToken, isWorker, asyncHandler(updateBooking));
 router.post("/", authenticateToken, isWorker, asyncHandler(createBooking));
 router.get("/user/:userId", authenticateToken, asyncHandler(getUserBookings));
 router.get("/status/:bookingId", authenticateToken, asyncHandler(updateBookingStatus));

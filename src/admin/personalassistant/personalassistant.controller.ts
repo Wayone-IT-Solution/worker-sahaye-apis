@@ -47,8 +47,7 @@ export class PersonalAssistantController {
     next: NextFunction
   ) {
     try {
-      const { id: userId, role } = (req as any).user;
-      const result = await PersonalAssistantService.getAll({ ...req.query, ...(role === "admin" ? {} : userId) });
+      const result = await PersonalAssistantService.getAll(req.query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -83,21 +82,12 @@ export class PersonalAssistantController {
   ) {
     try {
       const id = req.params.id;
-
-      const record = await PersonalAssistantService.getById(id);
-      if (!record) {
-        return res
-          .status(404)
-          .json(new ApiError(404, "Personal Assistant profile not found."));
-      }
-
       const result = await PersonalAssistantService.updateById(id, req.body);
       if (!result) {
         return res
           .status(400)
           .json(new ApiError(400, "Failed to update Personal Assistant profile."));
       }
-
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Personal Assistant profile updated successfully."));
@@ -119,14 +109,6 @@ export class PersonalAssistantController {
           .status(404)
           .json(new ApiError(404, "Personal Assistant profile not found."));
       }
-
-      // ✅ Optional: prevent deletion if it's still marked active
-      if (record.isActive) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Please deactivate the profile before deleting."));
-      }
-
       const result = await PersonalAssistantService.deleteById(id);
       return res
         .status(200)

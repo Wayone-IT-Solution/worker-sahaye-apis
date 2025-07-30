@@ -2,22 +2,50 @@ import mongoose from "mongoose";
 import { Request, Response } from "express";
 import ApiError from "../../utils/ApiError";
 import { Slot } from "../../modals/slot.model";
+import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { Booking } from "../../modals/booking.model";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
+import { PersonalAssistant } from "../../modals/personalassistant.model";
+import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
 
 const bookingService = new CommonService(Booking);
+
+const exactAmount = async (userId: any) => {
+  const enrolledPlan = await EnrolledPlan.findOne({ user: userId, status: "active" });
+  const planId = enrolledPlan?.plan;
+
+  let amount = 549;
+  if (planId) {
+    const mapping = await PlanFeatureMapping.findOne({
+      planId,
+      isEnabled: "active",
+    });
+    if (mapping) amount = mapping.amount;
+  }
+  return {
+    amount,
+    hasActivePlan: !!enrolledPlan,
+  }
+}
 
 export const createBooking = async (req: Request, res: Response) => {
   const session = await mongoose.startSession();
   try {
-    const { userId, assistantId, slotId, payment } = req.body;
-
-    if (!userId || !assistantId || !slotId || !payment?.amount) {
+    const { id: user } = (req as any).user;
+    const { assistantId, slotId, amount } = req.body;
+    if (!assistantId || !slotId) {
       return res
         .status(400)
-        .json(new ApiError(400, "userId, assistantId, slotId, amount are required"));
+        .json(new ApiError(400, "userId, assistantId, slotId are required"));
     }
+
+    const exact = await exactAmount(user);
+    if (amount !== exact.amount)
+      return res
+        .status(400)
+        .json(new ApiError(400, "Amount mismatch. Don't be oversmart!"));
 
     await session.withTransaction(async () => {
       const slotDoc = await Slot.findOne({ user: assistantId }).session(session);
@@ -25,24 +53,18 @@ export const createBooking = async (req: Request, res: Response) => {
 
       const ts: any = slotDoc.timeslots.find((slot: any) => slot?._id.toString() === slotId.toString());
       if (!ts) throw new ApiError(404, "Timeslot not found");
-
       if (ts.isBooked) throw new ApiError(400, "Timeslot already booked");
 
-      // 2) Mark booked
       ts.isBooked = true;
-      ts.bookedBy = userId;
+      ts.bookedBy = user;
       await slotDoc.save({ session });
 
-      // 3) Create booking
       const booking = await Booking.create(
         [{
-          user: userId,
-          date: ts.date,
-          status: "pending",
+          user,
           timeslotId: ts._id,
-          endTime: ts.endTime,
+          totalAmount: amount,
           assistant: assistantId,
-          startTime: ts.startTime,
         }],
         { session }
       );
@@ -94,12 +116,7 @@ export const changeBookingSlot = async (req: Request, res: Response) => {
       newTs.bookedBy = booking.user;
       await slotDoc.save({ session });
 
-      // 3) Update booking with new slot data
-      booking.date = newTs.date;
       booking.timeslotId = newTs._id;
-      booking.endTime = newTs.endTime;
-      booking.startTime = newTs.startTime;
-
       await booking.save({ session });
 
       return res
@@ -165,5 +182,49 @@ export const updateBookingStatus = async (req: Request, res: Response) => {
     res
       .status(500)
       .json(new ApiError(500, "Failed to update booking status", error.message));
+  }
+};
+
+export const updateBooking = async (req: Request, res: Response) => {
+  try {
+    const { status, paymentStatus, bookingId, paymentDetails } = req.body;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) throw new ApiError(404, "Booking not found");
+
+    // If already paid, return complete booking data
+    if (booking.paymentStatus === "success") {
+      return res.status(200).json(
+        new ApiResponse(200, {
+          message: "Booking already paid",
+          booking,
+        })
+      );
+    }
+
+    // Update fields if provided
+    if (status) booking.status = status;
+    if (paymentStatus) booking.paymentStatus = paymentStatus;
+    if (paymentDetails) booking.paymentDetails = paymentDetails;
+
+    // Fetch and attach metadata
+    const [user, assistant] = await Promise.all([
+      User.findById(booking.user).select("name email phoneNumber"),
+      PersonalAssistant.findById(booking.assistant).select("name email expertise"),
+    ]);
+
+    const slotDoc = await Slot.findOne({ user: booking.assistant });
+    if (!slotDoc) throw new ApiError(404, "Slot document not found");
+    const ts: any = slotDoc.timeslots.find((slot: any) => slot?._id.toString() === booking?.timeslotId.toString());
+    booking.metaDetails = {
+      user,
+      assistant,
+      timeslot: ts,
+    };
+    await booking.save();
+    return res.status(200).json(new ApiResponse(200, booking, "Booking updated successfully"));
+  } catch (err: any) {
+    const status = err instanceof ApiError ? err.statusCode : 500;
+    return res.status(status).json(new ApiError(status, err.message));
   }
 };

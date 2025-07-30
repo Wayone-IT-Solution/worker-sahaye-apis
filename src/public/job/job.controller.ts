@@ -88,6 +88,7 @@ export class JobController {
             benefits: 1,
             workMode: 1,
             industry: 1,
+            userType: 1,
             createdAt: 1,
             updatedAt: 1,
             expiresAt: 1,
@@ -122,7 +123,11 @@ export class JobController {
     }
   }
 
-  static async getAllUserWiseJobs(req: Request, res: Response, next: NextFunction) {
+  static async getAllUserWiseJobs(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const { id: user } = (req as any).user;
       const pipeline = [
@@ -199,7 +204,10 @@ export class JobController {
           },
         },
       ];
-      const result = await JobService.getAll({ ...req.query, postedBy: user }, pipeline);
+      const result = await JobService.getAll(
+        { ...req.query, postedBy: user },
+        pipeline
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -223,8 +231,8 @@ export class JobController {
         JobApplication.find({ applicant: userId }, { job: 1 }).lean(),
       ]);
 
-      const appliedJobIds = applications.map((app) =>
-        new mongoose.Types.ObjectId(app.job)
+      const appliedJobIds = applications.map(
+        (app) => new mongoose.Types.ObjectId(app.job)
       );
       const matchStage: Record<string, any> = {
         _id: { $nin: appliedJobIds },
@@ -336,15 +344,19 @@ export class JobController {
       const total = await Job.countDocuments(matchStage);
 
       return res.status(200).json(
-        new ApiResponse(200, {
-          result: jobs,
-          pagination: {
-            totalItems: total,
-            currentPage: page,
-            itemsPerPage: limit,
-            totalPages: Math.ceil(total / limit),
+        new ApiResponse(
+          200,
+          {
+            result: jobs,
+            pagination: {
+              totalItems: total,
+              currentPage: page,
+              itemsPerPage: limit,
+              totalPages: Math.ceil(total / limit),
+            },
           },
-        }, "Suggested jobs fetched successfully")
+          "Suggested jobs fetched successfully"
+        )
       );
     } catch (err: any) {
       console.log("❌ Error in getAllSuggestedJobsByUser:", err);
@@ -532,9 +544,7 @@ export class JobController {
       const { id: adminId } = (req as any).user;
 
       if (!comment?.trim()) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Comment is required"));
+        return res.status(400).json(new ApiError(400, "Comment is required"));
       }
 
       const jobDoc = await Job.findById(jobId);
@@ -562,13 +572,13 @@ export class JobController {
           senderId: adminId,
           senderRole: UserType.ADMIN,
           receiverRole: userDoc.userType,
-          receiverId: (userDoc._id as any)
+          receiverId: userDoc._id as any,
         });
       }
 
-      return res.status(200).json(
-        new ApiResponse(200, null, "Comment added and user notified")
-      );
+      return res
+        .status(200)
+        .json(new ApiResponse(200, null, "Comment added and user notified"));
     } catch (err) {
       next(err);
     }
@@ -594,7 +604,8 @@ export class JobController {
       }
 
       job.history = (job.history || []).sort(
-        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       return res
         .status(200)

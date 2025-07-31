@@ -124,6 +124,17 @@ export const NotificationMessages: Record<
     }),
   },
 
+  "task-assigned-to-sales": {
+    sender: (ctx) => ({
+      title: `Assigned "${ctx?.taskTitle}" to ${ctx?.assigneeName}`,
+      message: `You’ve successfully assigned the task "${ctx?.taskTitle}" to ${ctx?.assigneeName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `New Task Assigned: "${ctx?.taskTitle}"`,
+      message: `You have been assigned a new task "${ctx?.taskTitle}" by ${ctx?.assignedByName}.`,
+    }),
+  },
+
   "job-status-update": {
     sender: (ctx) => ({
       title: `Job marked as "${ctx?.status}"`,

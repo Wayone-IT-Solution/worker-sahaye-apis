@@ -7,6 +7,7 @@ import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { ProjectBasedHiring, ProjectHiringStatus } from "../../modals/projectbasedhiring.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
+import { Salesperson } from "../../modals/salesperson.model";
 
 const projectBasedHiringService = new CommonService(ProjectBasedHiring);
 
@@ -196,6 +197,85 @@ export class ProjectHiringController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async assignSalesPerson(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const requestId = req.params.id;
+      const { salesPersonTo } = req.body;
+      const { id: adminId, role } = (req as any).user;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(requestId) ||
+        (!mongoose.Types.ObjectId.isValid(salesPersonTo))
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid request or Project Based Hiring ID."));
+      }
+
+      const request = await ProjectBasedHiring.findById(requestId);
+      if (!request) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Project Based Hiring Doc not found."));
+      }
+
+      // ✅ Allow only certain statuses
+      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `Cannot assign request with status '${request.status}'.`
+          )
+        );
+      }
+
+      // ✅ Check if already assigned
+      if (request.salesPersonTo) {
+        return res
+          .status(409)
+          .json(
+            new ApiError(409, "This request is already assigned to a Project Based Hiring.")
+          );
+      }
+
+      if (!request.salesPersonTo && role === "admin") {
+        const userDetails = await User.findById(request.userId);
+        const salesperson = await Salesperson.findById(salesPersonTo);
+        if (userDetails && salesperson) {
+          await sendSingleNotification({
+            type: "task-assigned-to-sales",
+            context: {
+              taskTitle: "Project Based Hiring",
+              assigneeName: salesperson?.name
+            },
+            toRole: userDetails.userType,
+            toUserId: (userDetails?._id as any),
+            fromUser: { id: adminId, role: role },
+          });
+        }
+      }
+      request.salesPersonTo = salesPersonTo;
+      request.salesPersonAt = new Date();
+
+      await request.save();
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            request,
+            `Request assigned successfully to Project Based Hiring.`
+          )
+        );
     } catch (err) {
       next(err);
     }

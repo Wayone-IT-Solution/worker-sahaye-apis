@@ -6,6 +6,7 @@ import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/au
 const {
     getCurrentStats,
     getDashboardStats,
+    getIvrCallSummary,
     getBadgeStatusCounts,
     getJobApplicationsStats,
     getServicesStatusCounts,
@@ -29,6 +30,12 @@ router.get(
     authenticateToken,
     isAdmin,
     asyncHandler(getYearlyRevenueComparison)
+);
+router.get(
+    "/ivrcall-summary",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(getIvrCallSummary)
 );
 router.get(
     "/customer-support",

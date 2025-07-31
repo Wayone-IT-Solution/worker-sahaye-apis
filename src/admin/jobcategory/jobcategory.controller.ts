@@ -26,6 +26,26 @@ export class JobcategoryController {
     }
   }
 
+  static async createAllJobcategory(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await JobCategory.insertMany(req.body);
+      if (!result || result.length === 0) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Failed to insert job categories"));
+      }
+      return res
+        .status(201)
+        .json(new ApiResponse(201, result, "Job categories created successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getAllJobcategorys(
     req: Request,
     res: Response,

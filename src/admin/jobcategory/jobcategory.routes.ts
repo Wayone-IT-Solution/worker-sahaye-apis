@@ -6,6 +6,7 @@ const {
   createJobcategory,
   getAllJobcategorys,
   getJobcategoryById,
+  createAllJobcategory,
   updateJobcategoryById,
   deleteJobcategoryById,
 } = JobcategoryController;
@@ -16,6 +17,7 @@ router
   .post("/", asyncHandler(createJobcategory))
   .get("/", asyncHandler(getAllJobcategorys))
   .get("/:id", asyncHandler(getJobcategoryById))
+  .post("/all", asyncHandler(createAllJobcategory))
   .put("/:id", asyncHandler(updateJobcategoryById))
   .delete("/:id", asyncHandler(deleteJobcategoryById));
 

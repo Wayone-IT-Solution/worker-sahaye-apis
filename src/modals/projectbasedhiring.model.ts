@@ -22,6 +22,10 @@ export interface IProjectBasedHiring extends Document {
   preferredSkills: string[];
   optionalQuestion?: string;
   assignedBy?: Types.ObjectId;
+
+  salesPersonAt?: Date;
+  salesPersonTo?: Types.ObjectId;
+
   status: ProjectHiringStatus;
   cancellationReason?: string;
   assignedTo?: Types.ObjectId;
@@ -88,6 +92,13 @@ const ProjectBasedHiringSchema = new Schema<IProjectBasedHiring>(
       ref: "Admin",
     },
     assignedAt: { type: Date },
+    salesPersonTo: {
+      type: Schema.Types.ObjectId,
+      ref: "Salesperson",
+    },
+    salesPersonAt: {
+      type: Date,
+    },
     completedAt: { type: Date },
     cancellationReason: { type: String, maxlength: 1000 },
     status: {

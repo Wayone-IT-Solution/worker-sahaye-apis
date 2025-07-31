@@ -25,6 +25,10 @@ export interface IJobRequirement extends Document {
   perksAndBenefits?: string;
   preferredLocation: string;
   jobDescriptionUrl?: string;
+
+  salesPersonAt?: Date;
+  salesPersonTo?: Types.ObjectId;
+
   requiredSkillset: string[];
   jobCategory: Types.ObjectId;
   assignedBy?: Types.ObjectId;
@@ -111,6 +115,15 @@ const JobRequirementSchema = new Schema<IJobRequirement>(
       ref: "VirtualHR",
     },
     assignedAt: { type: Date },
+
+    salesPersonTo: {
+      type: Schema.Types.ObjectId,
+      ref: "Salesperson",
+    },
+    salesPersonAt: {
+      type: Date,
+    },
+
     completedAt: { type: Date },
     isActive: {
       type: Boolean,

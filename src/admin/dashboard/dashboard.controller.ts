@@ -42,6 +42,7 @@ import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model"
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
 import { LoanRequestModel } from "../../modals/loanrequest.model";
+import { IVRCallModel } from "../../modals/ivrcall.model";
 
 export class DashboardController {
   static async getDashboardStats(
@@ -254,6 +255,80 @@ export class DashboardController {
       });
     } catch (error) {
       console.error("Error getting ticket summary:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+
+  static async getIvrCallSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate: start, endDate: end, pickedBy, featureId } = req.query;
+
+      const endDate = end ? new Date(end as string) : new Date();
+      const startDate = start ? new Date(start as string) : subDays(endDate, 7);
+
+      const prevEndDate = subDays(startDate, 1);
+      const prevStartDate = subDays(startDate, 7);
+
+      const currentRange = {
+        $gte: startOfDay(startDate),
+        $lte: endOfDay(endDate),
+      };
+
+      const prevRange = {
+        $gte: startOfDay(prevStartDate),
+        $lte: endOfDay(prevEndDate),
+      };
+
+      const statuses = [
+        "answered",
+        "initiated",
+        "no_answer",
+        "in_progress",
+      ];
+
+      const buildMatchStage = (dateRange: any) => {
+        const match: any = { createdAt: dateRange };
+        if (pickedBy) match["pickedBy"] = new Types.ObjectId(pickedBy as string);
+        if (featureId) match["featureId"] = new Types.ObjectId(featureId as string);
+        return { $match: match };
+      };
+
+      const [currentCounts, previousCounts] = await Promise.all([
+        IVRCallModel.aggregate([
+          buildMatchStage(currentRange),
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        IVRCallModel.aggregate([
+          buildMatchStage(prevRange),
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+      ]);
+
+      const currentMap = Object.fromEntries(statuses.map((s) => [s, 0]));
+      const prevMap = { ...currentMap };
+
+      currentCounts.forEach(({ _id, count }) => (currentMap[_id] = count));
+      previousCounts.forEach(({ _id, count }) => (prevMap[_id] = count));
+
+      const result = statuses.reduce((acc, status) => {
+        const current = currentMap[status];
+        const previous = prevMap[status];
+        const change =
+          previous === 0 ? (current > 0 ? 100 : 0) : ((current - previous) / previous) * 100;
+
+        acc[status] = current;
+        acc[`${status}_change`] = parseFloat(change.toFixed(2));
+        return acc;
+      }, {} as Record<string, number>);
+
+      res.status(200).json({
+        success: true,
+        from: startOfDay(startDate),
+        to: endOfDay(endDate),
+        ...result,
+      });
+    } catch (err) {
+      console.error("IVR Analytics Error:", err);
       res.status(500).json({ message: "Internal server error" });
     }
   }

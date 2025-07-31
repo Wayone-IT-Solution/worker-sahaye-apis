@@ -10,6 +10,7 @@ const {
   createBulkHiring,
   getAllBulkHirings,
   getBulkHiringById,
+  assignSalesPerson,
   updateBulkHiringById,
   deleteBulkHiringById,
 } = BulkHiringController;
@@ -27,6 +28,12 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(assignVirtualHR)
+  )
+  .post(
+    "/:id/sales",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(assignSalesPerson)
   )
   .patch(
     "/:id/update-status",

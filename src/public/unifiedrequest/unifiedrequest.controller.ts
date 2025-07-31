@@ -9,6 +9,7 @@ import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { User } from "../../modals/user.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
+import { Salesperson } from "../../modals/salesperson.model";
 
 const unifiedRequestService = new CommonService(UnifiedServiceRequest);
 
@@ -137,7 +138,7 @@ export class UnifiedRequestController {
     try {
       const result = await unifiedRequestService.getById(req.params.id, true);
       if (!result)
-        return res.status(404).json(new ApiError(404, "bulk hiring not found"));
+        return res.status(404).json(new ApiError(404, "Unified Service Request not found"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -263,6 +264,86 @@ export class UnifiedRequestController {
       next(err);
     }
   }
+
+  static async assignSalesPerson(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const requestId = req.params.id;
+      const { salesPersonTo } = req.body;
+      const { id: adminId, role } = (req as any).user;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(requestId) ||
+        (!mongoose.Types.ObjectId.isValid(salesPersonTo))
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid request or Unified Service Request ID."));
+      }
+
+      const request = await UnifiedServiceRequest.findById(requestId);
+      if (!request) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Unified Service Request Doc not found."));
+      }
+
+      // ✅ Allow only certain statuses
+      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `Cannot assign request with status '${request.status}'.`
+          )
+        );
+      }
+
+      // ✅ Check if already assigned
+      if (request.salesPersonTo) {
+        return res
+          .status(409)
+          .json(
+            new ApiError(409, "This request is already assigned to a Unified Service Request.")
+          );
+      }
+
+      if (!request.salesPersonTo && role === "admin") {
+        const userDetails = await User.findById(request.userId);
+        const salesperson = await Salesperson.findById(salesPersonTo);
+        if (userDetails && salesperson) {
+          await sendSingleNotification({
+            type: "task-assigned-to-sales",
+            context: {
+              taskTitle: "Exclusive Request",
+              assigneeName: salesperson?.name
+            },
+            toRole: userDetails.userType,
+            toUserId: (userDetails?._id as any),
+            fromUser: { id: adminId, role: role },
+          });
+        }
+      }
+      request.salesPersonTo = salesPersonTo;
+      request.salesPersonAt = new Date();
+
+      await request.save();
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            request,
+            `Request assigned successfully to Unified Service Request.`
+          )
+        );
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async assignVirtualHR(
     req: Request,
     res: Response,

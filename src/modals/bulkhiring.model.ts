@@ -37,6 +37,9 @@ export interface IBulkHiringRequest extends Document {
   assignedTo?: Types.ObjectId;
   assignedBy?: Types.ObjectId;
 
+  salesPersonAt?: Date;
+  salesPersonTo?: Types.ObjectId;
+
   // Optional end/cancel metadata
   completedAt?: Date;
   cancelledAt?: Date;
@@ -126,8 +129,13 @@ const BulkHiringRequestSchema = new Schema<IBulkHiringRequest>(
     assignedAt: {
       type: Date,
     },
-
-    // Completion / Cancellation metadata
+    salesPersonTo: {
+      type: Schema.Types.ObjectId,
+      ref: "Salesperson",
+    },
+    salesPersonAt: {
+      type: Date,
+    },
     completedAt: {
       type: Date,
     },

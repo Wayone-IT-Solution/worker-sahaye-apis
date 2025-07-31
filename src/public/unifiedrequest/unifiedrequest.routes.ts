@@ -8,6 +8,7 @@ import { dynamicUpload, s3UploaderMiddleware, } from "../../middlewares/s3FileUp
 const {
   updateStatus,
   assignVirtualHR,
+  assignSalesPerson,
   createUnifiedRequest,
   getAllUnifiedRequests,
   getUnifiedRequestById,
@@ -42,6 +43,12 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(assignVirtualHR)
+  )
+  .post(
+    "/:id/sales",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(assignSalesPerson)
   )
   .patch(
     "/:id/update-status",

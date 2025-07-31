@@ -28,6 +28,10 @@ export interface IUnifiedServiceRequest extends Document {
   mobileNumber: string;
   contactPerson: string;
   userId: Types.ObjectId;
+
+  salesPersonAt?: Date;
+  salesPersonTo?: Types.ObjectId;
+
   preferredDateTime: Date;
   exclusiveService: string;
   briefDescription: string;
@@ -119,6 +123,13 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     assignedBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
+    },
+    salesPersonTo: {
+      type: Schema.Types.ObjectId,
+      ref: "Salesperson",
+    },
+    salesPersonAt: {
+      type: Date,
     },
     document: { type: String },
     assignedAt: { type: Date },

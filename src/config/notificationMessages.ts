@@ -131,7 +131,7 @@ export const NotificationMessages: Record<
     }),
     receiver: (ctx) => ({
       title: `New Task Assigned: "${ctx?.taskTitle}"`,
-      message: `You have been assigned a new task "${ctx?.taskTitle}" by ${ctx?.assignedByName}.`,
+      message: `You have been assigned a new task "${ctx?.taskTitle}"`,
     }),
   },
 

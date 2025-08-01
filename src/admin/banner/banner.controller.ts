@@ -74,14 +74,13 @@ export class BannerController {
       const id = req.params.id;
       const image = req?.body?.image?.[0]?.url;
       if (!mongoose.Types.ObjectId.isValid(id))
-        return res.status(400).json(new ApiError(400, "Invalid police verification doc ID"));
-
+        return res.status(400).json(new ApiError(400, "Invalid banner doc ID"));
 
       const record = await BannerService.getById(id);
       if (!record) {
         return res
           .status(404)
-          .json(new ApiError(404, "Job Requirement (On Demand) not found."));
+          .json(new ApiError(404, "Banner not found."));
       }
 
       let imageUrl;

@@ -1,10 +1,10 @@
 import mongoose from "mongoose";
-import { Request, Response } from "express";
 import ApiError from "../../utils/ApiError";
 import { Slot } from "../../modals/slot.model";
 import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { Booking } from "../../modals/booking.model";
+import { NextFunction, Request, Response } from "express";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
 import { PersonalAssistant } from "../../modals/personalassistant.model";
@@ -59,12 +59,18 @@ export const createBooking = async (req: Request, res: Response) => {
       ts.bookedBy = user;
       await slotDoc.save({ session });
 
+      const [userData, assistant]: any = await Promise.all([
+        User.findById(user).select("fullName email mobile"),
+        PersonalAssistant.findById(assistantId).select("name email phoneNumber"),
+      ]);
+      const metaDetails = { user: userData, assistant, timeslot: ts };
       const booking = await Booking.create(
         [{
           user,
           timeslotId: ts._id,
           totalAmount: amount,
           assistant: assistantId,
+          metaDetails: metaDetails
         }],
         { session }
       );
@@ -130,6 +136,40 @@ export const changeBookingSlot = async (req: Request, res: Response) => {
     session.endSession();
   }
 };
+
+export const getAllBookings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await bookingService.getAll(req.query);
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const getBookingById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await bookingService.getById(req.params.id);
+    if (!result)
+      return res
+        .status(404)
+        .json(new ApiError(404, "Booking not found"));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Data fetched successfully"));
+  } catch (err) {
+    next(err);
+  }
+}
 
 export const getUserBookings = async (req: Request, res: Response) => {
   try {
@@ -209,8 +249,8 @@ export const updateBooking = async (req: Request, res: Response) => {
 
     // Fetch and attach metadata
     const [user, assistant] = await Promise.all([
-      User.findById(booking.user).select("name email phoneNumber"),
-      PersonalAssistant.findById(booking.assistant).select("name email expertise"),
+      User.findById(booking.user).select("fullName email mobile"),
+      PersonalAssistant.findById(booking.assistant).select("name email phoneNumber"),
     ]);
 
     const slotDoc = await Slot.findOne({ user: booking.assistant });

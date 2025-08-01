@@ -1,9 +1,9 @@
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
 import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
-import { EnrolledPlan } from "../../modals/enrollplan.model";
 
 const PlanFeatureMappingService = new CommonService(PlanFeatureMapping);
 
@@ -105,7 +105,7 @@ export class PlanFeatureMappingController {
     next: NextFunction
   ) {
     try {
-      const result = await PlanFeatureMappingService.getById(req.params.id);
+      const result = await PlanFeatureMappingService.getById(req.params.id, false);
       if (!result)
         return res
           .status(404)

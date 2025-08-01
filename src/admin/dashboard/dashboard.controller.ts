@@ -23,6 +23,7 @@ import {
 import Ticket from "../../modals/ticket.model";
 import { Badge } from "../../modals/badge.model";
 import { ForumPost } from "../../modals/forumpost.model";
+import { IVRCallModel } from "../../modals/ivrcall.model";
 import { TopRecruiter } from "../../modals/toprecruiter.model";
 import { FastResponder } from "../../modals/fastresponder.model";
 import { ReliablePayer } from "../../modals/reliablepayer.model";
@@ -30,6 +31,7 @@ import { SafeWorkplace } from "../../modals/safeworkplace.model";
 import { TrainedWorker } from "../../modals/trainedworker.model";
 import { BulkHiringRequest } from "../../modals/bulkhiring.model";
 import { PreInterviewed } from "../../modals/preinterviewd.model";
+import { LoanRequestModel } from "../../modals/loanrequest.model";
 import { JobRequirement } from "../../modals/jobrequirement.model";
 import { TrustedPartner } from "../../modals/trustedpartner.model";
 import { HighlyPreferred } from "../../modals/highlypreferred.model";
@@ -41,8 +43,6 @@ import { ComplianceChecklist } from "../../modals/compliancechecklist.model";
 import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model";
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
-import { LoanRequestModel } from "../../modals/loanrequest.model";
-import { IVRCallModel } from "../../modals/ivrcall.model";
 
 export class DashboardController {
   static async getDashboardStats(

@@ -3,13 +3,13 @@ import ApiError from "../../utils/ApiError";
 import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { deleteFromS3 } from "../../config/s3Uploader";
+import { VirtualHR } from "../../modals/virtualhr.model";
 import { NextFunction, Request, Response } from "express";
+import { Salesperson } from "../../modals/salesperson.model";
 import { CommonService } from "../../services/common.services";
-import { JobRequirement, JobRequirementStatus } from "../../modals/jobrequirement.model";
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
-import { VirtualHR } from "../../modals/virtualhr.model";
-import { Salesperson } from "../../modals/salesperson.model";
+import { JobRequirement, JobRequirementStatus } from "../../modals/jobrequirement.model";
 
 const jobRequirementService = new CommonService(JobRequirement);
 

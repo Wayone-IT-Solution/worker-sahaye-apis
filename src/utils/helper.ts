@@ -20,6 +20,7 @@ export const getPipeline = (
     postedBy,
     assignee,
     userType,
+    stateId,
     assistant,
     createdBy,
     startDate,
@@ -48,6 +49,7 @@ export const getPipeline = (
   if (userType) match.userType = userType;
   if (user) match.user = safeObjectId(user);
   if (userId) match.userId = safeObjectId(userId);
+  if (stateId) match.stateId = safeObjectId(stateId);
   if (postedBy) match.postedBy = safeObjectId(postedBy);
   if (assignee) match.assignee = safeObjectId(assignee);
   if (assistant) match.assistant = safeObjectId(assistant);

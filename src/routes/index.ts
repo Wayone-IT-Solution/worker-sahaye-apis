@@ -35,6 +35,7 @@ import jobRoutes from "../public/job/job.routes";
 import userRoutes from "../public/user/user.routes";
 import featureRoutes from "../public/feature/feature.routes";
 import messageRoutes from "../public/message/message.routes";
+import IVRCallRoutes from "../public/ivrcall/ivrcall.routes";
 import jobSavedRoutes from "../public/jobsaved/jobsaved.routes";
 import forumPostRoutes from "../public/forumpost/forumpost.routes";
 import stateCityRoutes from "../public/statecity/statecity.routes";
@@ -99,6 +100,7 @@ router.use("/projectbasedhiring", projectBasedHiringRoutes);
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);
+router.use("/ivr", IVRCallRoutes);
 router.use("/feature", featureRoutes);
 router.use("/message", messageRoutes);
 router.use("/jobsaved", jobSavedRoutes);

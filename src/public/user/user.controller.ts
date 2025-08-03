@@ -41,7 +41,7 @@ export class UserController {
       } = req.body;
 
       // 1. Validation (basic example)
-      if (!email || !mobile || !fullName || !userType) {
+      if (!mobile || !fullName || !userType) {
         return res
           .status(400)
           .json(new ApiError(400, "Missing required fields"));
@@ -84,7 +84,8 @@ export class UserController {
           new ApiResponse(
             201,
             newUser,
-            `${userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
             } created successfully`
           )
         );
@@ -151,7 +152,8 @@ export class UserController {
           new ApiResponse(
             200,
             result,
-            `${userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
             } updated successfully`
           )
         );

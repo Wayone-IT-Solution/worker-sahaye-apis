@@ -183,7 +183,6 @@ const userSchema = new Schema<IUser>(
     email: {
       unique: true,
       sparse: true,
-      required: false,
       lowercase: true,
       type: Schema.Types.String,
       validate: {

@@ -13,7 +13,10 @@ import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
 const bookingService = new CommonService(Booking);
 
 const exactAmount = async (userId: any) => {
-  const enrolledPlan = await EnrolledPlan.findOne({ user: userId, status: "active" });
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  });
   const planId = enrolledPlan?.plan;
 
   let amount = 549;
@@ -27,8 +30,8 @@ const exactAmount = async (userId: any) => {
   return {
     amount,
     hasActivePlan: !!enrolledPlan,
-  }
-}
+  };
+};
 
 export const createBooking = async (req: Request, res: Response) => {
   const session = await mongoose.startSession();
@@ -48,10 +51,14 @@ export const createBooking = async (req: Request, res: Response) => {
         .json(new ApiError(400, "Amount mismatch. Don't be oversmart!"));
 
     await session.withTransaction(async () => {
-      const slotDoc = await Slot.findOne({ user: assistantId }).session(session);
+      const slotDoc = await Slot.findOne({ user: assistantId }).session(
+        session
+      );
       if (!slotDoc) throw new ApiError(404, "Slot document not found");
 
-      const ts: any = slotDoc.timeslots.find((slot: any) => slot?._id.toString() === slotId.toString());
+      const ts: any = slotDoc.timeslots.find(
+        (slot: any) => slot?._id.toString() === slotId.toString()
+      );
       if (!ts) throw new ApiError(404, "Timeslot not found");
       if (ts.isBooked) throw new ApiError(400, "Timeslot already booked");
 
@@ -61,22 +68,32 @@ export const createBooking = async (req: Request, res: Response) => {
 
       const [userData, assistant]: any = await Promise.all([
         User.findById(user).select("fullName email mobile"),
-        PersonalAssistant.findById(assistantId).select("name email phoneNumber"),
+        PersonalAssistant.findById(assistantId).select(
+          "name email phoneNumber"
+        ),
       ]);
       const metaDetails = { user: userData, assistant, timeslot: ts };
       const booking = await Booking.create(
-        [{
-          user,
-          timeslotId: ts._id,
-          totalAmount: amount,
-          assistant: assistantId,
-          metaDetails: metaDetails
-        }],
+        [
+          {
+            user,
+            timeslotId: ts._id,
+            totalAmount: amount,
+            assistant: assistantId,
+            metaDetails: metaDetails,
+          },
+        ],
         { session }
       );
       return res
         .status(201)
-        .json(new ApiResponse(201, booking[0], "Booking created & slot marked booked"));
+        .json(
+          new ApiResponse(
+            201,
+            booking[0],
+            "Booking created & slot marked booked"
+          )
+        );
     });
   } catch (err: any) {
     const status = err instanceof ApiError ? err.statusCode : 500;
@@ -95,7 +112,9 @@ export const changeBookingSlot = async (req: Request, res: Response) => {
     if (!bookingId || !newSlotId || !assistantId) {
       return res
         .status(400)
-        .json(new ApiError(400, "bookingId, newSlotId, assistantId are required"));
+        .json(
+          new ApiError(400, "bookingId, newSlotId, assistantId are required")
+        );
     }
 
     await session.withTransaction(async () => {
@@ -103,20 +122,27 @@ export const changeBookingSlot = async (req: Request, res: Response) => {
       if (!booking) throw new ApiError(404, "Booking not found");
 
       // 1) Un-book old slot
-      const slotDoc = await Slot.findOne({ user: assistantId }).session(session);
+      const slotDoc = await Slot.findOne({ user: assistantId }).session(
+        session
+      );
       if (!slotDoc) throw new ApiError(404, "Slot document not found");
 
-      const oldTs: any = slotDoc.timeslots.find((slot: any) => slot?._id.toString() === booking.timeslotId.toString());
+      const oldTs: any = slotDoc.timeslots.find(
+        (slot: any) => slot?._id.toString() === booking.timeslotId.toString()
+      );
       if (oldTs) {
         oldTs.isBooked = false;
         oldTs.bookedBy = null;
       }
 
       // 2) Book new slot
-      const newTs: any = slotDoc.timeslots.find((slot: any) => slot?._id.toString() === newSlotId.toString());
+      const newTs: any = slotDoc.timeslots.find(
+        (slot: any) => slot?._id.toString() === newSlotId.toString()
+      );
       if (!newTs) throw new ApiError(404, "New timeslot not found");
 
-      if (newTs.isBooked) throw new ApiError(400, "New timeslot already booked");
+      if (newTs.isBooked)
+        throw new ApiError(400, "New timeslot already booked");
 
       newTs.isBooked = true;
       newTs.bookedBy = booking.user;
@@ -127,7 +153,9 @@ export const changeBookingSlot = async (req: Request, res: Response) => {
 
       return res
         .status(200)
-        .json(new ApiResponse(200, booking, "Booking slot updated successfully"));
+        .json(
+          new ApiResponse(200, booking, "Booking slot updated successfully")
+        );
     });
   } catch (err: any) {
     const status = err instanceof ApiError ? err.statusCode : 500;
@@ -150,7 +178,7 @@ export const getAllBookings = async (
   } catch (err) {
     next(err);
   }
-}
+};
 
 export const getBookingById = async (
   req: Request,
@@ -160,21 +188,22 @@ export const getBookingById = async (
   try {
     const result = await bookingService.getById(req.params.id);
     if (!result)
-      return res
-        .status(404)
-        .json(new ApiError(404, "Booking not found"));
+      return res.status(404).json(new ApiError(404, "Booking not found"));
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Data fetched successfully"));
   } catch (err) {
     next(err);
   }
-}
+};
 
 export const getUserBookings = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const bookings = await bookingService.getAll({ ...req.query, user: userId });
+    const bookings = await bookingService.getAll({
+      ...req.query,
+      user: userId,
+    });
     res.status(200).json(new ApiResponse(200, bookings, "User bookings"));
   } catch (error: any) {
     res
@@ -186,18 +215,17 @@ export const getUserBookings = async (req: Request, res: Response) => {
 export const getAssistantBookings = async (req: Request, res: Response) => {
   try {
     const { assistantId } = req.params;
-    const bookings = await bookingService.getAll({ ...req.body, assistant: assistantId });
-    res
-      .status(200)
-      .json(new ApiResponse(200, bookings, "Assistant bookings"));
+    const bookings = await bookingService.getAll({
+      ...req.body,
+      assistant: assistantId,
+    });
+    res.status(200).json(new ApiResponse(200, bookings, "Assistant bookings"));
   } catch (error: any) {
-    res.status(500).json(
-      new ApiError(
-        500,
-        "Failed to fetch assistant bookings",
-        error.message
-      )
-    );
+    res
+      .status(500)
+      .json(
+        new ApiError(500, "Failed to fetch assistant bookings", error.message)
+      );
   }
 };
 
@@ -205,6 +233,12 @@ export const updateBookingStatus = async (req: Request, res: Response) => {
   try {
     const { status } = req.body;
     const { bookingId } = req.params;
+
+    const bookingData = await Booking.findById(bookingId);
+    if (!bookingData) throw new ApiError(404, "Booking not found");
+
+    if (bookingData.paymentStatus !== "success")
+      throw new ApiError(404, "Booking must have payment status: 'SUCCESS'");
 
     const booking = await Booking.findByIdAndUpdate(
       bookingId,
@@ -221,7 +255,9 @@ export const updateBookingStatus = async (req: Request, res: Response) => {
   } catch (error: any) {
     res
       .status(500)
-      .json(new ApiError(500, "Failed to update booking status", error.message));
+      .json(
+        new ApiError(500, "Failed to update booking status", error.message)
+      );
   }
 };
 
@@ -250,19 +286,25 @@ export const updateBooking = async (req: Request, res: Response) => {
     // Fetch and attach metadata
     const [user, assistant] = await Promise.all([
       User.findById(booking.user).select("fullName email mobile"),
-      PersonalAssistant.findById(booking.assistant).select("name email phoneNumber"),
+      PersonalAssistant.findById(booking.assistant).select(
+        "name email phoneNumber"
+      ),
     ]);
 
     const slotDoc = await Slot.findOne({ user: booking.assistant });
     if (!slotDoc) throw new ApiError(404, "Slot document not found");
-    const ts: any = slotDoc.timeslots.find((slot: any) => slot?._id.toString() === booking?.timeslotId.toString());
+    const ts: any = slotDoc.timeslots.find(
+      (slot: any) => slot?._id.toString() === booking?.timeslotId.toString()
+    );
     booking.metaDetails = {
       user,
       assistant,
       timeslot: ts,
     };
     await booking.save();
-    return res.status(200).json(new ApiResponse(200, booking, "Booking updated successfully"));
+    return res
+      .status(200)
+      .json(new ApiResponse(200, booking, "Booking updated successfully"));
   } catch (err: any) {
     const status = err instanceof ApiError ? err.statusCode : 500;
     return res.status(status).json(new ApiError(status, err.message));

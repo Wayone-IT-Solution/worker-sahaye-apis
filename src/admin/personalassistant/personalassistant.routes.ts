@@ -1,8 +1,11 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import { PersonalAssistantController } from "./personalassistant.controller";
-import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import {
+  dynamicUpload,
+  s3UploaderMiddleware,
+} from "../../middlewares/s3FileUploadMiddleware";
 
 const {
   createPersonalAssistant,
@@ -15,20 +18,34 @@ const {
 const router = express.Router();
 
 router
-  .post("/",
+  .post(
+    "/",
     authenticateToken,
     isAdmin,
     dynamicUpload([{ name: "profileImageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("profile"),
-    asyncHandler(createPersonalAssistant))
+    asyncHandler(createPersonalAssistant)
+  )
   .get("/", authenticateToken, isAdmin, asyncHandler(getAllPersonalAssistants))
-  .get("/:id", authenticateToken, isAdmin, asyncHandler(getPersonalAssistantById))
-  .put("/:id",
+  .get(
+    "/:id",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(getPersonalAssistantById)
+  )
+  .put(
+    "/:id",
     authenticateToken,
     isAdmin,
     dynamicUpload([{ name: "profileImageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("profile"),
-    asyncHandler(updatePersonalAssistantById))
-  .delete("/:id", authenticateToken, isAdmin, asyncHandler(deletePersonalAssistantById))
+    asyncHandler(updatePersonalAssistantById)
+  )
+  .delete(
+    "/:id",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(deletePersonalAssistantById)
+  );
 
 export default router;

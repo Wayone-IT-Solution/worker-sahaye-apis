@@ -21,6 +21,7 @@ export const getPipeline = (
     assignee,
     userType,
     stateId,
+    featureId,
     assistant,
     createdBy,
     startDate,
@@ -40,7 +41,8 @@ export const getPipeline = (
   const basePipeline: any[] = [];
   const match: Record<string, any> = {};
 
-  const safeObjectId = (val: any) => ObjectId.isValid(val) ? new ObjectId(val) : val;
+  const safeObjectId = (val: any) =>
+    ObjectId.isValid(val) ? new ObjectId(val) : val;
 
   // Basic match filters
   if (type) match.type = type;
@@ -52,6 +54,7 @@ export const getPipeline = (
   if (stateId) match.stateId = safeObjectId(stateId);
   if (postedBy) match.postedBy = safeObjectId(postedBy);
   if (assignee) match.assignee = safeObjectId(assignee);
+  if (featureId) match.featureId = safeObjectId(featureId);
   if (assistant) match.assistant = safeObjectId(assistant);
   if (createdBy) match.createdBy = safeObjectId(createdBy);
   if (community) match.community = safeObjectId(community);
@@ -69,11 +72,15 @@ export const getPipeline = (
 
   // Add additional stages before faceting (lookups, projections, etc.)
   if (Array.isArray(additionalStages)) basePipeline.push(...additionalStages);
-  else if (additionalStages && typeof additionalStages === "object") basePipeline.push(additionalStages);
+  else if (additionalStages && typeof additionalStages === "object")
+    basePipeline.push(additionalStages);
 
   // Search (including multi-field)
   if (search && searchkey) {
-    const keys = searchkey.split(",").map((k: string) => k.trim()).filter(Boolean);
+    const keys = searchkey
+      .split(",")
+      .map((k: string) => k.trim())
+      .filter(Boolean);
 
     if (keys.length > 1) {
       basePipeline.push({
@@ -87,10 +94,14 @@ export const getPipeline = (
       const key = keys[0];
       if (["_id", "category"].includes(key)) {
         basePipeline.push({ $addFields: { idStr: { $toString: `$${key}` } } });
-        basePipeline.push({ $match: { idStr: { $regex: search, $options: "i" } } });
+        basePipeline.push({
+          $match: { idStr: { $regex: search, $options: "i" } },
+        });
         basePipeline.push({ $project: { idStr: 0 } });
       } else {
-        basePipeline.push({ $match: { [key]: { $regex: search, $options: "i" } } });
+        basePipeline.push({
+          $match: { [key]: { $regex: search, $options: "i" } },
+        });
       }
     }
   }
@@ -108,7 +119,11 @@ export const getPipeline = (
         total: [{ $count: "count" }],
       },
     },
-    { $addFields: { totalCount: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] } } },
+    {
+      $addFields: {
+        totalCount: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
+      },
+    },
   ];
 
   return {

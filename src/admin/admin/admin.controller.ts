@@ -7,7 +7,7 @@ import { CommonService } from "../../services/common.services";
 
 const secret = config.jwt.secret;
 const adminService = new CommonService(Admin);
-const expiresIn = config.jwt.expiresIn as SignOptions["expiresIn"];;
+const expiresIn = config.jwt.expiresIn as SignOptions["expiresIn"];
 
 /**
  * User Controller
@@ -18,7 +18,8 @@ export class AdminController {
    */
   static async createAdmin(req: Request, res: Response, next: NextFunction) {
     try {
-      const { username, employeeCode, email, password, role, status } = req.body;
+      const { username, employeeCode, email, password, role, status } =
+        req.body;
       const user = await AdminController.createUser({
         role,
         email,
@@ -103,26 +104,26 @@ export class AdminController {
             from: "roles",
             localField: "role",
             foreignField: "_id",
-            as: "roleDetails"
-          }
+            as: "roleDetails",
+          },
         },
         {
           $unwind: {
             path: "$roleDetails",
-            preserveNullAndEmptyArrays: true
-          }
+            preserveNullAndEmptyArrays: true,
+          },
         },
         {
           $addFields: {
-            role: "$roleDetails.name"
-          }
+            role: "$roleDetails.name",
+          },
         },
         {
           $project: {
             password: 0,
             roleDetails: 0,
-          }
-        }
+          },
+        },
       ];
 
       const result = await adminService.getAll(req.query, pipeline);

@@ -487,7 +487,8 @@ export const getAllUserApplications = async (
   next: NextFunction
 ) => {
   try {
-    const pipeline = [
+    const { userType } = req.params;
+    const pipeline: any[] = [
       {
         $lookup: {
           from: "users",
@@ -530,33 +531,38 @@ export const getAllUserApplications = async (
           preserveNullAndEmptyArrays: true,
         },
       },
-      {
-        $project: {
-          job: 1,
-          status: 1,
-          history: 1,
-          resumeUrl: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          applicant: 1,
-          coverLetter: 1,
-          availability: 1,
-          expectedSalary: 1,
-          applicantSnapshot: 1,
-          jobTitle: "$jobDetails.title",
-          postedByEmail: "$postedDetails.email",
-          jobPosted: "$jobDetails.publishedAt",
-          jobType: "$jobDetails.jobType",
-          postedByMobile: "$postedDetails.mobile",
-          postedByName: "$postedDetails.fullName",
-          applicantEmail: "$applicantDetails.email",
-          postedByUserType: "$postedDetails.userType",
-          applicantMobile: "$applicantDetails.mobile",
-          applicantFullName: "$applicantDetails.fullName",
-          applicantUserType: "$applicantDetails.userType",
-        },
-      },
     ];
+
+    // Filter by role name if provided
+    if (userType)
+      pipeline.push({ $match: { "jobDetails.userType": userType } });
+
+    pipeline.push({
+      $project: {
+        job: 1,
+        status: 1,
+        history: 1,
+        resumeUrl: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        applicant: 1,
+        coverLetter: 1,
+        availability: 1,
+        expectedSalary: 1,
+        applicantSnapshot: 1,
+        jobTitle: "$jobDetails.title",
+        jobType: "$jobDetails.jobType",
+        jobPosted: "$jobDetails.publishedAt",
+        postedByEmail: "$postedDetails.email",
+        postedByMobile: "$postedDetails.mobile",
+        postedByName: "$postedDetails.fullName",
+        applicantEmail: "$applicantDetails.email",
+        postedByUserType: "$postedDetails.userType",
+        applicantMobile: "$applicantDetails.mobile",
+        applicantFullName: "$applicantDetails.fullName",
+        applicantUserType: "$applicantDetails.userType",
+      },
+    });
     const apps = await JobApplicationService.getAll(req.query, pipeline);
     return res
       .status(200)
@@ -633,7 +639,9 @@ export const handleOfferAccepted = async (
       User.findById(applicantId).select("fullName email mobile"),
     ]);
 
-    const receiver = await User.findById(jobDoc?.postedBy).select("_id userType");
+    const receiver = await User.findById(jobDoc?.postedBy).select(
+      "_id userType"
+    );
     if (jobDoc && receiver?._id) {
       await sendDualNotification({
         type: "application-status-update",
@@ -645,7 +653,7 @@ export const handleOfferAccepted = async (
         senderId: applicantId,
         senderRole: UserType.WORKER,
         receiverRole: receiver.userType,
-        receiverId: (receiver._id as any),
+        receiverId: receiver._id as any,
       });
     }
     if (app.job) await resetJobMetrics(app.job.toString());
@@ -768,7 +776,9 @@ export const withdrawApplication = async (
       User.findById(applicantId).select("fullName email mobile"),
     ]);
 
-    const receiver = await User.findById(jobDoc?.postedBy).select("_id userType");
+    const receiver = await User.findById(jobDoc?.postedBy).select(
+      "_id userType"
+    );
     if (jobDoc && receiver?._id) {
       await sendDualNotification({
         type: "application-status-update",
@@ -780,7 +790,7 @@ export const withdrawApplication = async (
         senderId: applicantId,
         senderRole: UserType.WORKER,
         receiverRole: receiver.userType,
-        receiverId: (receiver._id as any),
+        receiverId: receiver._id as any,
       });
     }
 
@@ -892,7 +902,9 @@ export const updateStatusByEmployer = async (
       User.findById(employerId).select("fullName email mobile"),
     ]);
 
-    const receiver = await User.findById(jobDoc?.postedBy).select("_id userType");
+    const receiver = await User.findById(jobDoc?.postedBy).select(
+      "_id userType"
+    );
     if (jobDoc && receiver?._id) {
       await sendDualNotification({
         type: "application-status-update",
@@ -904,7 +916,7 @@ export const updateStatusByEmployer = async (
         senderId: employerId,
         senderRole: UserType.EMPLOYER,
         receiverRole: receiver.userType,
-        receiverId: (receiver._id as any),
+        receiverId: receiver._id as any,
       });
     }
     if (app.job) await resetJobMetrics(app.job.toString());

@@ -1,7 +1,11 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { IVRCallController } from "./ivrcall.controller";
-import { authenticateToken, isAdmin, isWorker } from "../../middlewares/authMiddleware";
+import {
+  isAdmin,
+  isWorker,
+  authenticateToken,
+} from "../../middlewares/authMiddleware";
 
 const {
   createIVRCall,
@@ -14,20 +18,10 @@ const {
 const router = express.Router();
 
 router
-  .get("/", authenticateToken, asyncHandler(getAllIVRCalls))
+  .get("/:feature?", authenticateToken, isAdmin, asyncHandler(getAllIVRCalls))
   .post("/", authenticateToken, isWorker, asyncHandler(createIVRCall))
   .get("/:id", authenticateToken, isAdmin, asyncHandler(getIVRCallById))
-  .put(
-    "/:id",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(updateIVRCallById)
-  )
-  .delete(
-    "/:id",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(deleteIVRCallById)
-  );
+  .put("/:id", authenticateToken, isAdmin, asyncHandler(updateIVRCallById))
+  .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteIVRCallById));
 
 export default router;

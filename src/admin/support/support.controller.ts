@@ -27,17 +27,18 @@ export const createTicket = async (
     const { tags, title, description } = req.body;
 
     const duplicate = await Ticket.findOne({
-      $or: [
-        { tags: tags },
-        { title: title },
-        { description: description }
-      ]
+      $or: [{ tags: tags }, { title: title }, { description: description }],
     });
 
     if (duplicate) {
       return res
         .status(409)
-        .json(new ApiError(409, "Ticket with same tags, title, or description already exists."));
+        .json(
+          new ApiError(
+            409,
+            "Ticket with same tags, title, or description already exists."
+          )
+        );
     }
 
     const todayStart = new Date();
@@ -110,7 +111,7 @@ export const createAgent = async (
         { name: req.body.name },
         { email: req.body.email },
         { mobile: req.body.mobile },
-      ]
+      ],
     });
     let { availability } = req.body;
     if (availability === "active" || availability === "inactive") {
@@ -123,9 +124,17 @@ export const createAgent = async (
       }
       return res
         .status(409)
-        .json(new ApiError(409, "Agent with same name, email, or mobile already exists."));
+        .json(
+          new ApiError(
+            409,
+            "Agent with same name, email, or mobile already exists."
+          )
+        );
     }
-    const result = await agentService.create({ ...req.body, profilePictureUrl });
+    const result = await agentService.create({
+      ...req.body,
+      profilePictureUrl,
+    });
     if (!result) {
       return res
         .status(400)
@@ -135,10 +144,11 @@ export const createAgent = async (
     return res
       .status(201)
       .json(new ApiResponse(201, result, "Agent created successfully"));
-
   } catch (error) {
     console.log(error);
-    return res.status(500).json(new ApiError(400, "Failed to create ticket", error));
+    return res
+      .status(500)
+      .json(new ApiError(400, "Failed to create ticket", error));
   }
 };
 
@@ -214,14 +224,12 @@ export const getTicket = async (
   try {
     const result = await ticketService.getById(req.params.id, true);
     if (!result)
-      return res
-        .status(404)
-        .json(new ApiError(404, "Ticket not found"));
+      return res.status(404).json(new ApiError(404, "Ticket not found"));
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Data fetched successfully"));
   } catch (error) {
-    console.log(error)
+    console.log(error);
     next(new ApiError(500, "Error fetching ticket", error));
   }
 };
@@ -252,8 +260,9 @@ export const deactivateAgent = async (
 
     return res.status(200).json({
       success: true,
-      message: `Agent ${agent.availability ? "activated " : "deactivated "
-        } successfully`,
+      message: `Agent ${
+        agent.availability ? "activated " : "deactivated "
+      } successfully`,
     });
   } catch (error) {
     next(new ApiError(500, "Error fetching ticket", error));
@@ -292,55 +301,57 @@ export const getTickets = async (
     const query: any = { ...req.query };
 
     if (role === "agent") query.assignee = assignee || id;
-    const pipeline = [{
-      $lookup: {
-        from: "users",
-        localField: "requester",
-        foreignField: "_id",
-        as: "requesterInfo",
+    const pipeline = [
+      {
+        $lookup: {
+          from: "users",
+          localField: "requester",
+          foreignField: "_id",
+          as: "requesterInfo",
+        },
       },
-    },
-    {
-      $unwind: {
-        path: "$requesterInfo",
-        preserveNullAndEmptyArrays: true,
+      {
+        $unwind: {
+          path: "$requesterInfo",
+          preserveNullAndEmptyArrays: true,
+        },
       },
-    },
-    {
-      $lookup: {
-        from: "agents",
-        localField: "assignee",
-        foreignField: "_id",
-        as: "assigneeInfo",
+      {
+        $lookup: {
+          from: "agents",
+          localField: "assignee",
+          foreignField: "_id",
+          as: "assigneeInfo",
+        },
       },
-    },
-    {
-      $unwind: {
-        path: "$assigneeInfo",
-        preserveNullAndEmptyArrays: true,
+      {
+        $unwind: {
+          path: "$assigneeInfo",
+          preserveNullAndEmptyArrays: true,
+        },
       },
-    },
-    {
-      $project: {
-        _id: 1,
-        tags: 1,
-        title: 1,
-        status: 1,
-        dueDate: 1,
-        priority: 1,
-        createdAt: 1,
-        description: 1,
-        resolutionDate: 1,
-        assigneeId: "$assigneeInfo._id",
-        requesterId: "$requesterInfo._id",
-        assigneeName: "$assigneeInfo.name",
-        assigneeEmail: "$assigneeInfo.email",
-        assigneeMobile: "$assigneeInfo.mobile",
-        requesterEmail: "$requesterInfo.email",
-        requesterName: "$requesterInfo.fullName",
-        requesterNumber: "$requesterInfo.mobile",
+      {
+        $project: {
+          _id: 1,
+          tags: 1,
+          title: 1,
+          status: 1,
+          dueDate: 1,
+          priority: 1,
+          createdAt: 1,
+          description: 1,
+          resolutionDate: 1,
+          assigneeId: "$assigneeInfo._id",
+          requesterId: "$requesterInfo._id",
+          assigneeName: "$assigneeInfo.name",
+          assigneeEmail: "$assigneeInfo.email",
+          assigneeMobile: "$assigneeInfo.mobile",
+          requesterEmail: "$requesterInfo.email",
+          requesterName: "$requesterInfo.fullName",
+          requesterNumber: "$requesterInfo.mobile",
+        },
       },
-    }]
+    ];
     const result = await ticketService.getAll(query, pipeline);
     return res
       .status(200)
@@ -357,7 +368,25 @@ export const getAgents = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    const result = await agentService.getAll(req.query);
+    const { roleName = "agent" } = req.query;
+
+    const pipeline: any[] = [
+      {
+        $lookup: {
+          from: "roles",
+          localField: "role",
+          foreignField: "_id",
+          as: "roleData",
+        },
+      },
+      { $unwind: "$roleData" },
+    ];
+
+    // Filter by role name if provided
+    if (roleName) pipeline.push({ $match: { "roleData.name": roleName } });
+    pipeline.push({ $project: { __v: 0 } });
+
+    const result = await agentService.getAll(req.query, pipeline);
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -468,13 +497,17 @@ export const addInteraction = async (
     ) {
       return res
         .status(403)
-        .json(new ApiError(403, "You are not authorized to access this ticket"));
+        .json(
+          new ApiError(403, "You are not authorized to access this ticket")
+        );
     }
 
     if (ticket.status === "closed")
       return res.status(400).json(new ApiError(400, "Ticket has been closed"));
 
-    const isUserRole = ["worker", "employer", "contractor"].includes(role?.toLowerCase());
+    const isUserRole = ["worker", "employer", "contractor"].includes(
+      role?.toLowerCase()
+    );
 
     const userExist = await User.findById({
       _id: isUserRole ? initiator : receiver,
@@ -655,16 +688,17 @@ export const updateAgent = async (
     }
     let document;
     if (req?.body?.profilePictureUrl && agent.profilePictureUrl) {
-      document = await extractImageUrl(req?.body?.profilePictureUrl, agent.profilePictureUrl as string);
+      document = await extractImageUrl(
+        req?.body?.profilePictureUrl,
+        agent.profilePictureUrl as string
+      );
     }
-    const result = await agentService.updateById(
-      userId,
-      { ...req.body, profilePictureUrl: document || profilePictureUrl }
-    );
+    const result = await agentService.updateById(userId, {
+      ...req.body,
+      profilePictureUrl: document || profilePictureUrl,
+    });
     if (!result)
-      return res
-        .status(404)
-        .json(new ApiError(404, "Failed to update agent"));
+      return res.status(404).json(new ApiError(404, "Failed to update agent"));
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Updated successfully"));

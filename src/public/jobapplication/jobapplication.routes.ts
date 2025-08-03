@@ -22,7 +22,7 @@ const router = express.Router();
 router.post("/", authenticateToken, isWorker, asyncHandler(applyToJob));
 router.get("/", authenticateToken, isWorker, asyncHandler(getUserApplications));
 router.get(
-  "/all/applications",
+  "/all/:userType?",
   authenticateToken,
   asyncHandler(getAllUserApplications)
 );

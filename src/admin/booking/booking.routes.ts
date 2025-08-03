@@ -9,16 +9,30 @@ import {
   getAssistantBookings,
 } from "./booking.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken, isAdmin, isWorker } from "../../middlewares/authMiddleware";
+import {
+  isAdmin,
+  isWorker,
+  authenticateToken,
+} from "../../middlewares/authMiddleware";
 
 const router = express.Router();
 
 router.get("/", authenticateToken, isAdmin, asyncHandler(getAllBookings));
 router.put("/", authenticateToken, isWorker, asyncHandler(updateBooking));
 router.post("/", authenticateToken, isWorker, asyncHandler(createBooking));
-router.get("/:id", authenticateToken, isAdmin, asyncHandler(getBookingById));
+router.put(
+  "/:bookingId",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(updateBookingStatus)
+);
+router.get(
+  "/assistant/:assistantId",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getAssistantBookings)
+);
 router.get("/user/:userId", authenticateToken, asyncHandler(getUserBookings));
-router.get("/status/:bookingId", authenticateToken, asyncHandler(updateBookingStatus));
-router.get("/assistant/:assistantId", authenticateToken, asyncHandler(getAssistantBookings));
+router.get("/:id", authenticateToken, isAdmin, asyncHandler(getBookingById));
 
 export default router;

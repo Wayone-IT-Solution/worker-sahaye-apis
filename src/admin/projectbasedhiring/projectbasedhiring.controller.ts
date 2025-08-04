@@ -92,12 +92,43 @@ export class ProjectHiringController {
           },
         },
         {
+          $lookup: {
+            from: "salespeople",
+            localField: "salesPersonTo",
+            foreignField: "_id",
+            as: "salesPersonToDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$salesPersonToDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "quotations",
+            localField: "_id",
+            foreignField: "requestId",
+            as: "quotationMatch",
+          },
+        },
+        {
+          $addFields: {
+            isQuotationExists: { $gt: [{ $size: "$quotationMatch" }, 0] },
+          },
+        },
+        {
           $project: {
             __v: 0,
+            updatedAt: 0,
+            quotationMatch: 0,
             "assignedTo.__v": 0,
             "assignedTo.createdAt": 0,
             "assignedTo.updatedAt": 0,
-            updatedAt: 0,
+            "salesPersonToDetails.__v": 0,
+            "salesPersonToDetails.createdAt": 0,
+            "salesPersonToDetails.updatedAt": 0,
           },
         },
       ];

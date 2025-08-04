@@ -24,7 +24,7 @@ const {
 const router = express.Router();
 
 router
-  .get("/:userType?", authenticateToken, asyncHandler(getAllJobs))
+  .get("/", authenticateToken, asyncHandler(getAllJobs))
   .get("/:id", authenticateToken, asyncHandler(getJobById))
   .put("/:id", authenticateToken, asyncHandler(updateJobById))
   .delete("/:id", authenticateToken, asyncHandler(deleteJobById))

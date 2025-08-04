@@ -35,7 +35,6 @@ export class JobController {
 
   static async getAllJobs(req: Request, res: Response, next: NextFunction) {
     try {
-      const { userType } = req.params;
       const pipeline = [
         {
           $lookup: {
@@ -115,10 +114,7 @@ export class JobController {
         },
       ];
 
-      const result = await JobService.getAll(
-        { ...req.query, userType },
-        pipeline
-      );
+      const result = await JobService.getAll(req.query, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

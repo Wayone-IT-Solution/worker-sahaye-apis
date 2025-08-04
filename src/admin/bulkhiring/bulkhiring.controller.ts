@@ -2,12 +2,12 @@ import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
+import { VirtualHR } from "../../modals/virtualhr.model";
 import { NextFunction, Request, Response } from "express";
+import { Salesperson } from "../../modals/salesperson.model";
 import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { BulkHiringRequest, BulkHiringStatus } from "../../modals/bulkhiring.model";
-import { VirtualHR } from "../../modals/virtualhr.model";
-import { Salesperson } from "../../modals/salesperson.model";
 
 const bulkHiringService = new CommonService(BulkHiringRequest);
 
@@ -75,12 +75,43 @@ export class BulkHiringController {
           },
         },
         {
+          $lookup: {
+            from: "salespeople",
+            localField: "salesPersonTo",
+            foreignField: "_id",
+            as: "salesPersonToDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$salesPersonToDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "quotations",
+            localField: "_id",
+            foreignField: "requestId",
+            as: "quotationMatch",
+          },
+        },
+        {
+          $addFields: {
+            isQuotationExists: { $gt: [{ $size: "$quotationMatch" }, 0] },
+          },
+        },
+        {
           $project: {
             __v: 0,
+            updatedAt: 0,
+            quotationMatch: 0,
             "assignedTo.__v": 0,
             "assignedTo.createdAt": 0,
             "assignedTo.updatedAt": 0,
-            updatedAt: 0,
+            "salesPersonToDetails.__v": 0,
+            "salesPersonToDetails.createdAt": 0,
+            "salesPersonToDetails.updatedAt": 0,
           },
         },
       ];

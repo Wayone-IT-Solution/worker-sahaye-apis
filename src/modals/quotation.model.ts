@@ -1,9 +1,10 @@
 import { VirtualHR } from "./virtualhr.model";
 import { BulkHiringRequest } from "./bulkhiring.model";
 import { JobRequirement } from "./jobrequirement.model";
-import { Schema, Document, Types, model } from "mongoose";
+import { VirtualHRRequest } from "./virtualhrrequest.model";
 import { UnifiedServiceRequest } from "./unifiedrequest.model";
 import { ProjectBasedHiring } from "./projectbasedhiring.model";
+import mongoose, { Schema, Document, Types, model } from "mongoose";
 
 export enum RequestModelType {
   BULK = "BulkHiringRequest",
@@ -12,6 +13,14 @@ export enum RequestModelType {
   PROJECT = "ProjectBasedHiring",
   SUPPORT = "UnifiedServiceRequest",
 }
+
+export const modelMap: Record<string, mongoose.Model<any>> = {
+  JobRequirement: JobRequirement,
+  VirtualHRRequest: VirtualHRRequest,
+  BulkHiringRequest: BulkHiringRequest,
+  ProjectBasedHiring: ProjectBasedHiring,
+  UnifiedServiceRequest: UnifiedServiceRequest,
+};
 
 export function getModelFromType(model: RequestModelType) {
   switch (model) {

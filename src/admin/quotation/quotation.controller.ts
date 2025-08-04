@@ -2,7 +2,7 @@ import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
-import { getModelFromType, Quotation, RequestModelType } from "../../modals/quotation.model";
+import { getModelFromType, modelMap, Quotation, RequestModelType } from "../../modals/quotation.model";
 
 const QuotationService = new CommonService(Quotation);
 
@@ -26,11 +26,13 @@ export class QuotationController {
       const userId = requestDoc.userId;
       const agentId = requestDoc.salesPersonTo;
 
+      if (!agentId) return res.status(404).json(new ApiError(404, "Please Assign Sales person first!"));
       const existingQuotation = await Quotation.findOne({
         userId,
         requestId,
         status: { $nin: ["rejected", "completed"] },
       });
+
       if (existingQuotation) {
         return res
           .status(400)
@@ -58,7 +60,13 @@ export class QuotationController {
     next: NextFunction
   ) {
     try {
+      const page = parseInt((req.query.page as string) || "1", 10);
+      const limit = parseInt((req.query.limit as string) || "10", 10);
+      const skip = (page - 1) * limit;
+
+      const totalCount = await Quotation.countDocuments();
       const pipeline: any[] = [
+        { $sort: { createdAt: -1 } },
         {
           $lookup: {
             from: "users",
@@ -74,65 +82,76 @@ export class QuotationController {
           },
         },
         {
-          $addFields: {
-            requestModel: {
-              $switch: {
-                branches: [
-                  {
-                    case: { $eq: ["$model", RequestModelType.BULK] },
-                    then: RequestModelType.BULK.toLowerCase(),
-                  },
-                  {
-                    case: { $eq: ["$model", RequestModelType.ONDEMAND] },
-                    then: RequestModelType.ONDEMAND.toLowerCase(),
-                  },
-                  {
-                    case: { $eq: ["$model", RequestModelType.VirtualHR] },
-                    then: "virtualhrrequests",
-                  },
-                  {
-                    case: { $eq: ["$model", RequestModelType.PROJECT] },
-                    then: RequestModelType.PROJECT.toLowerCase(),
-                  },
-                  {
-                    case: { $eq: ["$model", RequestModelType.SUPPORT] },
-                    then: "unifiedservicerequests",
-                  },
-                ],
-                default: null,
-              },
-            },
-          },
-        },
-        {
           $lookup: {
-            from: "$$ROOT.requestModel",
-            let: { requestId: "$requestId", requestModel: "$requestModel" },
-            pipeline: [
-              { $match: { $expr: { $eq: ["$_id", "$$requestId"] } } },
-            ],
-            as: "requestDetails",
+            from: "salespeople",
+            localField: "agentId",
+            foreignField: "_id",
+            as: "salesPersonToDetails",
           },
         },
         {
           $unwind: {
-            path: "$requestDetails",
+            path: "$salesPersonToDetails",
             preserveNullAndEmptyArrays: true,
           },
         },
+        { $skip: skip },
+        { $limit: limit },
         {
           $project: {
-            __v: 0,
-            updatedAt: 0,
-            "user.__v": 0,
-            "user.password": 0,
-          },
+            _id: 1,
+            status: 1,
+            amount: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            requestId: 1,
+            paymentDate: 1,
+            paymentMode: 1,
+            requestModel: 1,
+            isAdvancePaid: 1,
+            advanceAmount: 1,
+
+            // User Info
+            "user._id": 1,
+            "user.email": 1,
+            "user.mobile": 1,
+            "user.userType": 1,
+            "user.fullName": 1,
+
+            // Salesperson Info
+            "salesPersonToDetails._id": 1,
+            "salesPersonToDetails.name": 1,
+            "salesPersonToDetails.email": 1,
+            "salesPersonToDetails.mobile": 1,
+          }
         },
       ];
-      const quotations = await QuotationService.getAll(req.query, pipeline);
-      return res
-        .status(200)
-        .json(new ApiResponse(200, quotations, "Quotations fetched successfully"));
+
+      // Fetch paginated quotations
+      const rawQuotations = await Quotation.aggregate(pipeline);
+
+      // Enrich with requestDetails from dynamic model
+      const enrichedQuotations = await Promise.all(
+        rawQuotations.map(async (q) => {
+          const Model = modelMap[q.requestModel];
+          if (!Model || !q.requestId) return q;
+          const requestDetails = await Model.findById(q.requestId).lean();
+          return { ...q, requestDetails: requestDetails || null };
+        })
+      );
+
+      // Respond with pagination data
+      return res.status(200).json(
+        new ApiResponse(200, {
+          result: enrichedQuotations,
+          pagination: {
+            currentPage: page,
+            itemsPerPage: limit,
+            totalItems: totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+          },
+        }, "Quotations fetched successfully")
+      );
     } catch (error) {
       next(error);
     }

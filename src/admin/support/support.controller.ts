@@ -368,25 +368,7 @@ export const getAgents = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    const { roleName = "agent" } = req.query;
-
-    const pipeline: any[] = [
-      {
-        $lookup: {
-          from: "roles",
-          localField: "role",
-          foreignField: "_id",
-          as: "roleData",
-        },
-      },
-      { $unwind: "$roleData" },
-    ];
-
-    // Filter by role name if provided
-    if (roleName) pipeline.push({ $match: { "roleData.name": roleName } });
-    pipeline.push({ $project: { __v: 0 } });
-
-    const result = await agentService.getAll(req.query, pipeline);
+    const result = await agentService.getAll(req.query);
     return res
       .status(200)
       .json(new ApiResponse(200, result, "Data fetched successfully"));

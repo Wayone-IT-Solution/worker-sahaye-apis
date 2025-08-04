@@ -22,10 +22,14 @@ const IVRCallSchema = new Schema<IVRCall>(
   {
     callRecordingUrl: { type: String },
     metadata: { type: Schema.Types.Mixed },
-    pickedBy: { type: Schema.Types.ObjectId, ref: "Agent" },
+    pickedBy: { type: Schema.Types.ObjectId, ref: "CallSupportAgent" },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     featureId: { type: Schema.Types.ObjectId, ref: "Feature", required: true },
-    status: { type: String, enum: Object.values(CallStatus), default: CallStatus.INITIATED },
+    status: {
+      type: String,
+      enum: Object.values(CallStatus),
+      default: CallStatus.INITIATED,
+    },
   },
   { timestamps: true }
 );

@@ -11,7 +11,20 @@ export class IVRCallController {
   static async createIVRCall(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: userId } = (req as any).user;
-      const { featureId } = req.body;
+      let featureId = "";
+      const featureKey: any = {
+        lwf: "LWF Support",
+        esic: "ESIC Support",
+        epf: "EPF Contribution",
+      };
+      let { feature } = req.params;
+      if (feature) {
+        feature = featureKey[feature];
+        if (feature) {
+          const featureData: any = await Feature.findOne({ name: feature });
+          if (featureData) featureId = featureData?._id.toString();
+        }
+      }
 
       if (!featureId) {
         return res
@@ -103,7 +116,7 @@ export class IVRCallController {
         },
         {
           $lookup: {
-            from: "agents",
+            from: "callsupportagents",
             localField: "pickedBy",
             foreignField: "_id",
             as: "agentDetails",
@@ -126,9 +139,9 @@ export class IVRCallController {
             mobile: "$userDetails.mobile",
             agentName: "$agentDetails.name",
             username: "$userDetails.fullName",
-            agentMobile: "$agentDetails.mobile",
             featureName: "$featureDetails.name",
             visibleTo: "$featureDetails.visibleTo",
+            agentMobile: "$agentDetails.phoneNumber",
           },
         },
       ];

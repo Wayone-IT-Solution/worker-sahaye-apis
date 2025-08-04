@@ -26,6 +26,7 @@ import salespersonRoutes from "../admin/salesperson/salesperson.routes";
 import workerCategoryRoutes from "../admin/workercategory/workercategory.routes";
 import assistantRoutes from "../admin/personalassistant/personalassistant.routes";
 import planfeatureRoutes from "../admin/planfeaturemapping/planfeaturemapping.routes";
+import callSupportAgentRoutes from "../admin/callsupportagent/callsupportagent.routes";
 import subscriptionPlanRoutes from "../admin/subscriptionplan/subscriptionplan.routes";
 import complianceCalendarRoutes from "../admin/compliancecalendar/compliancecalendar.routes";
 import projectBasedHiringRoutes from "../admin/projectbasedhiring/projectbasedhiring.routes";
@@ -46,22 +47,22 @@ import fileUploadRoutes from "../public/fileupload/fileupload.routes";
 import abuseReportRoutes from "../public/abusereport/abusereport.routes";
 import endorsementRoutes from "../public/endorsement/endorsement.routes";
 import loanRequestRoutes from "../public/loanrequest/loanrequest.routes";
-import topRecruiterRoutes from "../public/toprecruiter/toprecruiter.routes"
+import topRecruiterRoutes from "../public/toprecruiter/toprecruiter.routes";
 import contentBlockRoutes from "../public/contentblock/contentblock.routes";
 import courseReviewRoutes from "../public/coursereview/coursereview.routes";
 import forumCommentRoutes from "../public/forumcomment/forumcomment.routes";
-import fastResponderRoutes from "../public/fastresponder/fastresponder.routes"
+import fastResponderRoutes from "../public/fastresponder/fastresponder.routes";
 import preInterviewDRoutes from "../public/preinterviewd/preinterviewd.routes";
 import trainedWorkerRoutes from "../public/trainedworker/trainedworker.routes";
 import safeWorkplaceRoutes from "../public/safeworkplace/safeworkplace.routes";
 import reliablePayerRoutes from "../public/reliablepayer/reliablepayer.routes";
-import trustedPartnerRoutes from "../public/trustedpartner/trustedpartner.routes"
+import trustedPartnerRoutes from "../public/trustedpartner/trustedpartner.routes";
 import userPreferenceRoutes from "../public/userpreference/userpreference.routes";
 import jobApplicationRoutes from "../public/jobapplication/jobapplication.routes";
 import jobRequirementRoutes from "../public/jobrequirement/jobrequirement.routes";
 import gratuityRecordRoutes from "../public/gratuityrecord/gratuityrecord.routes";
 import postEngagementRoutes from "../public/postengagement/postengagement.routes";
-import highlyPreferredRoutes from "../public/highlypreferred/highlypreferred.routes"
+import highlyPreferredRoutes from "../public/highlypreferred/highlypreferred.routes";
 import communityMemberRoutes from "../public/communitymember/communitymember.routes";
 import employerFeedbackRoutes from "../public/employerfeedback/employerfeedback.routes";
 import virtualHRRequestRoutes from "../public/virtualhrrequest/virtualhrrequest.routes";
@@ -93,6 +94,7 @@ router.use("/bulkhiring", bulkhiringRoutes);
 router.use("/salesperson", salespersonRoutes);
 router.use("/planfeature", planfeatureRoutes);
 router.use("/jobcategory", jobCategoryRoutes);
+router.use("/callsupport", callSupportAgentRoutes);
 router.use("/workercategory", workerCategoryRoutes);
 router.use("/subscriptionplan", subscriptionPlanRoutes);
 router.use("/complianceCalendar", complianceCalendarRoutes);

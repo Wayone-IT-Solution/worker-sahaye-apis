@@ -15,11 +15,11 @@ const {
 const router = express.Router();
 
 router
-  .get("/",
+  .get("/:userType",
     authenticateToken,
     isAdmin,
     asyncHandler(getAllBestPracticesFacilitys))
-  .get("/:id", authenticateToken, isAdmin, asyncHandler(getBestPracticesFacilityById))
+  .get("/:userType/:id", authenticateToken, isAdmin, asyncHandler(getBestPracticesFacilityById))
   .put("/:id",
     authenticateToken,
     isAdmin,

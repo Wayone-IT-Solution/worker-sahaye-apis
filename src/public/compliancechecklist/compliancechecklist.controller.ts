@@ -51,6 +51,7 @@ export class ComplianceChecklistController {
     next: NextFunction
   ) {
     try {
+      const { userType } = req.params;
       const pipeline = [
         {
           $lookup: {
@@ -66,6 +67,9 @@ export class ComplianceChecklistController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        ...(userType
+          ? [{ $match: { "userDetails.userType": userType } }]
+          : []),
         {
           $lookup: {
             from: "fileuploads",

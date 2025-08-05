@@ -15,11 +15,11 @@ const {
 const router = express.Router();
 
 router
-  .get("/",
+  .get("/:userType",
     authenticateToken,
     isAdmin,
     asyncHandler(getAllReliablePayers))
-  .get("/:id", authenticateToken, isAdmin, asyncHandler(getReliablePayerById))
+  .get("/:userType/:id", authenticateToken, isAdmin, asyncHandler(getReliablePayerById))
   .put("/:id",
     authenticateToken,
     isAdmin,

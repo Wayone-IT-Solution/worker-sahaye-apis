@@ -15,11 +15,11 @@ const {
 const router = express.Router();
 
 router
-  .get("/",
+  .get("/:userType",
     authenticateToken,
     isAdmin,
     asyncHandler(getAllTopRecruiters))
-  .get("/:id", authenticateToken, isAdmin, asyncHandler(getTopRecruiterById))
+  .get("/:userType/:id", authenticateToken, isAdmin, asyncHandler(getTopRecruiterById))
   .put("/:id",
     authenticateToken,
     isAdmin,

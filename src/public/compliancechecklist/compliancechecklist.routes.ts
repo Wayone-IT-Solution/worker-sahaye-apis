@@ -15,11 +15,11 @@ const {
 const router = express.Router();
 
 router
-  .get("/",
+  .get("/:userType",
     authenticateToken,
     isAdmin,
     asyncHandler(getAllComplianceChecklists))
-  .get("/:id", authenticateToken, isAdmin, asyncHandler(getComplianceChecklistById))
+  .get("/:userType/:id", authenticateToken, isAdmin, asyncHandler(getComplianceChecklistById))
   .put("/:id",
     authenticateToken,
     isAdmin,

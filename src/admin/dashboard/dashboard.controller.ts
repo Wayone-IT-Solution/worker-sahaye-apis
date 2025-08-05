@@ -42,6 +42,7 @@ import { PoliceVerification } from "../../modals/policeverification.model";
 import { ComplianceChecklist } from "../../modals/compliancechecklist.model";
 import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model";
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
+import { Quotation, QuotationStatus, RequestModelType } from "../../modals/quotation.model";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
 
 export class DashboardController {
@@ -841,6 +842,151 @@ export class DashboardController {
       return res.status(200).json(new ApiResponse(200, results, "Services status counts fetched"));
     } catch (err) {
       next(err);
+    }
+  }
+
+  static async getQuotationsStatusCounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate, endDate, agentId } = req.query;
+
+      const start = startDate && isValid(new Date(startDate as string))
+        ? startOfDay(parseISO(startDate as string))
+        : undefined;
+
+      const end = endDate && isValid(new Date(endDate as string))
+        ? endOfDay(parseISO(endDate as string))
+        : undefined;
+
+      const models = Object.values(RequestModelType); // All models: BULK, ONDEMAND, etc.
+
+      const results: Record<string, Record<QuotationStatus, number>> = {};
+
+      await Promise.all(
+        models.map(async (modelKey) => {
+          const statusCount: Record<QuotationStatus, number> = {
+            [QuotationStatus.APPROVED]: 0,
+            [QuotationStatus.REJECTED]: 0,
+            [QuotationStatus.COMPLETED]: 0,
+            [QuotationStatus.UNDER_REVIEW]: 0,
+          };
+
+          const matchBase: any = { requestModel: modelKey };
+          if (agentId) matchBase.agentId = agentId;
+
+          if (start && end) {
+            matchBase.createdAt = { $gte: start, $lte: end };
+
+            const [approved, rejected, completed, under_review] = await Promise.all([
+              Quotation.countDocuments({ ...matchBase, status: QuotationStatus.APPROVED }),
+              Quotation.countDocuments({ ...matchBase, status: QuotationStatus.REJECTED }),
+              Quotation.countDocuments({ ...matchBase, status: QuotationStatus.COMPLETED }),
+              Quotation.countDocuments({ ...matchBase, status: QuotationStatus.UNDER_REVIEW }),
+            ]);
+
+            statusCount[QuotationStatus.APPROVED] = approved;
+            statusCount[QuotationStatus.REJECTED] = rejected;
+            statusCount[QuotationStatus.COMPLETED] = completed;
+            statusCount[QuotationStatus.UNDER_REVIEW] = under_review;
+          } else {
+            const matchPipeline: any[] = [{ $match: matchBase }];
+            const counts = await Quotation.aggregate([
+              ...matchPipeline,
+              { $group: { _id: "$status", count: { $sum: 1 } } },
+            ]);
+
+            counts.forEach(({ _id, count }: any) => {
+              if (_id in statusCount) {
+                statusCount[_id as QuotationStatus] = count;
+              }
+            });
+          }
+
+          results[modelKey] = statusCount;
+        })
+      );
+
+      return res.status(200).json(new ApiResponse(200, results, "Quotation status counts fetched"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getQuotationAmountSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate, endDate, agentId } = req.query;
+
+      const requestModels = [
+        "BulkHiringRequest",
+        "VirtualHRRequest",
+        "JobRequirement",
+        "ProjectBasedHiring",
+        "UnifiedServiceRequest"
+      ];
+
+      const start = startDate && isValid(new Date(startDate as string))
+        ? startOfDay(parseISO(startDate as string))
+        : undefined;
+
+      const end = endDate && isValid(new Date(endDate as string))
+        ? endOfDay(parseISO(endDate as string))
+        : undefined;
+
+      const matchStage: any = {};
+      if (agentId) matchStage.agentId = agentId;
+      if (start && end) matchStage.createdAt = { $gte: start, $lte: end };
+
+      const pipeline = [
+        { $match: matchStage },
+        {
+          $group: {
+            _id: "$requestModel",
+            totalAmount: { $sum: "$amount" },
+            totalAdvancePaid: {
+              $sum: {
+                $cond: [{ $eq: ["$isAdvancePaid", true] }, "$advanceAmount", 0],
+              },
+            },
+            quotationCount: { $sum: 1 },
+            advancePaidCount: {
+              $sum: { $cond: [{ $eq: ["$isAdvancePaid", true] }, 1, 0] },
+            },
+            advanceUnpaidCount: {
+              $sum: { $cond: [{ $ne: ["$isAdvancePaid", true] }, 1, 0] },
+            },
+          },
+        },
+      ];
+
+      const result = await Quotation.aggregate(pipeline);
+
+      // Start with all models and fill actual data or defaults
+      const formatted = requestModels.reduce((acc, model) => {
+        const found = result.find((r) => r._id === model);
+        acc[model] = found
+          ? {
+            totalAmount: found.totalAmount,
+            totalAdvancePaid: found.totalAdvancePaid,
+            totalPendingAdvance: found.totalAmount - found.totalAdvancePaid,
+            quotationCount: found.quotationCount,
+            advancePaidCount: found.advancePaidCount,
+            advanceUnpaidCount: found.advanceUnpaidCount,
+          }
+          : {
+            totalAmount: 0,
+            totalAdvancePaid: 0,
+            totalPendingAdvance: 0,
+            quotationCount: 0,
+            advancePaidCount: 0,
+            advanceUnpaidCount: 0,
+          };
+        return acc;
+      }, {} as Record<string, any>);
+
+      return res.status(200).json(
+        new ApiResponse(200, formatted, "Quotation amount summary fetched")
+      );
+    } catch (error) {
+      next(error);
     }
   }
 }

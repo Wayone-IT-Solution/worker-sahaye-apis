@@ -60,12 +60,19 @@ export class QuotationController {
     next: NextFunction
   ) {
     try {
+      const { requestModel } = req.params;
       const page = parseInt((req.query.page as string) || "1", 10);
       const limit = parseInt((req.query.limit as string) || "10", 10);
       const skip = (page - 1) * limit;
 
+      const matchStage: any = {};
+      if (requestModel) {
+        matchStage.requestModel = requestModel;
+      }
+
       const totalCount = await Quotation.countDocuments();
       const pipeline: any[] = [
+        { $match: matchStage },
         { $sort: { createdAt: -1 } },
         {
           $lookup: {

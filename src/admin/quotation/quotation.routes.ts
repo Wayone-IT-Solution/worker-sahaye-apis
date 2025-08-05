@@ -14,9 +14,9 @@ const {
 const router = express.Router();
 
 router
-  .get("/", authenticateToken, asyncHandler(getAllQuotations))
+  .get("/:requestModel?", authenticateToken, asyncHandler(getAllQuotations))
   .post("/", authenticateToken, asyncHandler(createQuotation))
-  .get("/:id", authenticateToken, asyncHandler(getQuotationById))
+  .get("/:requestModel/:id", authenticateToken, asyncHandler(getQuotationById))
   .put("/:id", authenticateToken, asyncHandler(updateQuotationById))
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteQuotationById));
 

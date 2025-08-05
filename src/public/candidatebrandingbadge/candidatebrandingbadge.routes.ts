@@ -15,8 +15,8 @@ const router = express.Router();
 
 router
   .post("/", authenticateToken, asyncHandler(createCandidateBrandingBadge))
-  .get("/", authenticateToken, asyncHandler(getAllCandidateBrandingBadges))
-  .get("/:id", authenticateToken, asyncHandler(getCandidateBrandingBadgeById))
+  .get("/:userType", authenticateToken, asyncHandler(getAllCandidateBrandingBadges))
+  .get("/:userType/:id", authenticateToken, asyncHandler(getCandidateBrandingBadgeById))
   .put(
     "/:id",
     authenticateToken,

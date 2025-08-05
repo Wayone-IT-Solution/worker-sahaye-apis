@@ -29,6 +29,7 @@ export const getPipeline = (
     searchkey,
     countryId,
     applicantId,
+    requestModel,
     page = 1,
     limit = 10,
     search = "",
@@ -52,6 +53,7 @@ export const getPipeline = (
   if (user) match.user = safeObjectId(user);
   if (userId) match.userId = safeObjectId(userId);
   if (stateId) match.stateId = safeObjectId(stateId);
+  if (requestModel) match.requestModel = requestModel;
   if (postedBy) match.postedBy = safeObjectId(postedBy);
   if (assignee) match.assignee = safeObjectId(assignee);
   if (featureId) match.featureId = safeObjectId(featureId);

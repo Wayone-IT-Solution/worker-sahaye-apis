@@ -8,9 +8,11 @@ const {
     getDashboardStats,
     getIvrCallSummary,
     getBadgeStatusCounts,
-    getJobApplicationsStats,
     getServicesStatusCounts,
+    getJobApplicationsStats,
     getCustomerSupportDetails,
+    getQuotationAmountSummary,
+    getQuotationsStatusCounts,
     getYearlyRevenueComparison,
     getUserStatsByTypeAndStatus,
 } = DashboardController;
@@ -54,6 +56,18 @@ router.get(
     authenticateToken,
     isAdmin,
     asyncHandler(getServicesStatusCounts)
+);
+router.get(
+    "/service-quotations-count",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(getQuotationsStatusCounts)
+);
+router.get(
+    "/quotation-amount-summary",
+    // authenticateToken,
+    // isAdmin,
+    asyncHandler(getQuotationAmountSummary)
 );
 router.get(
     "/user-stats",

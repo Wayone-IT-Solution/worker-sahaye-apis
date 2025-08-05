@@ -51,6 +51,7 @@ export class FastResponderController {
     next: NextFunction
   ) {
     try {
+      const { userType } = req.params;
       const pipeline = [
         {
           $lookup: {
@@ -66,6 +67,9 @@ export class FastResponderController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        ...(userType
+          ? [{ $match: { "userDetails.userType": userType } }]
+          : []),
         {
           $lookup: {
             from: "fileuploads",

@@ -62,6 +62,16 @@ export class UserController {
           .status(400)
           .json(new ApiError(400, "Phone Number Already Exist!"));
 
+
+      if (email) {
+        const emailExist = await User.findOne({ email });
+        if (emailExist)
+          return res
+            .status(400)
+            .json(new ApiError(400, "Email Address Already Exist!"));
+
+      }
+
       // 2. Handle referral (if any) before creating referralCode
       if (referralCode) {
         const referrer = await User.findOne({ referralCode });
@@ -84,8 +94,7 @@ export class UserController {
           new ApiResponse(
             201,
             newUser,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${userType.charAt(0).toUpperCase() + userType.slice(1)
             } created successfully`
           )
         );
@@ -152,8 +161,7 @@ export class UserController {
           new ApiResponse(
             200,
             result,
-            `${
-              userType.charAt(0).toUpperCase() + userType.slice(1)
+            `${userType.charAt(0).toUpperCase() + userType.slice(1)
             } updated successfully`
           )
         );

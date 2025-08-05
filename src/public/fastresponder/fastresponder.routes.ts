@@ -15,11 +15,11 @@ const {
 const router = express.Router();
 
 router
-  .get("/",
+  .get("/:userType",
     authenticateToken,
     isAdmin,
     asyncHandler(getAllFastResponders))
-  .get("/:id", authenticateToken, isAdmin, asyncHandler(getFastResponderById))
+  .get("/:userType/:id", authenticateToken, isAdmin, asyncHandler(getFastResponderById))
   .put("/:id",
     authenticateToken,
     isAdmin,

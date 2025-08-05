@@ -22,6 +22,7 @@ import {
 } from "../../modals/communitymember.model";
 import Ticket from "../../modals/ticket.model";
 import { Badge } from "../../modals/badge.model";
+import { Booking } from "../../modals/booking.model";
 import { ForumPost } from "../../modals/forumpost.model";
 import { IVRCallModel } from "../../modals/ivrcall.model";
 import { TopRecruiter } from "../../modals/toprecruiter.model";
@@ -111,7 +112,7 @@ export class DashboardController {
       };
 
       // Fetch all in parallel
-      const [payments, courses, activeUsers, appliedJobs, communityJoins, posts] =
+      const [payments, courses, activeUsers, appliedJobs, communityJoins, posts, personalAssistance] =
         await Promise.all([
           aggregateDaily(EnrolledPlan, "createdAt", "finalAmount", {
             "paymentDetails.status": "success",
@@ -129,9 +130,11 @@ export class DashboardController {
           aggregateDaily(ForumPost, "createdAt", undefined, {
             status: "active",
           }),
+          aggregateDaily(Booking, "createdAt", "totalAmount", {
+            "paymentStatus": "success",
+          }),
         ]);
-
-      const totalRevenue = payments.map((_, i) => payments[i] + courses[i]);
+      const totalRevenue = payments.map((_, i) => payments[i] + courses[i] + personalAssistance[i]);
 
       const prevIndex = 0;
       const currIndex = totalDays;
@@ -601,16 +604,52 @@ export class DashboardController {
         return monthlyTotals;
       };
 
+      const getMonthlyRevenuePersonal = async (
+        model: any,
+        year: number
+      ): Promise<number[]> => {
+        const pipeline = [
+          {
+            $match: {
+              createdAt: {
+                $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+              },
+              "paymentStatus": "success",
+            },
+          },
+          {
+            $group: {
+              _id: { month: { $month: "$createdAt" } },
+              total: { $sum: "$totalAmount" },
+            },
+          },
+          { $sort: { "_id.month": 1 } },
+        ];
+
+        const result = await model.aggregate(pipeline);
+        const monthlyTotals = Array(12).fill(0);
+        for (const item of result) {
+          const monthIndex = item._id.month - 1;
+          monthlyTotals[monthIndex] = item.total;
+        }
+        return monthlyTotals;
+      };
+
       const [
         enrollmentCurrent,
         enrolledPlanCurrent,
         enrollmentPrevious,
         enrolledPlanPrevious,
+        personalAssistanceCurrent,
+        personalAssistancePrevious,
       ] = await Promise.all([
         getMonthlyRevenue(Enrollment, currentYear),
         getMonthlyRevenue(EnrolledPlan, currentYear),
         getMonthlyRevenue(Enrollment, previousYear),
         getMonthlyRevenue(EnrolledPlan, previousYear),
+        getMonthlyRevenuePersonal(Booking, currentYear),
+        getMonthlyRevenuePersonal(Booking, previousYear),
       ]);
 
       const currentCombined = enrollmentCurrent.map(
@@ -636,8 +675,16 @@ export class DashboardController {
         (a, b) => a + b,
         0
       );
-      const totalCurrent = totalEnrollmentCurrent + totalEnrolledPlanCurrent;
-      const totalPrevious = totalEnrollmentPrevious + totalEnrolledPlanPrevious;
+      const totalPersonalCurrent = personalAssistanceCurrent.reduce(
+        (a, b) => a + b,
+        0
+      );
+      const totalPersonalPrevious = personalAssistancePrevious.reduce(
+        (a, b) => a + b,
+        0
+      );
+      const totalCurrent = totalEnrollmentCurrent + totalEnrolledPlanCurrent + totalPersonalCurrent;
+      const totalPrevious = totalEnrollmentPrevious + totalEnrolledPlanPrevious + totalPersonalPrevious;
 
       const getPercentageChange = (curr: number, prev: number) => {
         if (prev === 0 && curr > 0) return 100;
@@ -655,6 +702,10 @@ export class DashboardController {
         totalEnrolledPlanCurrent,
         totalEnrolledPlanPrevious
       );
+      const personalPercentageChange = getPercentageChange(
+        totalPersonalCurrent,
+        totalPersonalPrevious
+      );
 
       return res.status(200).json(
         new ApiResponse(
@@ -662,6 +713,8 @@ export class DashboardController {
           {
             currentYear,
             previousYear,
+            totalPersonalCurrent,
+            totalPersonalPrevious,
             totalEnrollmentCurrent,
             totalEnrollmentPrevious,
             totalEnrolledPlanCurrent,
@@ -669,18 +722,21 @@ export class DashboardController {
             totalCurrent,
             totalPrevious,
             percentageChange,
+            personalPercentageChange,
             enrollmentPercentageChange,
             enrolledPlanPercentageChange,
             monthlyData: {
               [currentYear]: {
+                combined: currentCombined,
                 enrollment: enrollmentCurrent,
                 enrolledPlan: enrolledPlanCurrent,
-                combined: currentCombined,
+                personalAssistance: personalAssistanceCurrent,
               },
               [previousYear]: {
+                combined: previousCombined,
                 enrollment: enrollmentPrevious,
                 enrolledPlan: enrolledPlanPrevious,
-                combined: previousCombined,
+                personalAssistance: personalAssistancePrevious,
               },
             },
           },

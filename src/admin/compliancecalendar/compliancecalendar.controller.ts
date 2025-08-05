@@ -17,6 +17,9 @@ export class ComplianceCalendarController {
   ) {
     try {
       const document = req?.body?.document?.[0]?.url;
+
+      if (typeof req.body.tags === "string")
+        req.body.tags = req.body.tags.split(",");
       const result = await complianceCalenderService.create({
         ...req.body,
         document: document ?? "",
@@ -93,7 +96,7 @@ export class ComplianceCalendarController {
         }
         return res
           .status(404)
-          .json(new ApiError(404, "Virtual HR request not found."));
+          .json(new ApiError(404, "Calender Compliance not found."));
       }
 
       let jobDescriptionUrl;
@@ -103,6 +106,8 @@ export class ComplianceCalendarController {
           record.document as string
         );
       }
+      if (typeof req.body.tags === "string")
+        req.body.tags = req.body.tags.split(",");
       const result = await complianceCalenderService.updateById(id, {
         ...req.body,
         document: jobDescriptionUrl || document,
@@ -110,7 +115,7 @@ export class ComplianceCalendarController {
       if (!result) {
         return res
           .status(400)
-          .json(new ApiError(400, "Failed to update Virtual HR request."));
+          .json(new ApiError(400, "Failed to update Calender Compliance."));
       }
 
       return res
@@ -119,7 +124,7 @@ export class ComplianceCalendarController {
           new ApiResponse(
             200,
             result,
-            "Virtual HR request updated successfully."
+            "Calender Compliance updated successfully."
           )
         );
     } catch (err) {

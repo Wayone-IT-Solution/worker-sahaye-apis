@@ -29,7 +29,7 @@ export const createLoanRequest = async (req: Request, res: Response) => {
     if (!enrolled)
       return res
         .status(403)
-        .json(new ApiError(403, "You must enroll in a plan to request a loan"));
+        .json(new ApiError(403, "Please enroll in subscription first"));
 
     const { loanCategory } = req.body;
     if (!loanCategory)

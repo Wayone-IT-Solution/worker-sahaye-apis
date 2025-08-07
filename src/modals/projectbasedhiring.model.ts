@@ -31,7 +31,7 @@ export interface IProjectBasedHiring extends Document {
   assignedTo?: Types.ObjectId;
   duration: { from: Date; to: Date };
   budget: { from: number; to: number };
-  employmentType: "Contract" | "Freelance" | "Temporary" | string;
+  employmentType: any;
 }
 
 const ProjectBasedHiringSchema = new Schema<IProjectBasedHiring>(
@@ -80,7 +80,6 @@ const ProjectBasedHiringSchema = new Schema<IProjectBasedHiring>(
     },
     employmentType: {
       type: String,
-      enum: ["Contract", "Freelance", "Temporary"],
       required: true,
     },
     assignedTo: {

@@ -64,8 +64,16 @@ const getContentType = (ext: string): string => {
 
 export const deleteFromS3 = async (key: string): Promise<void> => {
   if (!config.s3.enabled || !s3) {
-    throw new Error("S3 is disabled or not configured.");
+    console.warn("S3 is disabled or not configured. Skipping deletion.");
+    return;
   }
+
   const params = { Bucket: config.s3.bucket, Key: key };
-  await s3.deleteObject(params).promise();
+
+  try {
+    await s3.deleteObject(params).promise();
+    console.log(`✅ Deleted from S3: ${key}`);
+  } catch (err) {
+    console.log(`⚠️ Failed to delete from S3: ${key}`, err);
+  }
 };

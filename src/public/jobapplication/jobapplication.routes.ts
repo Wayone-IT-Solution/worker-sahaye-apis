@@ -27,6 +27,11 @@ router.get(
   asyncHandler(getAllUserApplications)
 );
 router.get(
+  "/all/:userType/:id",
+  authenticateToken,
+  asyncHandler(getApplicationById)
+);
+router.get(
   "/:id",
   authenticateToken,
   isWorker,

@@ -464,8 +464,9 @@ export class JobController {
 
   static async updateJobById(req: Request, res: Response, next: NextFunction) {
     try {
+      const { role } = (req as any).user;
       const data = req.body;
-      delete data.status;
+      if (role !== "admin") delete data.status;
       const result = await JobService.updateById(req.params.id, data);
       if (!result)
         return res

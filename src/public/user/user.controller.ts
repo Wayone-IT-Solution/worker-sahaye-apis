@@ -6,9 +6,9 @@ import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
 import {
-  UserStatus,
-  UserType,
   User,
+  UserType,
+  UserStatus,
   generateReferralCode,
 } from "../../modals/user.model";
 import {
@@ -57,19 +57,25 @@ export class UserController {
       };
 
       const mobileExist = await User.findOne({ mobile });
-      if (mobileExist)
-        return res
-          .status(400)
-          .json(new ApiError(400, "Phone Number Already Exist!"));
-
+      if (mobileExist) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `A ${mobileExist.userType} account with this phone number already exists.`
+          )
+        );
+      }
 
       if (email) {
         const emailExist = await User.findOne({ email });
-        if (emailExist)
-          return res
-            .status(400)
-            .json(new ApiError(400, "Email Address Already Exist!"));
-
+        if (emailExist) {
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `A ${emailExist.userType} account with this email address already exists.`
+            )
+          );
+        }
       }
 
       // 2. Handle referral (if any) before creating referralCode
@@ -244,7 +250,7 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
-      const { mobile } = req.body;
+      const { mobile, userType } = req.body;
 
       if (!mobile) {
         return res.status(400).json({
@@ -253,7 +259,7 @@ export class UserController {
         });
       }
 
-      const user = await User.findOne({ mobile });
+      const user = await User.findOne({ mobile, userType });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -356,7 +362,7 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
-      const { mobile, otp } = req.body;
+      const { mobile, otp, userType } = req.body;
 
       if (!mobile || !otp) {
         return res.status(400).json({
@@ -384,7 +390,7 @@ export class UserController {
       otpDoc.verified = true;
       await otpDoc.save();
 
-      const user: any = await User.findOne({ mobile });
+      const user: any = await User.findOne({ mobile, userType });
 
       if (!user) {
         return res.status(404).json({

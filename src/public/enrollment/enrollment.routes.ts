@@ -15,20 +15,18 @@ const {
 const router = express.Router();
 
 router
-  .post("/", authenticateToken, isWorker, asyncHandler(createEnrollment)) // Enroll in course
-  .get("/", authenticateToken, isWorker, asyncHandler(getAllEnrollments)) // Get all enrollments
+  .post("/", authenticateToken, asyncHandler(createEnrollment)) // Enroll in course
+  .get("/", authenticateToken, asyncHandler(getAllEnrollments)) // Get all enrollments
   .get("/all", authenticateToken, asyncHandler(getAllAdminEnrollments)) // Get all enrollments till now
-  .get("/:id", authenticateToken, isWorker, asyncHandler(getEnrollmentById)) // Get specific enrollment
+  .get("/:id", authenticateToken, asyncHandler(getEnrollmentById)) // Get specific enrollment
   .post(
     "/update-payment",
     authenticateToken,
-    isWorker,
     asyncHandler(updatePaymentStatus)
   ) // Update payment status manually if needed
   .post(
     "/refund/:id",
     authenticateToken,
-    isWorker,
     asyncHandler(refundEnrollment)
   ); // Refund a specific enrollment
 

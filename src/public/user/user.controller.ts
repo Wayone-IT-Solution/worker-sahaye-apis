@@ -686,26 +686,24 @@ export class UserController {
     try {
       let enrollmentCourses: any;
       let enrollSubscriptionPlans: any;
-      const { id: userId, role } = (req as any).user;
+      const { id: userId } = (req as any).user;
       const result = await userService.getById(userId);
-      if (role === UserType.WORKER) {
-        enrollmentCourses = await Enrollment.find(
-          {
-            user: userId,
-            status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
+      enrollmentCourses = await Enrollment.find(
+        {
+          user: userId,
+          status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
+        },
+        { _id: 1, course: 1 }
+      );
+      enrollSubscriptionPlans = await EnrolledPlan.find(
+        {
+          user: userId,
+          status: {
+            $in: [PlanEnrollmentStatus.ACTIVE],
           },
-          { _id: 1, course: 1 }
-        );
-        enrollSubscriptionPlans = await EnrolledPlan.find(
-          {
-            user: userId,
-            status: {
-              $in: [PlanEnrollmentStatus.ACTIVE],
-            },
-          },
-          { _id: 1, plan: 1 }
-        );
-      }
+        },
+        { _id: 1, plan: 1 }
+      );
       return res
         .status(200)
         .json(

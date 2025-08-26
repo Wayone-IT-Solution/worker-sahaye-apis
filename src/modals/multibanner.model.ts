@@ -1,0 +1,57 @@
+import { Schema, model, Document } from "mongoose";
+
+export type UserType = "worker" | "contractor" | "employer";
+export interface IAttachment {
+  url: string;
+  s3Key: string;
+  order: number;
+}
+
+export interface IPageBanner extends Document {
+  type: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  userType: UserType;
+  description: string;
+  image?: IAttachment[];
+}
+
+export enum ScreenEnum {
+  CandidateContractor = "candidate_contractor",
+  JobType = "job_type",
+  SmartHiring = "smart_hiring",
+  VirtualHR = "virtual_hr",
+  VirtualRecruiter = "virtual_recruiter",
+  ExclusiveSupport = "exclusive_support",
+  EmployerBranding = "employer_branding",
+  Community = "community",
+  Endorsement = "endorsement",
+  Subscription = "subscription",
+  AbuseReport = "abuse_report",
+}
+
+const pageBannerSchema = new Schema<IPageBanner>(
+  {
+    description: { type: String },
+    type: { type: String, enum: ScreenEnum },
+    title: { type: String, required: true },
+    image: [
+      {
+        url: { type: String, required: true },
+        order: { type: Number, default: 0, min: 0 },
+        s3Key: { type: String, required: true, unique: true },
+      },
+    ],
+    userType: {
+      type: String,
+      enum: ["worker", "contractor", "employer"],
+      description: { type: String, required: true },
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+const PageBannerModel = model<IPageBanner>("specific", pageBannerSchema);
+export default PageBannerModel;

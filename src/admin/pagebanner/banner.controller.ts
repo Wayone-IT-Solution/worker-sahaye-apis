@@ -44,7 +44,7 @@ export class BannerController {
   ) {
     try {
       const { role } = (req as any).user;
-      const result = await BannerService.getAll({ ...req.query, ...(role === "admin" ? {} : { userType: role, isActive: true }) });
+      const result = await BannerService.getAll({ ...req.query, ...(role === "admin" ? {} : { userType: role }) });
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

@@ -29,6 +29,12 @@ export enum ScreenEnum {
   Endorsement = "endorsement",
   Subscription = "subscription",
   AbuseReport = "abuse_report",
+
+  // Newly added
+  PreScreenedContractors = "pre_screened_contractors",
+  PreInterviewedCandidate = "pre_interviewed_candidate",
+  OnDemandRequirement = "on_demand_requirement",
+  ProjectBasedHiring = "project_based_hiring",
 }
 
 const pageBannerSchema = new Schema<IPageBanner>(

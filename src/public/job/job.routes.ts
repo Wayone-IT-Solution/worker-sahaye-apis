@@ -7,6 +7,7 @@ import {
   allowAllExcept,
   authenticateToken,
 } from "../../middlewares/authMiddleware";
+import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
   createJob,
@@ -26,9 +27,25 @@ const router = express.Router();
 router
   .get("/", authenticateToken, asyncHandler(getAllJobs))
   .get("/:id", authenticateToken, asyncHandler(getJobById))
-  .put("/:id", authenticateToken, asyncHandler(updateJobById))
+  .put("/:id",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(updateJobById))
   .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
   .get("/user-wise/list", authenticateToken, asyncHandler(getAllUserWiseJobs))
+  .get("/user-wise/list/:id", authenticateToken, asyncHandler(getJobById))
+  .post("/user-wise/list",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(createJob))
+  .put("/user-wise/list/:id",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(updateJobById))
+  .delete("/user-wise/list/:id", authenticateToken, asyncHandler(deleteJobById))
   .put(
     "/add-comment/:id",
     authenticateToken,
@@ -50,6 +67,8 @@ router
     "/",
     authenticateToken,
     allowAllExcept("admin", "worker", "agent"),
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
     asyncHandler(createJob)
   )
   .get(

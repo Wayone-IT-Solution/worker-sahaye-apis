@@ -113,10 +113,15 @@ export class EmployerFeedbackController {
           },
         },
       ];
-      const result = await employerFeedbackService.getAll(
-        { ...req.query, ...(role === "worker" ? { userId: user } : {}) },
-        pipeline
-      );
+      const filters: Record<string, any> = { ...req.query };
+
+      if (role === "worker") {
+        filters.userId = user;
+      } else if (role === "employer" || role === "contractor") {
+        filters.employerId = user;
+      }
+
+      const result = await employerFeedbackService.getAll(filters, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

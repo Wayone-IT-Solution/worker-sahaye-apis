@@ -28,6 +28,7 @@ export const getPipeline = (
     community,
     searchkey,
     countryId,
+    employerId,
     applicantId,
     requestModel,
     page = 1,
@@ -61,6 +62,7 @@ export const getPipeline = (
   if (createdBy) match.createdBy = safeObjectId(createdBy);
   if (community) match.community = safeObjectId(community);
   if (countryId) match.countryId = safeObjectId(countryId);
+  if (employerId) match.employerId = safeObjectId(employerId);
   if (applicantId) match.applicant = safeObjectId(applicantId);
   if (isActive) match.isActive = { $in: [true, "true", "active", 1] };
 

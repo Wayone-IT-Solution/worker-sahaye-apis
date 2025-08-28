@@ -487,7 +487,20 @@ export const getAllUserApplications = async (
   next: NextFunction
 ) => {
   try {
+    const { id: user, role } = (req as any).user;
     const { userType } = req.params;
+
+    let matchStage: any = {
+      "postedDetails._id": { $exists: true, $ne: null },
+      user: { $exists: true, $ne: null },
+    };
+
+    if (role === "employer" || role === "contractor") {
+      matchStage.$expr = {
+        $eq: ["$postedDetails._id", new mongoose.Types.ObjectId(user)],
+      };
+    }
+
     const pipeline: any[] = [
       {
         $lookup: {
@@ -531,10 +544,11 @@ export const getAllUserApplications = async (
           preserveNullAndEmptyArrays: true,
         },
       },
+      { $match: matchStage },
     ];
 
     // Filter by role name if provided
-    if (userType)
+    if (userType && userType !== "applications")
       pipeline.push({ $match: { "jobDetails.userType": userType } });
 
     pipeline.push({

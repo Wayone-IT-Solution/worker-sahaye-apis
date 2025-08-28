@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { Job } from "../../modals/job.model";
 import ApiResponse from "../../utils/ApiResponse";
@@ -64,6 +65,19 @@ export const JobSaveController = {
     next: NextFunction
   ) {
     try {
+      const { id: user, role } = (req as any).user;
+
+      let matchStage: any = {
+        "postedByUserDetails._id": { $exists: true, $ne: null },
+        user: { $exists: true, $ne: null },
+      };
+
+      if (role === "employer" || role === "contractor") {
+        matchStage.$expr = {
+          $eq: ["$postedByUserDetails._id", new mongoose.Types.ObjectId(user)],
+        };
+      }
+
       const pipeline = [
         {
           $lookup: {
@@ -112,6 +126,7 @@ export const JobSaveController = {
           },
         },
         { $unwind: "$postedByUserDetails" },
+        { $match: matchStage },
         {
           $project: {
             _id: 1,

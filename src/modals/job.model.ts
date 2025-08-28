@@ -238,6 +238,7 @@ export interface IJob extends Document {
 
   // Dates & Expiry
   expiresAt?: Date;
+  imageUrl?: string;
   publishedAt?: Date;
   lastBoostedAt?: Date;
   autoRepost?: {
@@ -425,6 +426,7 @@ const JobSchema = new Schema<IJob>(
       enum: Object.values(JobStatus),
       default: JobStatus.PENDING_APPROVAL,
     },
+    imageUrl: { type: String },
     priority: {
       index: true,
       type: String,

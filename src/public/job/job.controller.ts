@@ -1,22 +1,25 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
+import { Job } from "../../modals/job.model";
 import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
-import { Job, JobStatus } from "../../modals/job.model";
 import { NextFunction, Request, Response } from "express";
 import { UserType } from "../../modals/notification.model";
 import { CommonService } from "../../services/common.services";
 import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
 import { sendDualNotification } from "../../services/notification.service";
+import { extractImageUrl } from "../../admin/community/community.controller";
 
 const JobService = new CommonService(Job);
 
 export class JobController {
   static async createJob(req: Request, res: Response, next: NextFunction) {
     try {
+      const imageUrl = req?.body?.imageUrl?.[0]?.url;
       const data = {
         ...req.body,
+        imageUrl,
         postedBy: (req as any).user.id,
       };
       delete data.status;
@@ -464,10 +467,25 @@ export class JobController {
 
   static async updateJobById(req: Request, res: Response, next: NextFunction) {
     try {
+      const id = req.params.id;
       const { role } = (req as any).user;
+      const imageUrl = req?.body?.imageUrl?.[0]?.url;
+
+      const record = await JobService.getById(id);
+      if (!record) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Job not found."));
+      }
+
       const data = req.body;
       if (role !== "admin") delete data.status;
-      const result = await JobService.updateById(req.params.id, data);
+
+      let image;
+      if (req?.body?.imageUrl && record.imageUrl)
+        image = await extractImageUrl(req?.body?.image, record.imageUrl as string);
+
+      const result = await JobService.updateById(req.params.id, { ...data, imageUrl: image || imageUrl });
       if (!result)
         return res
           .status(404)

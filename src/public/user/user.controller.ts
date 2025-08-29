@@ -349,7 +349,7 @@ export class UserController {
       return res.status(200).json({
         otp: otpCode,
         success: true,
-        message: "OTP has been sent successfully",
+        message: `OTP has been sent successfully! OTP: ${otpCode}`,
       });
     } catch (error) {
       next(error);

@@ -3,6 +3,7 @@ import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { getModelFromType, modelMap, Quotation, RequestModelType } from "../../modals/quotation.model";
+import mongoose from "mongoose";
 
 const QuotationService = new CommonService(Quotation);
 
@@ -61,6 +62,8 @@ export class QuotationController {
   ) {
     try {
       const { requestModel } = req.params;
+      const { id: userId, role } = (req as any).user;
+
       const page = parseInt((req.query.page as string) || "1", 10);
       const limit = parseInt((req.query.limit as string) || "10", 10);
       const skip = (page - 1) * limit;
@@ -68,6 +71,10 @@ export class QuotationController {
       const matchStage: any = {};
       if (requestModel) {
         matchStage.requestModel = requestModel;
+      }
+
+      if (role === "employer" || role === "contractor") {
+        matchStage.userId = new mongoose.Types.ObjectId(userId)
       }
 
       const totalCount = await Quotation.countDocuments();

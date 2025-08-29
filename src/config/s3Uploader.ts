@@ -73,7 +73,7 @@ export const deleteFromS3 = async (key: string): Promise<void> => {
   try {
     await s3.deleteObject(params).promise();
     console.log(`✅ Deleted from S3: ${key}`);
-  } catch (err) {
-    console.log(`⚠️ Failed to delete from S3: ${key}`, err);
+  } catch (err: any) {
+    console.log(`⚠️ Failed to delete from S3: ${key}`, err.message);
   }
 };

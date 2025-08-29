@@ -152,6 +152,7 @@ export class CommunityController {
         {
           $project: {
             _id: 1,
+            name: "$communityDetails.name",
             communityId: "$communityDetails._id",
             communityName: "$communityDetails.name",
             communityStats: "$communityDetails.stats",

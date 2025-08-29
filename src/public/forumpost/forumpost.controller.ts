@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { startOfDay, endOfDay } from "date-fns";
 import ApiResponse from "../../utils/ApiResponse";
@@ -113,14 +114,14 @@ export class ForumPostController {
         content: string,
         tags: string[]
       ): boolean => {
-        const combined = `${title} ${content} ${tags.join(" ")}`.toLowerCase();
+        const combined = `${title} ${content} ${Array.isArray(tags) ? tags.join(" ") : tags}`.toLowerCase();
         return hiringPatterns.some((pattern) => pattern.test(combined));
       };
 
       const { title, content, tags, community } = req.body;
       const isBlocked = handleValidation(title, content, tags)
       const data: any = {
-        tags,
+        tags: typeof tags === "string" ? tags.split(",") : tags,
         title,
         content,
         community,
@@ -651,6 +652,105 @@ export class ForumPostController {
         },
       ];
       const result = await ForumPostService.getAll({ ...req.query, ...(role === "admin" ? {} : { createdBy: user }) }, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllMyPosts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id: user, role } = (req as any).user;
+
+      const pipeline: any[] = [
+        // Lookup community details
+        {
+          $lookup: {
+            from: "communities",
+            localField: "community",
+            foreignField: "_id",
+            as: "communityDetails",
+          },
+        },
+        { $unwind: "$communityDetails" },
+
+        // Lookup member details
+        {
+          $lookup: {
+            from: "communitymembers",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "memberDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$memberDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // Lookup user details
+        {
+          $lookup: {
+            from: "users",
+            localField: "memberDetails.user",
+            foreignField: "_id",
+            as: "userData",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userData",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // Step 2: Apply filter for non-admins (inside pipeline)
+        ...([
+          {
+            $match: {
+              "memberDetails.user": new mongoose.Types.ObjectId(user),
+            },
+          },
+        ]),
+
+        // Add creator details
+        {
+          $addFields: {
+            creatorEmail: "$userData.email",
+            creatorMobile: "$userData.mobile",
+            creatorName: "$userData.fullName",
+          },
+        },
+
+        // Projection
+        {
+          $project: {
+            _id: 1,
+            tags: 1,
+            likes: 1,
+            title: 1,
+            shares: 1,
+            status: 1,
+            content: 1,
+            createdAt: 1,
+            attachments: 1,
+            creatorName: 1,
+            creatorEmail: 1,
+            creatorMobile: 1,
+            commentsCount: 1,
+            "communityDetails.name": 1,
+          },
+        },
+      ];
+
+      // Step 3: Call service
+      const filters: any = { ...req.query };
+      const result = await ForumPostService.getAll(filters, pipeline);
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

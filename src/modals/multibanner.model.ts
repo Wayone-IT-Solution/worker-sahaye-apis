@@ -11,6 +11,7 @@ export interface IPageBanner extends Document {
   type: string;
   title: string;
   createdAt: Date;
+  message: string;
   updatedAt: Date;
   userType: UserType;
   description: string;
@@ -39,6 +40,7 @@ export enum ScreenEnum {
 
 const pageBannerSchema = new Schema<IPageBanner>(
   {
+    message: { type: String },
     description: { type: String },
     type: { type: String, enum: ScreenEnum },
     title: { type: String, required: true },

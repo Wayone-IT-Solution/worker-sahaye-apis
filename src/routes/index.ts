@@ -35,6 +35,7 @@ import projectBasedHiringRoutes from "../admin/projectbasedhiring/projectbasedhi
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
 import userRoutes from "../public/user/user.routes";
+import inviteRoutes from "../public/invite/invite.routes";
 import featureRoutes from "../public/feature/feature.routes";
 import messageRoutes from "../public/message/message.routes";
 import IVRCallRoutes from "../public/ivrcall/ivrcall.routes";
@@ -105,6 +106,7 @@ router.use("/projectbasedhiring", projectBasedHiringRoutes);
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);
 router.use("/ivr", IVRCallRoutes);
+router.use("/invite", inviteRoutes);
 router.use("/feature", featureRoutes);
 router.use("/message", messageRoutes);
 router.use("/jobsaved", jobSavedRoutes);

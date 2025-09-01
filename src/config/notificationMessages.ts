@@ -91,6 +91,17 @@ export const NotificationMessages: Record<
     }),
   },
 
+  "invite-prospective": {
+    sender: (ctx) => ({
+      title: `Invitation Sent to ${ctx?.prospectName}`,
+      message: `You have successfully invited ${ctx?.prospectName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `You've Been Invited! ✨`,
+      message: `Hello ${ctx?.prospectName}, you’ve been invited by ${ctx?.userName}.`,
+    }),
+  },
+
   "loan-feedback-added": {
     sender: (ctx) => ({
       title: `Comment Added on Loan Request`,

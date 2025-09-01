@@ -187,7 +187,8 @@ export interface IJob extends Document {
     includesBonus?: boolean;
     bonusStructure?: string;
   };
-  benefits: IBenefit[];
+  benefits?: IBenefit[];
+  attributes: any;
 
   // Job Details
   jobType: JobType;
@@ -197,7 +198,7 @@ export interface IJob extends Document {
   experienceLevel: ExperienceLevel;
 
   // Skills & Requirements
-  skillsRequired: ISkillRequirement[];
+  skillsRequired?: ISkillRequirement[];
   qualifications: {
     education?: Array<{
       level:
@@ -288,8 +289,8 @@ const JobSchema = new Schema<IJob>(
 
     // Compensation & Benefits
     salary: {
-      min: { type: Number, required: true, min: 0 },
-      max: { type: Number, required: true, min: 0 },
+      min: { type: Number, min: 0, default: 0 },
+      max: { type: Number, min: 0, default: 0 },
       currency: {
         type: String,
         default: Currency.INR,
@@ -356,7 +357,6 @@ const JobSchema = new Schema<IJob>(
     industry: {
       index: true,
       type: String,
-      required: true,
       enum: Object.values(Industry),
     },
     history: [JobHistorySchema],
@@ -373,14 +373,15 @@ const JobSchema = new Schema<IJob>(
     // Skills & Requirements
     skillsRequired: [
       {
-        name: { type: String, required: true },
+        name: { type: String, required: false }, // optional
         level: {
           type: String,
-          default: "intermediate",
           enum: ["beginner", "intermediate", "advanced", "expert"],
+          default: "intermediate",
+          required: false, // optional
         },
-        yearsOfExperience: Number,
-        required: { type: Boolean, default: true },
+        yearsOfExperience: { type: Number, required: false }, // optional
+        required: { type: Boolean, default: false, required: false }, // optional
       },
     ],
     qualifications: {
@@ -411,6 +412,10 @@ const JobSchema = new Schema<IJob>(
           required: Boolean,
         },
       ],
+      attributes: {
+        type: Schema.Types.Mixed,
+        default: {},
+      },
       experience: {
         maxYears: Number,
         specificExperience: [String],

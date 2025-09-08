@@ -65,7 +65,7 @@ export interface ICourse extends Document {
   description?: string;
   status: CourseStatus;
   priority: PriorityLevel;
-  DiscountedAmount: number;
+  discountedAmount: number;
   category: Schema.Types.ObjectId;
   address?: string;
   locationName?: string;
@@ -141,7 +141,7 @@ const CourseSchema = new Schema<ICourse>(
       type: Number,
       required: true,
     },
-    DiscountedAmount: {
+    discountedAmount: {
       type: Number,
       required: true,
     },

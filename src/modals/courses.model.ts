@@ -57,6 +57,7 @@ export interface ICourse extends Document {
   createdAt: Date;
   updatedAt: Date;
   isFree: boolean;
+  extras: string[];
   type: CourseType;
   startDate?: Date;
   imageUrl?: string;
@@ -64,6 +65,7 @@ export interface ICourse extends Document {
   description?: string;
   status: CourseStatus;
   priority: PriorityLevel;
+  DiscountedAmount: number;
   category: Schema.Types.ObjectId;
   address?: string;
   locationName?: string;
@@ -125,6 +127,7 @@ const CourseSchema = new Schema<ICourse>(
     },
     endDate: Date,
     tags: [String],
+    extras: [String],
     startDate: Date,
     category: {
       type: Schema.Types.ObjectId,
@@ -135,6 +138,10 @@ const CourseSchema = new Schema<ICourse>(
       default: false,
     },
     amount: {
+      type: Number,
+      required: true,
+    },
+    DiscountedAmount: {
       type: Number,
       required: true,
     },

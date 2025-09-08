@@ -36,6 +36,16 @@ export enum ScreenEnum {
   PreInterviewedCandidate = "pre_interviewed_candidate",
   OnDemandRequirement = "on_demand_requirement",
   ProjectBasedHiring = "project_based_hiring",
+
+  // Additional new
+  PFSupport = "pf_support",
+  ESICSport = "esic_sport",
+  LWFSupport = "lwf_support",
+  LoanSupport = "loan_support",
+  CandidateBranding = "candidate_branding",
+  ReferAndEarn = "refer_and_earn",
+  KnowYourWages = "know_your_wages",
+  Preferences = "preferences",
 }
 
 const pageBannerSchema = new Schema<IPageBanner>(

@@ -62,6 +62,7 @@ export interface ICourse extends Document {
   startDate?: Date;
   imageUrl?: string;
   _id: Types.ObjectId;
+  certificate?: string;
   description?: string;
   status: CourseStatus;
   priority: PriorityLevel;
@@ -110,6 +111,7 @@ const CourseSchema = new Schema<ICourse>(
     imageUrl: String,
     description: String,
     name: { type: String, required: true },
+    certificate: { type: String },
     status: {
       type: String,
       default: CourseStatus.DRAFT,

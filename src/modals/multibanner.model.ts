@@ -46,6 +46,8 @@ export enum ScreenEnum {
   ReferAndEarn = "refer_and_earn",
   KnowYourWages = "know_your_wages",
   Preferences = "preferences",
+  CV = "CV",
+  ComplianceCalender = "compliance_calender",
 }
 
 const pageBannerSchema = new Schema<IPageBanner>(

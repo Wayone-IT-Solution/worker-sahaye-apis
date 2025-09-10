@@ -23,6 +23,7 @@ import {
   ConnectionStatus,
 } from "../../modals/connection.model";
 import { Endorsement } from "../../modals/endorsement.model";
+import { UserPreference } from "../../modals/userpreference.model";
 
 const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
@@ -717,4 +718,93 @@ export class UserController {
       next(error); // Pass errors to the error handling middleware
     }
   }
+
+  static async getUserFilters(req: Request, res: Response) {
+    try {
+      const [
+        skills,
+        yearsOfExperience,
+        educationFields,
+        educationDegrees,
+        educationInstitutions,
+        experienceCompanies,
+        experiencePositions,
+        cities,
+        states,
+        pincodes,
+        availabilityStatus,
+        preferredWorkType,
+      ] = await Promise.all([
+        User.distinct("profile.skills.name"),
+        User.distinct("profile.skills.yearsOfExperience"),
+        User.distinct("profile.education.field"),
+        User.distinct("profile.education.degree"),
+        User.distinct("profile.education.institution"),
+        User.distinct("profile.experience.company"),
+        User.distinct("profile.experience.position"),
+        User.distinct("primaryLocation.city"),
+        User.distinct("primaryLocation.state"),
+        User.distinct("primaryLocation.pincode"),
+        User.distinct("primaryLocation.availability.status"),
+        User.distinct("primaryLocation.availability.preferredWorkType")
+      ]);
+      const [
+        preferredLocations,
+        salaryExpectation,
+        frequency,
+        jobType,
+        workModes,
+        experienceLevel
+      ] = await Promise.all([
+        UserPreference.distinct("preferredLocations"),
+        UserPreference.distinct("salaryExpectation.amount"),
+        UserPreference.distinct("salaryExpectation.frequency"),
+        UserPreference.distinct("jobType"),
+        UserPreference.distinct("workModes"),
+        UserPreference.distinct("experienceLevel"),
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        filters: {
+          skills: {
+            skills: skills.filter(Boolean),
+            yearsOfExperience: yearsOfExperience.filter(Boolean),
+          },
+          education: {
+            fields: educationFields.filter(Boolean),
+            degrees: educationDegrees.filter(Boolean),
+            institutions: educationInstitutions.filter(Boolean),
+          },
+          experience: {
+            companies: experienceCompanies.filter(Boolean),
+            positions: experiencePositions.filter(Boolean),
+          },
+          locations: {
+            states: states.filter(Boolean),
+            cities: cities.filter(Boolean),
+            pincodes: pincodes.filter(Boolean),
+            preferredLocations: preferredLocations.filter(Boolean),
+          },
+          availability: {
+            status: availabilityStatus.filter(Boolean),
+            preferredWorkType: preferredWorkType.filter(Boolean)
+          },
+          employmentPreferences: {
+            jobType: jobType.filter(Boolean),
+            frequency: frequency.filter(Boolean),
+            workModes: workModes.filter(Boolean),
+            experienceLevel: experienceLevel.filter(Boolean),
+            salaryExpectation: salaryExpectation.filter(Boolean),
+          }
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching filters",
+        error,
+      });
+    }
+  };
 }

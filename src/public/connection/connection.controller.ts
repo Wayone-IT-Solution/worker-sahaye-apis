@@ -372,9 +372,11 @@ export const getSuggestedUsers = async (
     // Step 3: Paginated user fetch + enrichment
     const suggestions = await User.aggregate([
       { $match: { _id: { $nin: excludedIds } } },
-      { $sort: { createdAt: -1 } }, // optional, can change to popularity later
+      { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
+
+      // Connection stats
       {
         $lookup: {
           from: "connections",
@@ -402,6 +404,8 @@ export const getSuggestedUsers = async (
           },
         },
       },
+
+      // Profile picture
       {
         $lookup: {
           from: "fileuploads",
@@ -415,16 +419,33 @@ export const getSuggestedUsers = async (
           profilePic: { $arrayElemAt: ["$profilePicData.url", 0] },
         },
       },
+
+      // Final projection with enriched profile fields
       {
         $project: {
           userId: "$_id",
           fullName: 1,
+          gender: 1,
           email: 1,
-          totalConnections: 1,
           profilePic: 1,
+          primaryLocation: 1,
+          totalConnections: 1,
+
+          // Worker profile
+          "profile.designation": 1,
+          "profile.shortDescription": 1,
+          "profile.skills.name": { $slice: ["$profile.skills.name", 3] },
+
+          // Employer profile
+          "profile.company.name": 1,
+          "profile.company.industry": 1,
+
+          // Contractor profile
+          "profile.business.name": 1,
+          "profile.business.type": 1,
         },
       },
-      { $sort: { totalConnections: -1 } }, // final sort on enriched result
+      { $sort: { totalConnections: -1 } }, // final sort
     ]);
 
     return res.status(200).json(

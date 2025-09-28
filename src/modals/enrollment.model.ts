@@ -28,6 +28,7 @@ export interface IEnrollment extends Document {
   totalAmount: number;
   finalAmount: number;
   refundReason?: string;
+  numberOfPeople: number;
   appliedCoupon?: {
     code: string;
     appliedAt: Date;
@@ -68,6 +69,7 @@ const EnrollmentSchema = new Schema<IEnrollment>(
     totalAmount: { type: Number, required: true },
     finalAmount: { type: Number, required: true },
     paymentDetails: { type: PaymentDetailsSchema },
+    numberOfPeople: { type: Number, default: 1, min: 1 },
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
     course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
     status: {

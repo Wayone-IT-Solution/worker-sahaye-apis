@@ -1,7 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { EnrollmentController } from "./enrollment.controller";
-import { isWorker, authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken } from "../../middlewares/authMiddleware";
 
 const {
   createEnrollment,

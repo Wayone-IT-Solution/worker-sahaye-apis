@@ -15,7 +15,7 @@ const enrollmentService = new CommonService(Enrollment);
 export class EnrollmentController {
   static async createEnrollment(req: any, res: Response, next: NextFunction) {
     try {
-      const { course } = req.body;
+      const { course, numberOfPeople = 1 } = req.body;
       const { id: user } = req.user;
 
       const exists = await Enrollment.findOne({ user, course });
@@ -76,8 +76,9 @@ export class EnrollmentController {
       const data: any = {
         user,
         course,
-        totalAmount: courseDetails.amount,
-        finalAmount: courseDetails.amount,
+        numberOfPeople,
+        totalAmount: courseDetails.amount * numberOfPeople,
+        finalAmount: courseDetails.amount * numberOfPeople,
         status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
       };
 

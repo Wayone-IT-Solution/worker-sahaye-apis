@@ -20,7 +20,6 @@ export interface IBooking extends Document {
 const BookingSchema = new Schema<IBooking>(
   {
     assistant: {
-      required: true,
       ref: "PersonalAssistant",
       type: Schema.Types.ObjectId,
     },
@@ -30,8 +29,8 @@ const BookingSchema = new Schema<IBooking>(
       type: Schema.Types.ObjectId,
     },
     notes: { type: String },
+    timeslotId: { type: Schema.Types.ObjectId },
     totalAmount: { type: Number, default: 0, required: true },
-    timeslotId: { type: Schema.Types.ObjectId, required: true },
     status: {
       type: String,
       default: "pending",

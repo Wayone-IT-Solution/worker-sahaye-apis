@@ -4,7 +4,9 @@ import {
   createBooking,
   getAllBookings,
   getBookingById,
+  assignAssistant,
   getUserBookings,
+  changeBookingSlot,
   updateBookingStatus,
   getAssistantBookings,
 } from "./booking.controller";
@@ -20,11 +22,18 @@ const router = express.Router();
 router.get("/", authenticateToken, isAdmin, asyncHandler(getAllBookings));
 router.put("/", authenticateToken, isWorker, asyncHandler(updateBooking));
 router.post("/", authenticateToken, isWorker, asyncHandler(createBooking));
+router.post("/:bookingId", authenticateToken, isWorker, asyncHandler(changeBookingSlot));
 router.put(
   "/:bookingId",
   authenticateToken,
   isAdmin,
   asyncHandler(updateBookingStatus)
+);
+router.put(
+  "/:bookingId/:assistantId",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(assignAssistant)
 );
 router.get(
   "/assistant/:assistantId",

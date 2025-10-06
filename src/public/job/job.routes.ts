@@ -7,7 +7,10 @@ import {
   allowAllExcept,
   authenticateToken,
 } from "../../middlewares/authMiddleware";
-import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
+import {
+  dynamicUpload,
+  s3UploaderMiddleware,
+} from "../../middlewares/s3FileUploadMiddleware";
 
 const {
   createJob,
@@ -32,11 +35,13 @@ router
   .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
   .get("/user-wise/list", authenticateToken, asyncHandler(getAllUserWiseJobs))
   .get("/user-wise/list/:id", authenticateToken, asyncHandler(getJobById))
-  .post("/document",
+  .post(
+    "/document",
     authenticateToken,
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("jobposting"),
-    asyncHandler(uploadJobUpdated))
+    asyncHandler(uploadJobUpdated)
+  )
   .post("/user-wise/list", authenticateToken, asyncHandler(createJob))
   .put("/user-wise/list/:id", authenticateToken, asyncHandler(updateJobById))
   .delete("/user-wise/list/:id", authenticateToken, asyncHandler(deleteJobById))

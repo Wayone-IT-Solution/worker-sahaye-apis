@@ -2,6 +2,7 @@ import express from "express";
 import {
   updateBooking,
   createBooking,
+  getExactAmount,
   getAllBookings,
   getBookingById,
   assignAssistant,
@@ -19,6 +20,7 @@ import {
 
 const router = express.Router();
 
+router.patch("/", authenticateToken, asyncHandler(getExactAmount));
 router.get("/", authenticateToken, isAdmin, asyncHandler(getAllBookings));
 router.put("/", authenticateToken, isWorker, asyncHandler(updateBooking));
 router.post("/", authenticateToken, isWorker, asyncHandler(createBooking));

@@ -40,6 +40,7 @@ export enum ScreenEnum {
   // Additional new
   PFSupport = "pf_support",
   ESICSport = "esic_sport",
+  BULKHIRING = "bulk_hiring",
   LWFSupport = "lwf_support",
   LoanSupport = "loan_support",
   CandidateBranding = "candidate_branding",

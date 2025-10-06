@@ -9,19 +9,14 @@ import { CommonService } from "../../services/common.services";
 import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
 import { sendDualNotification } from "../../services/notification.service";
-import { extractImageUrl } from "../../admin/community/community.controller";
+// import { extractImageUrl } from "../../admin/community/community.controller";
 
 const JobService = new CommonService(Job);
 
 export class JobController {
   static async createJob(req: Request, res: Response, next: NextFunction) {
     try {
-      const imageUrl = req?.body?.imageUrl?.[0]?.url;
-      const data = {
-        ...req.body,
-        imageUrl,
-        postedBy: (req as any).user.id,
-      };
+      const data = { ...req.body, postedBy: (req as any).user.id };
       delete data.status;
       const result = await JobService.create(data);
       if (!result)
@@ -31,6 +26,17 @@ export class JobController {
       return res
         .status(201)
         .json(new ApiResponse(201, result, "Created successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async uploadJobUpdated(req: Request, res: Response, next: NextFunction) {
+    try {
+      const imageUrl = req?.body?.imageUrl;
+      return res
+        .status(201)
+        .json(new ApiResponse(201, imageUrl, "Created successfully"));
     } catch (err) {
       next(err);
     }
@@ -469,7 +475,7 @@ export class JobController {
     try {
       const id = req.params.id;
       const { role } = (req as any).user;
-      const imageUrl = req?.body?.imageUrl?.[0]?.url;
+      // const imageUrl = req?.body?.imageUrl?.[0]?.url;
 
       const record = await JobService.getById(id);
       if (!record) {
@@ -481,11 +487,11 @@ export class JobController {
       const data = req.body;
       if (role !== "admin") delete data.status;
 
-      let image;
-      if (req?.body?.imageUrl && record.imageUrl)
-        image = await extractImageUrl(req?.body?.image, record.imageUrl as string);
+      // let image;
+      // if (req?.body?.imageUrl && record.imageUrl)
+      //   image = await extractImageUrl(req?.body?.image, record.imageUrl as string);
 
-      const result = await JobService.updateById(req.params.id, { ...data, imageUrl: image || imageUrl });
+      const result = await JobService.updateById(req.params.id, data);
       if (!result)
         return res
           .status(404)

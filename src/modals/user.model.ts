@@ -31,7 +31,6 @@ export interface IUser extends Document {
   dateOfBirth?: Date;
   userType: UserType;
   status: UserStatus;
-  natureOfWork?: string;
   referralCode?: string;
   referredCode?: string;
   pointsEarned?: number;
@@ -41,6 +40,9 @@ export interface IUser extends Document {
   category: Schema.Types.ObjectId;
   preferredJobCategories?: string[];
   referredBy?: Schema.Types.ObjectId;
+  trade?: Schema.Types.ObjectId;
+  industry?: Schema.Types.ObjectId;
+  natureOfWork?: Schema.Types.ObjectId;
   preferences: {
     jobAlerts: boolean;
     notifications: {
@@ -156,7 +158,15 @@ const userSchema = new Schema<IUser>(
     },
     natureOfWork: {
       type: Schema.Types.ObjectId,
-      ref: "JobCategory",
+      ref: "NatureOfWork",
+    },
+    industry: {
+      type: Schema.Types.ObjectId,
+      ref: "Industry",
+    },
+    trade: {
+      type: Schema.Types.ObjectId,
+      ref: "Trade",
     },
     category: {
       type: Schema.Types.ObjectId,

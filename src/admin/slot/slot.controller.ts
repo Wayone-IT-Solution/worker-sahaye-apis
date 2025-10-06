@@ -91,16 +91,16 @@ export const getNextDaysSlots = async (request: Request, response: Response) => 
       { $group: { _id: "$_id", timeslots: { $push: "$timeslots" } } },
     ]);
 
-    if (!slots[0]?.timeslots.length) {
-      return response
-        .status(404)
-        .json(
-          new ApiError(404, "No slots available for the next 10 days")
-        );
-    }
+    // if (!slots[0]?.timeslots.length) {
+    //   return response
+    //     .status(404)
+    //     .json(
+    //       new ApiError(404, "No slots available for the next 10 days")
+    //     );
+    // }
     return response
       .status(200)
-      .json(new ApiResponse(200, slots[0], "Slots fetched successfully"));
+      .json(new ApiResponse(200, slots[0], !slots[0]?.timeslots.length ? "No slots available for the next 10 days" : "Slots fetched successfully"));
   } catch (error: any) {
     return response
       .status(500)
@@ -222,6 +222,66 @@ export const getSlotsByDate = async (request: Request, response: Response) => {
       .json(new ApiResponse(200, slotsForDay, "Slots retrieved successfully"));
   } catch (error: any) {
     console.log("Error retrieving slots:", error);
+    return response
+      .status(500)
+      .json(new ApiError(500, "Internal server error"));
+  }
+};
+
+export const getAllSlotsByDate = async (request: Request, response: Response) => {
+  const { date }: any = request.query;
+
+  if (!date) {
+    return response
+      .status(400)
+      .json(new ApiError(400, "Date is required"));
+  }
+
+  try {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const now = new Date();
+
+    // Check if given date is today
+    const isToday =
+      startOfDay.toDateString() === now.toDateString();
+
+    // Fetch all slots for that day
+    const slots = await Slot.find({
+      "timeslots.date": {
+        $gte: startOfDay,
+        $lt: endOfDay,
+      },
+    }).populate("user");
+
+    if (!slots || slots.length === 0) {
+      return response.status(404).json(new ApiError(404, "No slots found"));
+    }
+
+    // Map user-wise slots
+    const result = slots
+      .map((slot) => {
+        const filteredSlots = slot.timeslots.filter((ts) => {
+          if (isToday) return ts.date >= now && ts.date < endOfDay;
+          else return ts.date >= startOfDay && ts.date < endOfDay;
+        });
+        return { user: slot.user, slots: filteredSlots };
+      })
+      .filter((s) => s.slots.length > 0);
+
+    if (result.length === 0) {
+      return response.status(404).json(new ApiError(404, "No slots available"));
+    }
+
+    return response
+      .status(200)
+      .json(new ApiResponse(200, result, "Slots retrieved successfully"));
+  } catch (error: any) {
+    console.error("Error retrieving slots:", error);
     return response
       .status(500)
       .json(new ApiError(500, "Internal server error"));

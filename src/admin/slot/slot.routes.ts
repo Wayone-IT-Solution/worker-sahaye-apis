@@ -5,6 +5,7 @@ import {
   addMoreSlots,
   getSlotsByDate,
   getNextDaysSlots,
+  getAllSlotsByDate
 } from "./slot.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
@@ -12,6 +13,7 @@ import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 const router = Router();
 
 router.get("/", authenticateToken, asyncHandler(getSlotsByDate));
+router.get("/public", authenticateToken, asyncHandler(getAllSlotsByDate));
 router.get("/:id", authenticateToken, asyncHandler(getNextDaysSlots));
 router.post("/", authenticateToken, isAdmin, asyncHandler(createSlots));
 router.delete("/", authenticateToken, isAdmin, asyncHandler(deleteSlot));

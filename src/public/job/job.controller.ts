@@ -31,7 +31,11 @@ export class JobController {
     }
   }
 
-  static async uploadJobUpdated(req: Request, res: Response, next: NextFunction) {
+  static async uploadJobUpdated(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const imageUrl = req?.body?.imageUrl;
       return res
@@ -82,6 +86,39 @@ export class JobController {
           },
         },
         {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: { path: "$natureDetails", preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: "jobcategories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$categoryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        {
           $project: {
             _id: 1,
             tags: 1,
@@ -119,6 +156,21 @@ export class JobController {
             profilePicUrl: "$profilePicFile.url",
             creatorMobile: "$userDetails.mobile",
             creatorUserType: "$userDetails.userType",
+            nature: {
+              name: "$natureDetails.name",
+              description: "$natureDetails.description",
+            },
+            categoryInfo: {
+              name: "$categoryDetails.name",
+              description: "$categoryDetails.description",
+            },
+            trades: {
+              $map: {
+                input: "$tradesDetails",
+                as: "t",
+                in: { name: "$$t.name", description: "$$t.description" },
+              },
+            },
           },
         },
       ];
@@ -479,9 +531,7 @@ export class JobController {
 
       const record = await JobService.getById(id);
       if (!record) {
-        return res
-          .status(404)
-          .json(new ApiError(404, "Job not found."));
+        return res.status(404).json(new ApiError(404, "Job not found."));
       }
 
       const data = req.body;

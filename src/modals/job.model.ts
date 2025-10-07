@@ -97,18 +97,18 @@ export interface ISkillRequirement {
 
 export interface IBenefit {
   type:
-  | "pto"
-  | "gym"
-  | "bonus"
-  | "other"
-  | "health"
-  | "dental"
-  | "equity"
-  | "vision"
-  | "flexible"
-  | "learning"
-  | "transport"
-  | "retirement";
+    | "pto"
+    | "gym"
+    | "bonus"
+    | "other"
+    | "health"
+    | "dental"
+    | "equity"
+    | "vision"
+    | "flexible"
+    | "learning"
+    | "transport"
+    | "retirement";
 }
 
 export interface IWorkSchedule {
@@ -125,15 +125,15 @@ export interface IApplicationProcess {
   steps: Array<{
     step: number;
     type:
-    | "screening"
-    | "application"
-    | "technical_test"
-    | "phone_interview"
-    | "video_interview"
-    | "reference_check"
-    | "onsite_interview"
-    | "background_check"
-    | "offer";
+      | "screening"
+      | "application"
+      | "technical_test"
+      | "phone_interview"
+      | "video_interview"
+      | "reference_check"
+      | "onsite_interview"
+      | "background_check"
+      | "offer";
     description: string;
     estimatedDuration?: string;
   }>;
@@ -158,6 +158,8 @@ const JobHistorySchema = new Schema<IJobHistory>(
 export interface IJob extends Document {
   // Basic Information
   title: string;
+  nature: any;
+  trades: any;
   category: any;
   userType: string;
   teamSize?: number;
@@ -202,12 +204,12 @@ export interface IJob extends Document {
   qualifications: {
     education?: Array<{
       level:
-      | "high_school"
-      | "associates"
-      | "bachelors"
-      | "masters"
-      | "phd"
-      | "professional";
+        | "high_school"
+        | "associates"
+        | "bachelors"
+        | "masters"
+        | "phd"
+        | "professional";
       field?: string;
       required: boolean;
     }>;
@@ -439,6 +441,8 @@ const JobSchema = new Schema<IJob>(
       enum: Object.values(Priority),
     },
     tags: [{ type: String, index: true }],
+    trades: [{ type: Schema.Types.ObjectId, ref: "Trade" }],
+    nature: { type: Schema.Types.ObjectId, ref: "NatureOfWork" },
     category: { type: Schema.Types.ObjectId, ref: "JobCategory" },
     postedBy: {
       ref: "User",
@@ -530,26 +534,35 @@ JobSchema.index(
 );
 
 // 📌 Compound Indexes for Filters and Listings
-JobSchema.index({
-  status: 1,
-  jobType: 1,
-  workMode: 1,
-  experienceLevel: 1,
-  industry: 1,
-  publishedAt: -1,
-}, { name: "JobListingQueryIndex" });
+JobSchema.index(
+  {
+    status: 1,
+    jobType: 1,
+    workMode: 1,
+    experienceLevel: 1,
+    industry: 1,
+    publishedAt: -1,
+  },
+  { name: "JobListingQueryIndex" }
+);
 
-JobSchema.index({
-  "location.country": 1,
-  "location.city": 1,
-  jobType: 1,
-  experienceLevel: 1,
-}, { name: "LocationJobFilterIndex" });
+JobSchema.index(
+  {
+    "location.country": 1,
+    "location.city": 1,
+    jobType: 1,
+    experienceLevel: 1,
+  },
+  { name: "LocationJobFilterIndex" }
+);
 
-JobSchema.index({
-  postedBy: 1,
-  status: 1,
-}, { name: "PostedByStatusIndex" });
+JobSchema.index(
+  {
+    postedBy: 1,
+    status: 1,
+  },
+  { name: "PostedByStatusIndex" }
+);
 
 // ⏳ TTL Index for Auto-Expired Jobs
 JobSchema.index(
@@ -568,7 +581,10 @@ JobSchema.index(
 );
 
 // 🌐 SEO-friendly Slug Index
-JobSchema.index({ "seo.slug": 1 }, { unique: true, sparse: true, name: "SeoSlugUniqueIndex" });
+JobSchema.index(
+  { "seo.slug": 1 },
+  { unique: true, sparse: true, name: "SeoSlugUniqueIndex" }
+);
 
 // 🚀 Active Job Prioritization Index
 JobSchema.index(

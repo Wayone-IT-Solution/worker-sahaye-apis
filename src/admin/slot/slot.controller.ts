@@ -244,12 +244,6 @@ export const getAllSlotsByDate = async (request: Request, response: Response) =>
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const now = new Date();
-
-    // Check if given date is today
-    const isToday =
-      startOfDay.toDateString() === now.toDateString();
-
     // Fetch all slots for that day
     const slots = await Slot.find({
       "timeslots.date": {
@@ -265,10 +259,9 @@ export const getAllSlotsByDate = async (request: Request, response: Response) =>
     // Map user-wise slots
     const result = slots
       .map((slot) => {
-        const filteredSlots = slot.timeslots.filter((ts) => {
-          if (isToday) return ts.date >= now && ts.date < endOfDay;
-          else return ts.date >= startOfDay && ts.date < endOfDay;
-        });
+        const filteredSlots = slot.timeslots.filter(
+          (ts) => ts.date >= startOfDay && ts.date < endOfDay
+        );
         return { user: slot.user, slots: filteredSlots };
       })
       .filter((s) => s.slots.length > 0);

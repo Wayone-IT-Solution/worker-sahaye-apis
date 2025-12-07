@@ -11,6 +11,7 @@ import {
   dynamicUpload,
   s3UploaderMiddleware,
 } from "../../middlewares/s3FileUploadMiddleware";
+import { enforceJobListingLimit } from "../../middlewares/jobListingLimitMiddleware";
 
 const {
   createJob,
@@ -23,12 +24,19 @@ const {
   uploadJobUpdated,
   getJobWithHistory,
   getAllUserWiseJobs,
+  getJobListingUsage,
   getAllSuggestedJobsByUser,
 } = JobController;
 
 const router = express.Router();
 
 router
+  .get(
+    "/listing/usage",
+    authenticateToken,
+    allowAllExcept("admin", "worker", "agent"),
+    asyncHandler(getJobListingUsage)
+  )
   .get("/", authenticateToken, asyncHandler(getAllJobs))
   .get("/:id", authenticateToken, asyncHandler(getJobById))
   .put("/:id", authenticateToken, asyncHandler(updateJobById))
@@ -42,7 +50,12 @@ router
     s3UploaderMiddleware("jobposting"),
     asyncHandler(uploadJobUpdated)
   )
-  .post("/user-wise/list", authenticateToken, asyncHandler(createJob))
+  .post(
+    "/user-wise/list",
+    authenticateToken,
+    asyncHandler(enforceJobListingLimit),
+    asyncHandler(createJob)
+  )
   .put("/user-wise/list/:id", authenticateToken, asyncHandler(updateJobById))
   .delete("/user-wise/list/:id", authenticateToken, asyncHandler(deleteJobById))
   .put(
@@ -66,6 +79,7 @@ router
     "/",
     authenticateToken,
     allowAllExcept("admin", "worker", "agent"),
+    asyncHandler(enforceJobListingLimit),
     asyncHandler(createJob)
   )
   .get(

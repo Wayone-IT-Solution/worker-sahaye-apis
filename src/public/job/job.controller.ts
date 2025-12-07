@@ -9,7 +9,7 @@ import { CommonService } from "../../services/common.services";
 import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
 import { sendDualNotification } from "../../services/notification.service";
-// import { extractImageUrl } from "../../admin/community/community.controller";
+import { getJobListingUsage as fetchJobListingUsage } from "../../middlewares/jobListingLimitMiddleware";
 
 const JobService = new CommonService(Job);
 
@@ -23,9 +23,31 @@ export class JobController {
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create worker category"));
+
+      const limitContext: any = (req as any).jobListingLimit;
+      const usage =
+        limitContext && typeof limitContext.usedThisMonth === "number"
+          ? {
+              ...limitContext,
+              usedThisMonth: limitContext.usedThisMonth + 1,
+              remaining:
+                limitContext.limit !== null
+                  ? Math.max(
+                      limitContext.limit - (limitContext.usedThisMonth + 1),
+                      0
+                    )
+                  : null,
+            }
+          : limitContext || null;
+
+      const responsePayload =
+        result?.toObject && typeof result.toObject === "function"
+          ? { ...result.toObject(), jobListingUsage: usage }
+          : { ...(result as any), jobListingUsage: usage };
+
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+        .json(new ApiResponse(201, responsePayload, "Created successfully"));
     } catch (err) {
       next(err);
     }
@@ -685,6 +707,40 @@ export class JobController {
       return res
         .status(200)
         .json(new ApiResponse(200, job.history, "Job with history fetched"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getJobListingUsage(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { user } = req as any;
+      if (!user?.id) {
+        return res.status(401).json(new ApiError(401, "Unauthorized user"));
+      }
+
+      if (!["employer", "contractor"].includes(user.role)) {
+        return res
+          .status(403)
+          .json(
+            new ApiError(
+              403,
+              "Job listing usage is only available to employers and contractors"
+            )
+          );
+      }
+
+      const usage = await fetchJobListingUsage(user.id);
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(200, usage, "Job listing usage fetched successfully")
+        );
     } catch (err) {
       next(err);
     }

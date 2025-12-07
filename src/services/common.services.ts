@@ -1,6 +1,7 @@
+import { toBoolean } from "validator";
 import ApiError from "../utils/ApiError";
+import { getPipeline } from "../utils/helper";
 import { Model, Document, UpdateQuery } from "mongoose";
-import { getPipeline, paginationResult } from "../utils/helper";
 
 export class CommonService<T extends Document> {
   private model: Model<T>;
@@ -41,21 +42,30 @@ export class CommonService<T extends Document> {
   async getAll(query: any = {}, optionsToBeExtract?: any) {
     try {
       const { pipeline, options } = getPipeline(query, optionsToBeExtract);
+      const usePagination = toBoolean(query.pagination ?? "true");
+      const page = Math.max(parseInt(query.page, 10) || 1, 1);
+      const limit = Math.max(parseInt(query.limit, 10) || 10, 1);
+
+      // Run aggregation
       const result = await this.model.aggregate(pipeline, options);
 
-      const { data = [], totalCount = 0 } = result?.[0] || {};
-      const page = parseInt(query.page, 10) || 1;
-      const limit = parseInt(query.limit, 10) || 10;
+      // Handle pagination
+      if (usePagination) {
+        const data = result?.[0]?.data || [];
+        const totalItems = result?.[0].total;
+        const totalPages = Math.ceil(totalItems / limit);
 
-      return {
-        result: data,
-        pagination: {
-          currentPage: page,
-          itemsPerPage: limit,
-          totalItems: totalCount,
-          totalPages: Math.ceil(totalCount / limit),
-        },
-      };
+        return {
+          result: data,
+          pagination: {
+            totalItems,
+            totalPages,
+            currentPage: page,
+            itemsPerPage: limit,
+          },
+        };
+      }
+      return result;
     } catch (error: any) {
       throw new ApiError(500, error.message || "Failed to fetch data");
     }

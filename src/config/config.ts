@@ -82,4 +82,19 @@ export const config = {
     rateLimitEnabled: toBool(process.env.RATE_LIMIT_ENABLED),
     rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60000),
   },
+
+  servetel: {
+    baseUrl: process.env.SERVETEL_BASE_URL || "https://api.servetel.in",
+    clientId: process.env.SERVETEL_CLIENT_ID || "",
+    clientSecret: process.env.SERVETEL_CLIENT_SECRET || "",
+    defaultCallerId: process.env.SERVETEL_DEFAULT_CALLER_ID || "",
+    authPath: process.env.SERVETEL_AUTH_PATH || "/v1/auth/login",
+    clickToCallPath:
+      process.env.SERVETEL_CLICK_TO_CALL_PATH || "/v1/click-to-call",
+    statsPath: process.env.SERVETEL_STATS_PATH || "/v1/calls/summary",
+    recordingsPath:
+      process.env.SERVETEL_RECORDINGS_PATH || "/v1/calls/recordings",
+    forwardingPath:
+      process.env.SERVETEL_FORWARDING_PATH || "/v1/call-forwarding",
+  },
 };

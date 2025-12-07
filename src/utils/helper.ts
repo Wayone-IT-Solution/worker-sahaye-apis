@@ -1,15 +1,19 @@
 import { ObjectId } from "mongodb";
+import { toBoolean } from "validator";
+import { deleteFromS3 } from "../config/s3Uploader";
 
 /**
  * 🟢 Build the MongoDB aggregation pipeline based on query filters
- * @param {Record<string, any>} query - The query parameters to build the pipeline from
- * @returns {Object} - The constructed pipeline and matching stage
+ * @param {Record<string, any>} query - Query filters with pagination, search, projection, sort
+ * @param {Array|Object} additionalStages - Optional extra aggregation stages
+ * @returns {Object} - { pipeline, matchStage, options }
  */
 export const getPipeline = (
   query: Record<string, any>,
   additionalStages?: any[] | Record<string, any>
 ) => {
   const {
+    // Legacy/common filters (kept for backward compatibility)
     _id,
     user,
     type,
@@ -26,16 +30,34 @@ export const getPipeline = (
     createdBy,
     startDate,
     community,
-    searchkey,
     countryId,
     employerId,
     applicantId,
     requestModel,
+
+    // Pagination & search controls
     page = 1,
     limit = 10,
+    pagination = "true",
+
     search = "",
+    searchkey = "",
+    searchOperator = "or", // 'or' | 'and'
+
+    // Sorting
+    multiSort = "", // "field1:asc,field2:desc"
     sortDir = "desc",
     sortKey = "createdAt",
+
+    // Projection
+    fields = "",
+    exclude = "",
+
+    // Special filters
+    exists = "",
+    notExists = "",
+
+    ...filters
   } = query;
 
   const pageNumber = Math.max(parseInt(page, 10), 1);
@@ -43,97 +65,367 @@ export const getPipeline = (
   const basePipeline: any[] = [];
   const match: Record<string, any> = {};
 
-  const safeObjectId = (val: any) =>
-    ObjectId.isValid(val) ? new ObjectId(val) : val;
+  // ==========================================
+  // 🔧 HELPER FUNCTIONS
+  // ==========================================
 
-  // Basic match filters
-  if (type) match.type = type;
-  if (status) match.status = status;
-  if (_id) match._id = safeObjectId(_id);
-  if (userType) match.userType = userType;
-  if (user) match.user = safeObjectId(user);
-  if (userId) match.userId = safeObjectId(userId);
-  if (stateId) match.stateId = safeObjectId(stateId);
-  if (requestModel) match.requestModel = requestModel;
-  if (postedBy) match.postedBy = safeObjectId(postedBy);
-  if (assignee) match.assignee = safeObjectId(assignee);
-  if (featureId) match.featureId = safeObjectId(featureId);
-  if (assistant) match.assistant = safeObjectId(assistant);
-  if (createdBy) match.createdBy = safeObjectId(createdBy);
-  if (community) match.community = safeObjectId(community);
-  if (countryId) match.countryId = safeObjectId(countryId);
-  if (employerId) match.employerId = safeObjectId(employerId);
-  if (applicantId) match.applicant = safeObjectId(applicantId);
-  if (isActive) match.isActive = { $in: [true, "true", "active", 1] };
+  /**
+   * Safely convert to ObjectId if valid
+   */
+  const safeObjectId = (val: any): ObjectId | any => {
+    if (typeof val === "string" && ObjectId.isValid(val)) {
+      return new ObjectId(val);
+    }
+    return val;
+  };
+
+  const normalizeActive = (val: any) => {
+    if (["true", true, "active", 1, "1"].includes(val)) return true;
+    if (["false", false, "inactive", 0, "0"].includes(val)) return false;
+    return val;
+  };
+
+  /**
+   * Check if value is truly empty (null, undefined, empty string)
+   */
+  const isEmpty = (val: any): boolean => {
+    return val === null || val === undefined || val === "";
+  };
+
+  /**
+   * Parse string to appropriate type
+   */
+  const parseValue = (value: any): any => {
+    if (isEmpty(value)) return null;
+
+    // Boolean
+    if (value === "true") return true;
+    if (value === "false") return false;
+
+    // Number
+    if (!isNaN(value) && value !== "" && typeof value !== "boolean") {
+      return Number(value);
+    }
+
+    // Date (ISO format)
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) return date;
+    }
+
+    // ObjectId
+    if (typeof value === "string" && ObjectId.isValid(value)) {
+      return safeObjectId(value);
+    }
+
+    // Array (comma-separated)
+    if (typeof value === "string" && value.includes(",")) {
+      return value.split(",").map((v) => parseValue(v.trim()));
+    }
+
+    return value;
+  };
+
+  /**
+   * Handle special operators in field names
+   * Examples: price__gte, status__in, createdAt__exists
+   */
+  const parseFieldOperator = (
+    key: string,
+    value: any
+  ): { field: string; operator: string; value: any } => {
+    const parts = key.split("__");
+    const field = parts[0];
+    const operator = parts[1] || "eq";
+
+    const parsedValue = parseValue(value);
+
+    switch (operator) {
+      case "in":
+        return {
+          field,
+          operator: "$in",
+          value: Array.isArray(parsedValue) ? parsedValue : [parsedValue],
+        };
+      case "nin":
+        return {
+          field,
+          operator: "$nin",
+          value: Array.isArray(parsedValue) ? parsedValue : [parsedValue],
+        };
+      case "gte":
+        return { field, operator: "$gte", value: parsedValue };
+      case "gt":
+        return { field, operator: "$gt", value: parsedValue };
+      case "lte":
+        return { field, operator: "$lte", value: parsedValue };
+      case "lt":
+        return { field, operator: "$lt", value: parsedValue };
+      case "ne":
+        return { field, operator: "$ne", value: parsedValue };
+      case "exists":
+        return { field, operator: "$exists", value: parsedValue === true };
+      case "regex":
+        return {
+          field,
+          operator: "$regex",
+          value: new RegExp(value, "i"),
+        };
+      default:
+        return { field, operator: "eq", value: parsedValue };
+    }
+  };
+
+  /**
+   * Set nested match dynamically with multi-level support
+   * Supports: user.profile.name, items.0.price, tags.*
+   */
+  const setNestedMatch = (
+    obj: any,
+    key: string,
+    operator: string,
+    value: any
+  ) => {
+    const keys = key.split(".");
+    let current = obj;
+
+    keys.forEach((k, i) => {
+      if (i === keys.length - 1) {
+        // Last key - apply the value
+        if (operator === "eq") {
+          // For string values, use case-insensitive regex
+          if (typeof value === "string" && operator === "eq") {
+            current[k] = { $regex: new RegExp(`^${value}$`, "i") };
+          } else {
+            current[k] = value;
+          }
+        } else {
+          // For other operators
+          current[k] = { [operator]: value };
+        }
+      } else {
+        // Nested path - create if doesn't exist
+        if (!current[k]) {
+          current[k] = {};
+        }
+        current = current[k];
+      }
+    });
+  };
+
+  // ==========================================
+  // 🔍 BUILD MATCH STAGE (legacy filters)
+  // ==========================================
+
+  const legacyFilters = {
+    _id,
+    user,
+    type,
+    status,
+    userId,
+    stateId,
+    postedBy,
+    assignee,
+    userType,
+    featureId,
+    assistant,
+    createdBy,
+    community,
+    countryId,
+    employerId,
+    applicantId,
+    requestModel,
+  };
+
+  Object.entries(legacyFilters).forEach(([key, value]) => {
+    if (!isEmpty(value)) setNestedMatch(match, key, "eq", safeObjectId(value));
+  });
+
+  if (!isEmpty(isActive)) {
+    setNestedMatch(match, "isActive", "eq", normalizeActive(isActive));
+  }
 
   if (startDate || endDate) {
-    match.createdAt = {};
+    match.createdAt = match.createdAt || {};
     if (startDate) match.createdAt.$gte = new Date(startDate);
     if (endDate) match.createdAt.$lte = new Date(endDate);
   }
 
   if (Object.keys(match).length) basePipeline.push({ $match: match });
 
-  // Add additional stages before faceting (lookups, projections, etc.)
+  // ==========================================
+  // 🔗 ADDITIONAL STAGES (Lookups, etc.)
+  // ==========================================
   if (Array.isArray(additionalStages)) basePipeline.push(...additionalStages);
   else if (additionalStages && typeof additionalStages === "object")
     basePipeline.push(additionalStages);
 
-  // Search (including multi-field)
+  // ==========================================
+  // 🔎 ADVANCED SEARCH
+  // ==========================================
   if (search && searchkey) {
     const keys = searchkey
       .split(",")
       .map((k: string) => k.trim())
       .filter(Boolean);
 
-    if (keys.length > 1) {
-      basePipeline.push({
-        $match: {
-          $or: keys.map((key: any) => ({
-            [key]: { $regex: search, $options: "i" },
-          })),
-        },
-      });
-    } else {
-      const key = keys[0];
-      if (["_id", "category"].includes(key)) {
-        basePipeline.push({ $addFields: { idStr: { $toString: `$${key}` } } });
-        basePipeline.push({
-          $match: { idStr: { $regex: search, $options: "i" } },
-        });
-        basePipeline.push({ $project: { idStr: 0 } });
-      } else {
-        basePipeline.push({
-          $match: { [key]: { $regex: search, $options: "i" } },
-        });
-      }
+    if (keys.length > 0) {
+      const searchConditions = keys.map((k: any) => ({
+        [k]: { $regex: search, $options: "i" },
+      }));
+
+      const searchQuery =
+        searchOperator === "and"
+          ? { $and: searchConditions }
+          : { $or: searchConditions };
+
+      basePipeline.push({ $match: searchQuery });
     }
   }
 
-  // Wrap in facet for pagination and total count
-  const pipeline = [
-    ...basePipeline,
-    { $sort: { [sortKey]: sortDir === "asc" ? 1 : -1 } },
-    {
-      $facet: {
-        data: [
-          { $skip: (pageNumber - 1) * limitNumber },
-          { $limit: limitNumber },
-        ],
-        total: [{ $count: "count" }],
-      },
-    },
-    {
-      $addFields: {
-        totalCount: { $ifNull: [{ $arrayElemAt: ["$total.count", 0] }, 0] },
-      },
-    },
-  ];
+  // Process all dynamic filters
+  for (const key in filters) {
+    const value = filters[key];
 
+    if (isEmpty(value)) continue;
+
+    const {
+      field,
+      operator,
+      value: parsedValue,
+    } = parseFieldOperator(key, value);
+
+    setNestedMatch(match, field, operator, parsedValue);
+  }
+
+  // Exists/Not Exists
+  if (exists) {
+    exists.split(",").forEach((field: string) => {
+      setNestedMatch(match, field.trim(), "$exists", true);
+    });
+  }
+
+  if (notExists) {
+    notExists.split(",").forEach((field: string) => {
+      setNestedMatch(match, field.trim(), "$exists", false);
+    });
+  }
+
+  if (Object.keys(match).length) {
+    // Ensure latest match is applied before projections/lookups
+    const firstMatchIndex = basePipeline.findIndex((stage) => stage.$match);
+    if (firstMatchIndex === -1) basePipeline.unshift({ $match: match });
+    else basePipeline[firstMatchIndex] = { $match: match };
+  }
+
+  // ==========================================
+  // 📋 PROJECTION
+  // ==========================================
+  if (fields || exclude) {
+    const projectFields: any = {};
+
+    // Include specific fields
+    if (fields) {
+      fields.split(",").forEach((f: string) => {
+        const field = f.trim();
+        if (field) projectFields[field] = 1;
+      });
+    }
+
+    // Exclude specific fields
+    if (exclude) {
+      exclude.split(",").forEach((f: string) => {
+        const field = f.trim();
+        if (field) projectFields[field] = 0;
+      });
+    }
+
+    if (Object.keys(projectFields).length > 0) {
+      basePipeline.push({ $project: projectFields });
+    }
+  }
+
+  // ==========================================
+  // 📊 SORTING
+  // ==========================================
+  const sortStage: Record<string, 1 | -1> = {};
+
+  // Multi-field sorting: "price:asc,createdAt:desc"
+  if (multiSort) {
+    multiSort.split(",").forEach((s: string) => {
+      const [field, direction] = s.trim().split(":");
+      if (field) {
+        sortStage[field] = direction === "asc" ? 1 : -1;
+      }
+    });
+  } else {
+    // Single field sorting
+    sortStage[sortKey] = sortDir === "asc" ? 1 : -1;
+  }
+
+  if (Object.keys(sortStage).length > 0) {
+    basePipeline.push({ $sort: sortStage });
+  }
+
+  // ==========================================
+  // 📄 PAGINATION
+  // ==========================================
+  let pipeline: any[] = [];
+
+  if (toBoolean(pagination.toString())) {
+    pipeline = [
+      ...basePipeline,
+      {
+        $facet: {
+          data: [
+            { $skip: (pageNumber - 1) * limitNumber },
+            { $limit: limitNumber },
+          ],
+          metadata: [
+            { $count: "total" },
+            {
+              $addFields: {
+                page: pageNumber,
+                limit: limitNumber,
+                totalPages: {
+                  $ceil: { $divide: ["$total", limitNumber] },
+                },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          data: 1,
+          total: { $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0] },
+          totalCount: {
+            $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0],
+          },
+          page: { $ifNull: [{ $arrayElemAt: ["$metadata.page", 0] }, 1] },
+          limit: {
+            $ifNull: [{ $arrayElemAt: ["$metadata.limit", 0] }, limitNumber],
+          },
+          totalPages: {
+            $ifNull: [{ $arrayElemAt: ["$metadata.totalPages", 0] }, 0],
+          },
+        },
+      },
+    ];
+  } else {
+    pipeline = [...basePipeline];
+  }
+
+  // ==========================================
+  // 🎯 RETURN PIPELINE
+  // ==========================================
   return {
     pipeline,
     matchStage: match,
-    options: { collation: { locale: "en", strength: 2 }, allowDiskUse: true },
+    options: {
+      collation: { locale: "en", strength: 2 },
+      allowDiskUse: true,
+    },
   };
 };
 

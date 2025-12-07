@@ -79,6 +79,7 @@ export interface ISubscriptionPlan extends Document {
   description: string;
   isRecommended: boolean;
   billingCycle: BillingCycle;
+  monthlyJobListingLimit?: number;
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -134,6 +135,12 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       enum: Object.values(BillingCycle),
     },
     features: [{ type: Schema.Types.ObjectId, ref: "Feature" }],
+    monthlyJobListingLimit: {
+      type: Number,
+      min: 0,
+      default: null,
+      // Represents the allowed number of job listings per month for employer/contractor plans.
+    },
     status: {
       type: String,
       enum: Object.values(PlanStatus),

@@ -57,12 +57,6 @@ const EmployerFeedbackSchema: Schema = new Schema<IEmployerFeedback>(
 
 EmployerFeedbackSchema.index({ userId: 1, employerId: 1 }, { unique: true });
 
-EmployerFeedbackSchema.index({ employerId: 1 });
-// Optimize queries to fetch all feedback given *to* an employer (most common case)
-
-EmployerFeedbackSchema.index({ userId: 1 });
-// Speeds up lookups for all feedback *given by* a specific user (e.g., audits)
-
 EmployerFeedbackSchema.index({ employerId: 1, workEnvironmentRating: -1 });
 // For rating-based filtering/sorting per employer (e.g., top-rated employers)
 

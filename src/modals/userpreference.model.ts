@@ -101,16 +101,13 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
 );
 
 // 🔍 Filter & join optimization
-UserPreferenceSchema.index({ userId: 1 }, { unique: true }); // Already present via `unique: true`, just explicit
 UserPreferenceSchema.index({ jobRole: 1 }); // useful for filtering or joining with JobCategory
 
 // 📍 Location-based filtering
 UserPreferenceSchema.index({ preferredLocations: 1 }); // useful for searching by preferred cities
 
 // 🧠 Work preference filters
-UserPreferenceSchema.index({ workModes: 1 }); // already indexed in the field definition
 UserPreferenceSchema.index({ jobType: 1 });
-UserPreferenceSchema.index({ experienceLevel: 1 }); // already indexed in field definition
 UserPreferenceSchema.index({ isWillingToRelocate: 1 });
 
 // 💰 Salary expectation filter

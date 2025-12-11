@@ -65,9 +65,6 @@ const ForumPostSchema = new Schema<IForumPost>(
   { timestamps: true }
 );
 
-ForumPostSchema.index({ community: 1 });                  // Filter posts by community
-ForumPostSchema.index({ createdBy: 1 });                  // Filter posts by user
-ForumPostSchema.index({ status: 1 });                     // Filter by post status (active/archived)
 ForumPostSchema.index({ createdAt: -1 });                 // For sorting posts by latest
 ForumPostSchema.index({ tags: 1 });                       // Search/filter by tags
 ForumPostSchema.index({ title: "text", content: "text" }); // Full-text search on title + content

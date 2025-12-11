@@ -50,9 +50,6 @@ PreInterviewedSchema.pre("save", function (next) {
   next();
 });
 
-// To uniquely identify user-level pre-interviews (already ensured)
-PreInterviewedSchema.index({ user: 1 }, { unique: true });
-
 // For quick filtering by status (e.g., pending, approved)
 PreInterviewedSchema.index({ status: 1 });
 

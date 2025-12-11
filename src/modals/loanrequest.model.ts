@@ -157,9 +157,6 @@ LoanRequestSchema.pre<ILoanRequest>("save", function (next) {
   next();
 });
 
-// 🔎 Index for userId-specific loan fetch
-LoanRequestSchema.index({ userId: 1 });
-
 // 📅 Index for loan need date (useful for filtering upcoming loans)
 LoanRequestSchema.index({ loanNeedDate: 1 });
 

@@ -64,7 +64,6 @@ const GratuityRecordSchema: Schema = new Schema<IGratuityRecord>(
   { timestamps: true }
 );
 
-GratuityRecordSchema.index({ userId: 1 });                          // Query by user
 GratuityRecordSchema.index({ employeeName: 1 });                   // Search/filter by employee name
 GratuityRecordSchema.index({ designation: 1 });                    // Filter by designation
 GratuityRecordSchema.index({ department: 1 });                     // Filter by department

@@ -75,7 +75,6 @@ BadgeSchema.pre("validate", function (next) {
 });
 
 BadgeSchema.index({ name: 1 });
-BadgeSchema.index({ slug: 1 });
 BadgeSchema.index({ awardType: 1 });
 
 export const Badge = mongoose.model<IBadge>("Badge", BadgeSchema);

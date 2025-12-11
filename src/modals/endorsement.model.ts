@@ -123,9 +123,6 @@ EndorsementSchema.index({ endorsedTo: 1, fulfilled: 1 });
 EndorsementSchema.index({ endorsedBy: 1, fulfilled: 1 });
 // Speeds up finding endorsements made by a user and their status
 
-EndorsementSchema.index({ connectionId: 1 });
-// Efficient if checking endorsements by connection (e.g., within a specific relationship)
-
 EndorsementSchema.index({ fulfilled: 1, createdAt: -1 });
 // Helpful for reports or filtering unfulfilled/fulfilled endorsements by recent activity
 

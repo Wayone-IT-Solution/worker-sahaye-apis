@@ -277,17 +277,12 @@ export const generateReferralCode = (userId: string) => {
 };
 
 // Indexes
-userSchema.index({ mobile: 1 });
-userSchema.index({ referralCode: 1 });
+// Rely on schema `unique` flags for mobile/email/referralCode indexes.
 userSchema.index({ userType: 1, status: 1 });
-
-// Index for commonly searched fields
-userSchema.index({ email: 1 }, { unique: true, sparse: true }); // email lookup
 userSchema.index({ fullName: "text" }); // for text search on name
 userSchema.index({ createdAt: -1 }); // for sorting latest users
 
 // Compound indexes
-userSchema.index({ userType: 1, status: 1 }); // already added - useful
 userSchema.index({ category: 1, status: 1 }); // useful when filtering by category + status
 userSchema.index({ preferredJobCategories: 1 }); // for job preference filters
 userSchema.index({ referredBy: 1 }); // for analytics/referral queries

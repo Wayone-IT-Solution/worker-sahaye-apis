@@ -59,7 +59,6 @@ PreInterviewedContractorSchema.pre("save", function (next) {
 });
 
 // Indexes for search and filtering
-PreInterviewedContractorSchema.index({ user: 1 }, { unique: true });
 PreInterviewedContractorSchema.index({ status: 1 });
 PreInterviewedContractorSchema.index({ verifiedAt: -1 });
 PreInterviewedContractorSchema.index({ interviewedAt: -1 });

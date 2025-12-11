@@ -165,26 +165,11 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
   { timestamps: true }
 );
 
-// Index for unique plan name (already included in schema)
-SubscriptionPlanSchema.index({ name: 1 }, { unique: true });
-
-// Filter by plan type (free, basic, etc.)
-SubscriptionPlanSchema.index({ planType: 1 });
-
 // Filter by user type (worker, employer, contractor)
 SubscriptionPlanSchema.index({ userType: 1 });
 
-// Filter by plan status (active/inactive)
-SubscriptionPlanSchema.index({ status: 1 });
-
-// Sorting/filtering based on popularity
-SubscriptionPlanSchema.index({ isPopular: 1 });
-
 // Sorting/filtering recommended plans
 SubscriptionPlanSchema.index({ isRecommended: 1 });
-
-// Sorting by priority for display order
-SubscriptionPlanSchema.index({ priority: 1 });
 
 // Compound index for listing plans for a specific user type + status
 SubscriptionPlanSchema.index({ userType: 1, status: 1 });

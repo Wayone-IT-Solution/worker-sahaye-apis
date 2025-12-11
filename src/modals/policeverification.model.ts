@@ -50,9 +50,6 @@ PoliceVerificationSchema.pre("save", function (next) {
   next();
 });
 
-// 🔒 Ensure 1 police verification per user
-PoliceVerificationSchema.index({ user: 1 }, { unique: true });
-
 // 📅 Querying by status (e.g., pending/approved)
 PoliceVerificationSchema.index({ status: 1 });
 

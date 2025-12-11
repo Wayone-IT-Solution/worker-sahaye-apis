@@ -68,10 +68,7 @@ const FileUploadSchema: Schema<IFileUpload> = new Schema(
   { timestamps: true }
 );
 
-FileUploadSchema.index({ userId: 1 });        // Allows filtering files by user
-FileUploadSchema.index({ tag: 1 });           // Allows filtering files by type/tag
 FileUploadSchema.index({ userId: 1, tag: 1 }); // Compound index for user + tag combo
-FileUploadSchema.index({ s3Key: 1 }, { unique: true }); // Ensure uniqueness of stored file keys
 
 const FileUpload: Model<IFileUpload> = mongoose.model<IFileUpload>(
   "FileUpload",

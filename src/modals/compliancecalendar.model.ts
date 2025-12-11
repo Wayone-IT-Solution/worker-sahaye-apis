@@ -86,7 +86,6 @@ const ComplianceCalendarSchema = new Schema<IComplianceCalendar>(
   { timestamps: true }
 );
 
-ComplianceCalendarSchema.index({ eventType: 1 });
 ComplianceCalendarSchema.index({ tags: 1 });
 
 export const ComplianceCalendar = mongoose.model<IComplianceCalendar>(

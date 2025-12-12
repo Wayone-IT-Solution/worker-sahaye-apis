@@ -1,6 +1,7 @@
-import { ObjectId } from "mongodb";
+import mongoose from "mongoose";
 import { toBoolean } from "validator";
-import { deleteFromS3 } from "../config/s3Uploader";
+
+const { ObjectId } = mongoose.Types;
 
 /**
  * 🟢 Build the MongoDB aggregation pipeline based on query filters
@@ -72,7 +73,7 @@ export const getPipeline = (
   /**
    * Safely convert to ObjectId if valid
    */
-  const safeObjectId = (val: any): ObjectId | any => {
+  const safeObjectId = (val: any): mongoose.Types.ObjectId | any => {
     if (typeof val === "string" && ObjectId.isValid(val)) {
       return new ObjectId(val);
     }
@@ -459,7 +460,9 @@ export const paginationResult = (
  * @param {string} id - The string to convert
  * @returns {ObjectId | null} - The ObjectId or null if invalid
  */
-export const convertToObjectId = (id: string): ObjectId | null => {
+export const convertToObjectId = (
+  id: string
+): mongoose.Types.ObjectId | null => {
   try {
     return new ObjectId(id);
   } catch (error) {
@@ -475,8 +478,7 @@ export const convertToObjectId = (id: string): ObjectId | null => {
  */
 export const isValidObjectId = (id: string): boolean => {
   try {
-    new ObjectId(id);
-    return true;
+    return ObjectId.isValid(id);
   } catch (error) {
     return false;
   }

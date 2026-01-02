@@ -20,10 +20,18 @@ export class ComplianceCalendarController {
     try {
       const document = req?.body?.document?.[0]?.url;
 
-      if (typeof req.body.tags === "string")
-        req.body.tags = req.body.tags.split(",");
+      // Trim all string values to remove extra spaces from form-data
+      const cleanBody = Object.keys(req.body).reduce((acc: any, key: string) => {
+        const value = req.body[key];
+        acc[key] = typeof value === "string" ? value.trim() : value;
+        return acc;
+      }, {});
+
+      if (typeof cleanBody.tags === "string")
+        cleanBody.tags = cleanBody.tags.split(",").map((tag: string) => tag.trim());
+      
       const result = await complianceCalenderService.create({
-        ...req.body,
+        ...cleanBody,
         document: document ?? "",
       });
       if (!result)

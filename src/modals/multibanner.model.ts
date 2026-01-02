@@ -49,6 +49,12 @@ export enum ScreenEnum {
   Preferences = "preferences",
   CV = "CV",
   ComplianceCalender = "compliance_calender",
+  
+  // Dashboard & Help screens
+  FAQ = "faq",
+  WorkerDashboard = "worker_dashboard",
+  ContractorDashboard = "contractor_dashboard",
+  EmployerDashboard = "employer_dashboard",
 }
 
 const pageBannerSchema = new Schema<IPageBanner>(

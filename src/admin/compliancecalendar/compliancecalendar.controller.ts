@@ -6,6 +6,8 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { ComplianceCalendar } from "../../modals/compliancecalendar.model";
 import { extractImageUrl } from "../../admin/community/community.controller";
+import { createStatusForAllEmployers } from "../../utils/complianceUtil";
+import { User } from "../../modals/user.model";
 
 const complianceCalenderService = new CommonService(ComplianceCalendar);
 
@@ -28,6 +30,21 @@ export class ComplianceCalendarController {
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create compliance Calender"));
+      
+      // ⚡ IMPORTANT: Create status records for all employers so they can see this compliance
+      try {
+        // Fetch all employers (users with role "employer")
+        const employers = await User.find({ userType: "employer" }).select("_id").lean();
+        const employerIds = employers.map(emp => emp._id.toString());
+        
+        // Create status records linking this compliance to all employers
+        if (employerIds.length > 0) {
+          await createStatusForAllEmployers(result._id.toString(), employerIds);
+        }
+      } catch (statusError) {
+        console.error("Warning: Failed to create status records for employers:", statusError);
+      }
+      
       return res
         .status(201)
         .json(new ApiResponse(201, result, "Created successfully"));
@@ -43,10 +60,8 @@ export class ComplianceCalendarController {
   ) {
     try {
       const { id: userId, role } = (req as any).user;
-      const result = await complianceCalenderService.getAll({
-        ...req.query,
-        ...(role === "admin" ? {} : userId),
-      });
+      // Use CommonService with proper pagination support
+      const result = await complianceCalenderService.getAll(req.query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

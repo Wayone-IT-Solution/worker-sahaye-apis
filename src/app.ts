@@ -21,6 +21,8 @@ import "./cron/markExpiredJobs";
 import "./cron/resetJobMetrics";
 import "./cron/communityStatsCron";
 import "./cron/deleteRejectedBadges";
+import "./cron/complianceReminderCron";
+import "./cron/complianceStatusUpdateCron";
 
 const app = express();
 

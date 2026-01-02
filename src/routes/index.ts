@@ -81,11 +81,15 @@ import complianceChecklistRoutes from "../public/compliancechecklist/compliancec
 import bestPracticesFacilityRoutes from "../public/bestpracticesfacility/bestpracticesfacility.routes";
 import candidateBrandingBadgeRoutes from "../public/candidatebrandingbadge/candidatebrandingbadge.routes";
 import preInterviewedContractorRoutes from "../public/preinterviewedcontractor/preinterviewedcontractor.routes";
+import publicComplianceCalendarRoutes from "../public/compliancecalendar/compliancecalendar.routes";
 
 // Create main router
 const router = Router();
 
 // ROUTE MOUNTS
+// Specific routes MUST come before general routes to avoid conflicts
+router.use("/admin/compliancecalendar", complianceCalendarRoutes);
+
 router.use("/role", roleRoutes);
 router.use("/slot", slotRoutes);
 router.use("/admin", adminRoutes);
@@ -112,7 +116,6 @@ router.use("/branding-content", contentRoutes);
 router.use("/callsupport", callSupportAgentRoutes);
 router.use("/workercategory", workerCategoryRoutes);
 router.use("/subscriptionplan", subscriptionPlanRoutes);
-router.use("/complianceCalendar", complianceCalendarRoutes);
 router.use("/projectbasedhiring", projectBasedHiringRoutes);
 
 router.use("/job", jobRoutes);
@@ -158,5 +161,6 @@ router.use("/unifiedservicerequest", unifiedServcieRequestRoutes);
 router.use("/bestpracticesfacility", bestPracticesFacilityRoutes);
 router.use("/candidatebrandingbadge", candidateBrandingBadgeRoutes);
 router.use("/preinterviewedcontractor", preInterviewedContractorRoutes);
+router.use("/compliancecalendar", publicComplianceCalendarRoutes);
 
 export default router;

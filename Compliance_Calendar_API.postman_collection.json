@@ -1,0 +1,362 @@
+{
+  "info": {
+    "name": "Compliance Calendar System",
+    "description": "Complete API collection for Compliance Calendar System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User Authentication",
+      "item": [
+        {
+          "name": "1. Create Employer Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"9876543210\",\n  \"fullName\": \"ABC Company Ltd\",\n  \"userType\": \"employer\",\n  \"email\": \"company@example.com\",\n  \"agreedToTerms\": true,\n  \"privacyPolicyAccepted\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user"]
+            },
+            "description": "Create a new employer account"
+          }
+        },
+        {
+          "name": "2. Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"9876543210\",\n  \"userType\": \"employer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/send-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user", "send-otp"]
+            },
+            "description": "Send OTP to mobile number. For testing use phone 6397228522 to get OTP 123456"
+          }
+        },
+        {
+          "name": "3. Verify OTP & Get Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"9876543210\",\n  \"otp\": \"123456\",\n  \"userType\": \"employer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user", "verify-otp"]
+            },
+            "description": "Verify OTP and get JWT token. Save the token for further requests."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Create Compliance",
+      "item": [
+        {
+          "name": "Create Compliance Calendar (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"PF Return Filing\",\n  \"notes\": \"Provident Fund return filing for FY 2024-25\",\n  \"eventType\": \"PF Return\",\n  \"eventDate\": \"2024-03-31T23:59:59Z\",\n  \"recurrence\": \"YEARLY\",\n  \"tags\": [\"pf\", \"mandatory\", \"quarterly\"],\n  \"document\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/complianceCalendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "complianceCalendar"]
+            },
+            "description": "Admin creates a new compliance calendar. Note: This uses admin token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employer - Get Compliances",
+      "item": [
+        {
+          "name": "Get All Compliance Calendars",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar"]
+            },
+            "description": "Fetch all compliance calendars assigned to employer"
+          }
+        },
+        {
+          "name": "Get Compliance by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/CALENDAR_ID",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "CALENDAR_ID"]
+            },
+            "description": "Get single compliance calendar with status and reminders. Replace CALENDAR_ID with actual ID."
+          }
+        },
+        {
+          "name": "Get Compliance Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "summary"]
+            },
+            "description": "Get compliance status summary (PAID/YET_TO_PAY/MISSED count)"
+          }
+        },
+        {
+          "name": "Get Compliance History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/history?limit=20&skip=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "skip",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Get compliance payment history with pagination"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employer - Update Status",
+      "item": [
+        {
+          "name": "Update Status to PAID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PAID\",\n  \"datePaid\": \"2024-03-31T10:00:00Z\",\n  \"notes\": \"Payment reference: TXN123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/CALENDAR_ID/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "CALENDAR_ID", "status"]
+            },
+            "description": "Update compliance status to PAID. Replace CALENDAR_ID with actual ID."
+          }
+        },
+        {
+          "name": "Update Status to YET_TO_PAY",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"YET_TO_PAY\",\n  \"notes\": \"Will pay by end of month\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/CALENDAR_ID/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "CALENDAR_ID", "status"]
+            },
+            "description": "Update compliance status to YET_TO_PAY"
+          }
+        },
+        {
+          "name": "Update Status to MISSED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"MISSED\",\n  \"notes\": \"Due to unforeseen circumstances\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/CALENDAR_ID/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "CALENDAR_ID", "status"]
+            },
+            "description": "Update compliance status to MISSED"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employer - Reminders",
+      "item": [
+        {
+          "name": "Set Reminders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channels\": [\"IN_APP\", \"WHATSAPP\", \"EMAIL\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/CALENDAR_ID/reminder/set",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "CALENDAR_ID", "reminder", "set"]
+            },
+            "description": "Set reminders for compliance (7 days, 1 day, due date). Channels: IN_APP, WHATSAPP, EMAIL"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employer - Attachments",
+      "item": [
+        {
+          "name": "Upload Proof Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "document",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/compliancecalendar/CALENDAR_ID/attachments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliancecalendar", "CALENDAR_ID", "attachments"]
+            },
+            "description": "Upload proof document for compliance payment. Select file in 'Body' tab."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "employerToken",
+      "value": "YOUR_EMPLOYER_TOKEN_HERE",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "YOUR_ADMIN_TOKEN_HERE",
+      "type": "string"
+    }
+  ]
+}

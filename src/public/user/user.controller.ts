@@ -714,12 +714,24 @@ export class UserController {
         { url: 1, tag: 1, originalName: 1, uploadedAt: 1, _id: 1 }
       ).sort({ uploadedAt: -1 }).lean();
       
+      // Fetch profilePic from FileUpload model
+      const profilePic = await FileUpload.findOne({
+        userId,
+        tag: "profilePic",
+      }).sort({ createdAt: -1 });
+      
+      // Add profilePicUrl to user object
+      const userWithProfilePic = {
+        ...result?.toObject(),
+        profilePicUrl: profilePic?.url || null,
+      };
+      
       return res
         .status(200)
         .json(
           new ApiResponse(
             200,
-            { user: result, enrollmentCourses, enrollSubscriptionPlans, documents },
+            { user: userWithProfilePic, enrollmentCourses, enrollSubscriptionPlans, documents },
             `User fetched successfully`
           )
         );

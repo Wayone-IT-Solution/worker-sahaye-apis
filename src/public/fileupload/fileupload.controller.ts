@@ -19,20 +19,41 @@ export const FileUploadController = {
       }
 
       const uploads = await Promise.all(
-        files.map((file: any) => {
+        files.map(async (file: any) => {
           const s3Key = file.url.split(".com/")[1];
+          const tag = file.tags || "other";
+
+          // Check if a document with the same tag already exists for this user
+          const existingFile = await FileUpload.findOne({ 
+            userId, 
+            tag 
+          });
+
+          // If it exists, delete the old one from S3 and DB
+          if (existingFile) {
+            try {
+              await deleteFromS3(existingFile.s3Key);
+              await FileUpload.deleteOne({ _id: existingFile._id });
+              console.log(`✅ Deleted old document with tag '${tag}' for user ${userId}`);
+            } catch (deleteError) {
+              console.error(`⚠️ Failed to delete old document: ${deleteError}`);
+              // Continue with upload even if deletion fails
+            }
+          }
+
+          // Create new file upload record
           return FileUpload.create({
             s3Key,
             userId,
             url: file.url,
             sizeInBytes: file.size,
             mimeType: file.mimetype,
-            tag: file.tags || "other",
+            tag: tag,
             originalName: file.originalname,
           });
         })
       );
-      res.status(201).json({ success: true, data: uploads });
+      res.status(201).json({ success: true, data: uploads, message: "Files uploaded successfully (duplicates replaced)" });
     } catch (error) {
       console.log("Upload Save Error:", error);
       res.status(500).json({

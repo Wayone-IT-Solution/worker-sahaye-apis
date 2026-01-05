@@ -40,7 +40,7 @@ export class PublicComplianceCalendarController {
       const calendars = Array.isArray(calendarsResult) ? calendarsResult : (calendarsResult.result || []);
       const paginationInfo = !Array.isArray(calendarsResult) ? calendarsResult.pagination : null;
 
-      // Get status for each calendar
+      // Get status and reminders for each calendar
       const enrichedCalendars = await Promise.all(
         calendars.map(async (calendar: any) => {
           const statusRecord = await ComplianceCalendarStatus.findOne({
@@ -48,12 +48,25 @@ export class PublicComplianceCalendarController {
             employerId: new mongoose.Types.ObjectId(employerId),
           }).lean();
 
+          // Get reminders to check if active
+          const reminders = await ComplianceCalendarReminder.find({
+            complianceCalendarId: new mongoose.Types.ObjectId(calendar._id),
+            employerId: new mongoose.Types.ObjectId(employerId),
+          }).select("channels status").lean();
+
+          // Extract active channels (flatten array of arrays)
+          const activeChannels = reminders.length > 0 
+            ? [...new Set(reminders.flatMap((r: any) => r.channels || []))]
+            : [];
+
           return {
             ...calendar,
             employerStatus: statusRecord || {
               status: ComplianceStatus.UPCOMING,
               datePaid: null,
             },
+            isReminderActive: reminders.length > 0,
+            activeChannels: activeChannels,
           };
         })
       );

@@ -6,12 +6,13 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export enum FileTag {
   OTHER = "other",
   RESUME = "resume",
-  ID_PROOF = "idProof",
+  ID_PROOF = "company_proof",
   DOCUMENT = "document",
   CONTRACT = "contract",
   CERTIFICATE = "certificate",
   PROFILE_PICTURE = "profilePic",
   PERSONALRESUME = "personalResume",
+  GST_CERTIFICATE = "gst_cert",
 }
 
 /**

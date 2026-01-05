@@ -689,6 +689,7 @@ export class UserController {
       let enrollSubscriptionPlans: any;
       const { id: userId } = (req as any).user;
       const result = await userService.getById(userId);
+      
       enrollmentCourses = await Enrollment.find(
         {
           user: userId,
@@ -696,6 +697,7 @@ export class UserController {
         },
         { _id: 1, course: 1 }
       );
+      
       enrollSubscriptionPlans = await EnrolledPlan.find(
         {
           user: userId,
@@ -705,12 +707,19 @@ export class UserController {
         },
         { _id: 1, plan: 1 }
       );
+      
+      // Fetch documents from FileUpload model
+      const documents = await FileUpload.find(
+        { userId },
+        { url: 1, tag: 1, originalName: 1, uploadedAt: 1, _id: 1 }
+      ).sort({ uploadedAt: -1 }).lean();
+      
       return res
         .status(200)
         .json(
           new ApiResponse(
             200,
-            { user: result, enrollmentCourses, enrollSubscriptionPlans },
+            { user: result, enrollmentCourses, enrollSubscriptionPlans, documents },
             `User fetched successfully`
           )
         );

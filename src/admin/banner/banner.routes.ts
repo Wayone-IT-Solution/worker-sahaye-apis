@@ -15,7 +15,7 @@ const {
 const router = express.Router();
 
 router
-  .get("/", authenticateToken, asyncHandler(getAllBanners))
+  .get("/", asyncHandler(getAllBanners))
   .post("/",
     authenticateToken,
     isAdmin,

@@ -90,7 +90,7 @@ export class UserController {
         userData.referredCode = referralCode;
         await referrer.updateOne({ $inc: { pointsEarned: 50 } });
       }
-
+      console.log("userData", userData);
       const newUser: any = await userService.create(userData);
       newUser.referralCode = generateReferralCode(newUser._id);
       await newUser.save();

@@ -191,12 +191,13 @@ const userSchema = new Schema<IUser>(
       },
     },
     email: {
+      required: false,
       unique: true,
       sparse: true,
       lowercase: true,
       type: Schema.Types.String,
       validate: {
-        validator: (val: string) => validator.isEmail(val),
+        validator: (val: string) => !val || validator.isEmail(val),
         message: "Invalid email address",
       },
     } as const,

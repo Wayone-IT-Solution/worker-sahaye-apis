@@ -3,6 +3,7 @@ import FileUpload from "../../modals/fileupload.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import { upsertMultipleFileUploads } from "../../services/fileUpload.service";
 
 const fileUploadService = new CommonService(FileUpload);
 
@@ -18,42 +19,26 @@ export const FileUploadController = {
           .json({ success: false, message: "No files uploaded." });
       }
 
-      const uploads = await Promise.all(
-        files.map(async (file: any) => {
-          const s3Key = file.url.split(".com/")[1];
-          const tag = file.tags || "other";
+      // Prepare file data for upsert
+      const fileDataArray = files.map((file: any) => ({
+        s3Key: file.url.split(".com/")[1],
+        url: file.url,
+        tag: file.tags || "other",
+        sizeInBytes: file.size,
+        mimeType: file.mimetype,
+        originalName: file.originalname,
+      }));
 
-          // Check if a document with the same tag already exists for this user
-          const existingFile = await FileUpload.findOne({ 
-            userId, 
-            tag 
-          });
+      // Upsert all files (create if not exists, update if exists)
+      const results = await upsertMultipleFileUploads(userId, fileDataArray);
 
-          // If it exists, delete the old one from S3 and DB
-          if (existingFile) {
-            try {
-              await deleteFromS3(existingFile.s3Key);
-              await FileUpload.deleteOne({ _id: existingFile._id });
-              console.log(`✅ Deleted old document with tag '${tag}' for user ${userId}`);
-            } catch (deleteError) {
-              console.error(`⚠️ Failed to delete old document: ${deleteError}`);
-              // Continue with upload even if deletion fails
-            }
-          }
+      const uploads = results.map((result) => result.data);
 
-          // Create new file upload record
-          return FileUpload.create({
-            s3Key,
-            userId,
-            url: file.url,
-            sizeInBytes: file.size,
-            mimeType: file.mimetype,
-            tag: tag,
-            originalName: file.originalname,
-          });
-        })
-      );
-      res.status(201).json({ success: true, data: uploads, message: "Files uploaded successfully (duplicates replaced)" });
+      res.status(201).json({
+        success: true,
+        data: uploads,
+        message: "Files uploaded successfully",
+      });
     } catch (error) {
       console.log("Upload Save Error:", error);
       res.status(500).json({

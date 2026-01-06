@@ -36,8 +36,25 @@ export class BannerController {
     next: NextFunction
   ) {
     try {
-      const { role } = (req as any).user;
-      const result = await BannerService.getAll({ ...req.query, ...(role === "admin" ? {} : { userType: role, isActive: true }) });
+      const role = (req as any).user?.role;
+      const { usertype } = req.query;
+      
+      let query: any = {};
+      
+      // If admin, return all banners (no filtering)
+      if (role === "admin") {
+        query = {};
+      } else {
+        // For non-admin users, always filter by active status
+        query.isActive = true;
+        
+        // If usertype is provided in query, filter by that usertype
+        if (usertype) {
+          query.userType = usertype;
+        }
+      }
+      
+      const result = await BannerService.getAll({ ...req.query, ...query });
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

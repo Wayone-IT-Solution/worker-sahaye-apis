@@ -36,28 +36,51 @@ export class BannerController {
     next: NextFunction
   ) {
     try {
-      const role = (req as any).user?.role;
-      const { usertype } = req.query;
+      const user = (req as any).user;
+      const isAdmin = user?.role === "admin";
+      const { usertype, ...restQuery } = req.query;
       
-      let query: any = {};
+      // Get all banners first
+      const allBannersResult = await BannerService.getAll(restQuery);
       
-      // If admin, return all banners (no filtering)
-      if (role === "admin") {
-        query = {};
-      } else {
-        // For non-admin users, always filter by active status
-        query.isActive = true;
-        
-        // If usertype is provided in query, filter by that usertype
-        if (usertype) {
-          query.userType = usertype;
-        }
+      // Extract result array
+      const allBanners = Array.isArray(allBannersResult) 
+        ? allBannersResult 
+        : (allBannersResult.result || []);
+      
+      // Apply filters in controller
+      let filteredBanners = allBanners;
+      
+      // Filter by userType if provided
+      if (usertype) {
+        filteredBanners = filteredBanners.filter(
+          (banner: any) => banner.userType === usertype
+        );
       }
       
-      const result = await BannerService.getAll({ ...req.query, ...query });
+      // Filter by isActive if not admin
+      if (!isAdmin) {
+        filteredBanners = filteredBanners.filter(
+          (banner: any) => banner.isActive === "active"
+        );
+      }
+      
+      // Return formatted response
+      const response = {
+        result: filteredBanners,
+        pagination: !Array.isArray(allBannersResult) 
+          ? allBannersResult.pagination 
+          : {
+              totalItems: filteredBanners.length,
+              totalPages: 1,
+              currentPage: 1,
+              itemsPerPage: filteredBanners.length,
+            }
+      };
+      
       return res
         .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
+        .json(new ApiResponse(200, response, "Data fetched successfully"));
     } catch (err) {
       next(err);
     }

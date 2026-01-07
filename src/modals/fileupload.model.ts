@@ -13,6 +13,7 @@ export enum FileTag {
   PROFILE_PICTURE = "profilePic",
   PERSONALRESUME = "personalResume",
   GST_CERTIFICATE = "gst_cert",
+  IDENTITY_PROOF = "idProof",
 }
 
 /**

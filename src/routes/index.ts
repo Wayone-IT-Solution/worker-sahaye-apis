@@ -37,6 +37,8 @@ import callSupportAgentRoutes from "../admin/callsupportagent/callsupportagent.r
 import subscriptionPlanRoutes from "../admin/subscriptionplan/subscriptionplan.routes";
 import complianceCalendarRoutes from "../admin/compliancecalendar/compliancecalendar.routes";
 import projectBasedHiringRoutes from "../admin/projectbasedhiring/projectbasedhiring.routes";
+import faqRoutes from "../admin/faq/faq.routes";
+import faqCategoryRoutes from "../admin/faqcategory/faqcategory.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -117,6 +119,8 @@ router.use("/callsupport", callSupportAgentRoutes);
 router.use("/workercategory", workerCategoryRoutes);
 router.use("/subscriptionplan", subscriptionPlanRoutes);
 router.use("/projectbasedhiring", projectBasedHiringRoutes);
+router.use("/faq", faqRoutes);
+router.use("/faqcategory", faqCategoryRoutes);
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);

@@ -207,8 +207,8 @@ export async function healthCheckComplianceDatabase(): Promise<{
     const statusCount = await ComplianceCalendarStatus.countDocuments();
     const reminderCount = await ComplianceCalendarReminder.countDocuments();
 
-    const health = {
-      status: "healthy" as const,
+    const health: { status: "healthy" | "degraded" | "critical"; details: Record<string, any> } = {
+      status: "healthy",
       details: {
         complianceCalendarStatus: {
           count: statusCount,

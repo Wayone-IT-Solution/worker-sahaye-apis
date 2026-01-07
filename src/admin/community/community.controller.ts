@@ -87,7 +87,7 @@ export class CommunityController {
       // Step 1: Get all joined community IDs for the user
       const joinedCommunities = await CommunityMember.find({
         user: new mongoose.Types.ObjectId(userId),
-      }).select("community");
+      });
 
       const joinedCommunityIds = joinedCommunities.map(
         (cm) => cm.community

@@ -692,8 +692,7 @@ export class UserController {
         {
           user: userId,
           status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
-        },
-        { _id: 1, course: 1 }
+        }
       );
       
       enrollSubscriptionPlans = await EnrolledPlan.find(
@@ -702,8 +701,7 @@ export class UserController {
           status: {
             $in: [PlanEnrollmentStatus.ACTIVE],
           },
-        },
-        { _id: 1, plan: 1 }
+        }
       );
       
       // Fetch documents from FileUpload model

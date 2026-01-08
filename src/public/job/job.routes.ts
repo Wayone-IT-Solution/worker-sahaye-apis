@@ -38,7 +38,18 @@ router
     asyncHandler(getJobListingUsage)
   )
   .get("/", authenticateToken, asyncHandler(getAllJobs))
-  .get("/:id", authenticateToken, asyncHandler(getJobById))
+  .get(
+    "/:id",
+    (req, res, next) => {
+      // Make token optional
+      if (req.headers.authorization) {
+        authenticateToken(req, res, next);
+      } else {
+        next();
+      }
+    },
+    asyncHandler(getJobById)
+  )
   .put("/:id", authenticateToken, asyncHandler(updateJobById))
   .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
   .get("/user-wise/list", authenticateToken, asyncHandler(getAllUserWiseJobs))

@@ -542,6 +542,22 @@ export class JobController {
           .status(404)
           .json(new ApiError(404, "Worker category not found"));
       result = result?.result[0];
+
+      // Check if user is authenticated and has applied for this job
+      let isApplied = false;
+      const userId = (req as any).user?.id;
+      
+      if (userId) {
+        const application = await JobApplication.findOne({
+          job: req.params.id,
+          applicant: userId,
+        });
+        isApplied = !!application;
+      }
+
+      // Add isApplied to result
+      result.isApplied = isApplied;
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

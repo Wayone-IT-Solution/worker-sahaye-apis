@@ -45,6 +45,7 @@ import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model"
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 import { Quotation, QuotationStatus, RequestModelType } from "../../modals/quotation.model";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
+import { Job } from "../../modals/job.model";
 
 export class DashboardController {
   static async getDashboardStats(
@@ -492,6 +493,10 @@ export class DashboardController {
       );
       const { role, id: userId } = (req as any).user;
 
+      // Fetch total jobs and companies
+      const totalJobs = await Job.countDocuments({ status: "active" });
+      const totalCompanies = await User.countDocuments({ userType: "employer", status: "active" });
+
       const allRoleBadges = await Badge.find({ userTypes: role }).lean();
       const totalBadges = allRoleBadges.length;
 
@@ -551,6 +556,8 @@ export class DashboardController {
         total: totalBadges,
         badges: approvedBadges,
         approved: approvedCount,
+        totalJobs,
+        totalCompanies,
       };
       return res.status(200).json(
         new ApiResponse(200, data, "Active user type counts fetched")

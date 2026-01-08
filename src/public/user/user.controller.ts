@@ -145,10 +145,8 @@ export class UserController {
         country,
         profile,
         fullName,
-        jobAlerts,
         dateOfBirth,
-        notifications,
-        preferredLanguage,
+        preferences,
       } = req.body;
 
       const data = {
@@ -156,7 +154,7 @@ export class UserController {
         profile,
         fullName,
         dateOfBirth,
-        preferences: { preferredLanguage, notifications, jobAlerts },
+        preferences, // Get the entire preferences object as sent from frontend
         primaryLocation: { city, state, pincode, address, country },
       };
 

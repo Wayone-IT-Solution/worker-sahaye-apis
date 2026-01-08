@@ -238,18 +238,38 @@ const userSchema = new Schema<IUser>(
       default: false,
     },
     preferences: {
-      jobAlerts: { type: Boolean, default: true },
-      notifications: {
-        sms: { type: Boolean, default: false },
-        push: { type: Boolean, default: true },
-        email: { type: Boolean, default: false },
-        frequency: {
-          type: String,
-          enum: ["immediate", "daily", "weekly"],
-          default: "daily",
+      type: {
+        jobAlerts: { type: Boolean, default: true },
+        notifications: {
+          type: {
+            sms: { type: Boolean, default: false },
+            push: { type: Boolean, default: true },
+            email: { type: Boolean, default: false },
+            frequency: {
+              type: String,
+              enum: ["immediate", "daily", "weekly"],
+              default: "daily",
+            },
+          },
+          default: {
+            sms: false,
+            push: true,
+            email: false,
+            frequency: "daily",
+          },
         },
+        preferredLanguage: { type: String, default: "en" },
       },
-      preferredLanguage: { type: String, default: "en" },
+      default: {
+        jobAlerts: true,
+        notifications: {
+          sms: false,
+          push: true,
+          email: false,
+          frequency: "daily",
+        },
+        preferredLanguage: "en",
+      },
     },
     primaryLocation: {
       city: String,

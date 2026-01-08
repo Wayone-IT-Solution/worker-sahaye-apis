@@ -72,6 +72,11 @@ export class JobController {
     try {
       const pipeline = [
         {
+          $match: {
+            status: "open"
+          }
+        },
+        {
           $lookup: {
             from: "users",
             localField: "postedBy",

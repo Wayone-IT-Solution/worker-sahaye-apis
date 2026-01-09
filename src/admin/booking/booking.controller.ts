@@ -9,6 +9,7 @@ import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
 import { PersonalAssistant } from "../../modals/personalassistant.model";
 import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
+import { SubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 
 const bookingService = new CommonService(Booking);
 
@@ -44,11 +45,11 @@ export const createBooking = async (req: Request, res: Response) => {
   const session = await mongoose.startSession();
   try {
     const { id: user } = (req as any).user;
-    const { assistantId, slotId, amount } = req.body;
+    const { assistantId, slotId, amount, supportServiceId } = req.body;
     if (!assistantId || !slotId) {
       return res
         .status(400)
-        .json(new ApiError(400, "userId, assistantId, slotId are required"));
+        .json(new ApiError(400, "assistantId, slotId are required"));
     }
 
     const exact = await exactAmount(user);
@@ -87,6 +88,8 @@ export const createBooking = async (req: Request, res: Response) => {
             timeslotId: ts._id,
             totalAmount: amount,
             assistant: assistantId,
+            supportService: supportServiceId || null,
+            canCall: true,
             metaDetails: metaDetails,
           },
         ],
@@ -310,5 +313,114 @@ export const getAssistantBookings = async (req: Request, res: Response) => {
     res
       .status(500)
       .json(new ApiError(500, "Failed to fetch assistant bookings", error.message));
+  }
+};
+
+// Mark call as used - set canCall to false
+export const markCallAsUsed = async (req: Request, res: Response) => {
+  try {
+    const { bookingId } = req.params;
+    const { id: userId } = (req as any).user;
+
+    if (!bookingId) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "bookingId is required"));
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res
+        .status(404)
+        .json(new ApiError(404, "Booking not found"));
+    }
+
+    // Verify that the user making the call is the one who booked it
+    if (booking.user.toString() !== userId) {
+      return res
+        .status(403)
+        .json(new ApiError(403, "Unauthorized - This booking is not yours"));
+    }
+
+    // Check if call is already used
+    if (!booking.canCall) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Call opportunity already used for this booking"));
+    }
+
+    // Mark call as used
+    booking.canCall = false;
+    await booking.save();
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, booking, "Call marked as used successfully")
+      );
+  } catch (error: any) {
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res
+      .status(status)
+      .json(new ApiError(status, error.message || "Error marking call as used"));
+  }
+};
+
+// Get canCall status for a support service
+export const getServiceCallStatus = async (req: Request, res: Response) => {
+  try {
+    const { id: userId } = (req as any).user;
+    const { serviceId } = req.params;
+
+    if (!userId) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "User not authenticated"));
+    }
+
+    if (!serviceId) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "serviceId is required"));
+    }
+
+    // Find booking for this user and service
+    const booking = await Booking.findOne({
+      user: userId,
+      supportService: serviceId,
+      status: { $ne: "cancelled" },
+    });
+
+    if (!booking) {
+      return res
+        .status(404)
+        .json(new ApiError(404, "No booking found for this service"));
+    }
+
+    // Check if user has active premium/enterprise/professional subscription
+    const enrolledPlan = await EnrolledPlan.findOne({
+      user: userId,
+      status: "active",
+    }).populate("plan");
+
+    const premiumPlanTypes = [PlanType.PREMIUM, PlanType.ENTERPRISE, PlanType.PROFESSIONAL];
+    const hasActiveSubscription = enrolledPlan && premiumPlanTypes.includes((enrolledPlan.plan as any).planType);
+
+    // Return canCall status, serviceId, bookingId, and hasActiveSubscription
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, {
+          bookingId: booking._id,
+          serviceId: booking.supportService,
+          canCall: booking.canCall,
+          hasActiveSubscription: hasActiveSubscription || false,
+        }, "Service call status fetched successfully")
+      );
+  } catch (error: any) {
+    const status = error instanceof ApiError ? error.statusCode : 500;
+    return res
+      .status(status)
+      .json(new ApiError(status, error.message || "Error fetching service call status"));
   }
 };

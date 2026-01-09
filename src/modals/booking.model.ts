@@ -15,6 +15,8 @@ export interface IBooking extends Document {
   assistant: Types.ObjectId;
   timeslotId: Types.ObjectId;
   paymentStatus: PaymentStatus;
+  supportService?: Types.ObjectId;
+  canCall: boolean;
 }
 
 const BookingSchema = new Schema<IBooking>(
@@ -26,6 +28,10 @@ const BookingSchema = new Schema<IBooking>(
     user: {
       ref: "User",
       required: true,
+      type: Schema.Types.ObjectId,
+    },
+    supportService: {
+      ref: "SupportService",
       type: Schema.Types.ObjectId,
     },
     notes: { type: String },
@@ -40,6 +46,10 @@ const BookingSchema = new Schema<IBooking>(
       type: String,
       default: "pending",
       enum: ["pending", "success", "failed", "refunded"],
+    },
+    canCall: {
+      type: Boolean,
+      default: true,
     },
     metaDetails: {},
     paymentDetails: {},

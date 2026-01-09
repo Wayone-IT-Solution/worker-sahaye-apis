@@ -494,7 +494,7 @@ export class DashboardController {
       const { role, id: userId } = (req as any).user;
 
       // Fetch total jobs and companies
-      const totalJobs = await Job.countDocuments({ status: "active" });
+      const totalJobs = await Job.countDocuments({ status: "open" });
       const totalCompanies = await User.countDocuments({ userType: "employer", status: "active" });
 
       const allRoleBadges = await Badge.find({ userTypes: role }).lean();
@@ -550,8 +550,15 @@ export class DashboardController {
         .map(({ _id, name }) => ({ _id, name }));
 
       const percentage = totalBadges === 0 ? 0 : parseFloat(((approvedCount / totalBadges) * 100).toFixed(2));
+      
+      // Add totalJobs to counts array
+      const countsWithJobs = [
+        ...counts,
+        { title: "jobs", count: totalJobs }
+      ];
+      
       const data = {
-        counts,
+        counts: countsWithJobs,
         percentage,
         total: totalBadges,
         badges: approvedBadges,

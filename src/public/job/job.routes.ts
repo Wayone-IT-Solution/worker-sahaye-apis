@@ -26,6 +26,7 @@ const {
   getAllUserWiseJobs,
   getJobListingUsage,
   getAllSuggestedJobsByUser,
+  getJobCities,
 } = JobController;
 
 const router = express.Router();
@@ -37,6 +38,7 @@ router
     allowAllExcept("admin", "worker", "agent"),
     asyncHandler(getJobListingUsage)
   )
+  .get("/cities", asyncHandler(getJobCities))
   .get("/", authenticateToken, asyncHandler(getAllJobs))
   .get(
     "/:id",

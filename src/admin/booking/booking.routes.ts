@@ -10,6 +10,8 @@ import {
   changeBookingSlot,
   updateBookingStatus,
   getAssistantBookings,
+  markCallAsUsed,
+  getServiceCallStatus,
 } from "./booking.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
 import {
@@ -24,6 +26,8 @@ router.patch("/", authenticateToken, asyncHandler(getExactAmount));
 router.get("/", authenticateToken, isAdmin, asyncHandler(getAllBookings));
 router.put("/", authenticateToken, isWorker, asyncHandler(updateBooking));
 router.post("/", authenticateToken, isWorker, asyncHandler(createBooking));
+router.get("/service/:serviceId/call-status", authenticateToken, asyncHandler(getServiceCallStatus));
+router.post("/:bookingId/mark-call-used", authenticateToken, isWorker, asyncHandler(markCallAsUsed));
 router.post("/:bookingId", authenticateToken, isWorker, asyncHandler(changeBookingSlot));
 router.put(
   "/:bookingId",

@@ -70,12 +70,79 @@ export class JobController {
 
   static async getAllJobs(req: Request, res: Response, next: NextFunction) {
     try {
+      const { jobRole, category, city, workMode, jobType, minSalary, maxSalary, experience, search } = req.query;
+
+      // Build match stage dynamically
+      const matchStage: any = {
+        status: "open"
+      };
+
+      // Filter by category
+      if (category) {
+        matchStage.category = new (require("mongoose")).Types.ObjectId(category as string);
+      }
+
+      // Filter by city
+      if (city) {
+        matchStage["location.city"] = { $regex: city as string, $options: "i" };
+      }
+
+      // Filter by workMode
+      if (workMode) {
+        matchStage.workMode = workMode;
+      }
+
+      // Filter by jobType
+      if (jobType) {
+        matchStage.jobType = jobType;
+      }
+
+      // Filter by salary range
+      if (minSalary || maxSalary) {
+        matchStage["salary.min"] = {};
+        if (minSalary) {
+          matchStage["salary.min"]["$gte"] = parseInt(minSalary as string);
+        }
+        if (maxSalary) {
+          matchStage["salary.max"] = matchStage["salary.max"] || {};
+          matchStage["salary.max"]["$lte"] = parseInt(maxSalary as string);
+        }
+      }
+
+      // Filter by experience level
+      if (experience) {
+        matchStage.experienceLevel = experience;
+      }
+
       const pipeline = [
         {
-          $match: {
-            status: "open"
-          }
+          $match: matchStage
         },
+        {
+          $lookup: {
+            from: "jobroles",
+            localField: "attributes.jobRole",
+            foreignField: "_id",
+            as: "jobRoleDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$jobRoleDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        // Filter by job role if provided
+        ...(jobRole ? [
+          {
+            $match: {
+              $or: [
+                { "jobRoleDetails._id": new (require("mongoose")).Types.ObjectId(jobRole as string) },
+                { "jobRoleDetails.name": { $regex: jobRole as string, $options: "i" } }
+              ]
+            }
+          }
+        ] : []),
         {
           $lookup: {
             from: "users",
@@ -145,6 +212,18 @@ export class JobController {
             as: "tradesDetails",
           },
         },
+        // Full-text search on title and description if search param provided
+        ...(search ? [
+          {
+            $match: {
+              $or: [
+                { title: { $regex: search as string, $options: "i" } },
+                { description: { $regex: search as string, $options: "i" } },
+                { shortDescription: { $regex: search as string, $options: "i" } }
+              ]
+            }
+          }
+        ] : []),
         {
           $project: {
             _id: 1,
@@ -190,6 +269,12 @@ export class JobController {
             categoryInfo: {
               name: "$categoryDetails.name",
               description: "$categoryDetails.description",
+            },
+            jobRole: {
+              _id: "$jobRoleDetails._id",
+              name: "$jobRoleDetails.name",
+              slug: "$jobRoleDetails.slug",
+              description: "$jobRoleDetails.description"
             },
             trades: {
               $map: {
@@ -761,6 +846,55 @@ export class JobController {
         .status(200)
         .json(
           new ApiResponse(200, usage, "Job listing usage fetched successfully")
+        );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getJobCities(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const cities = await Job.aggregate([
+        {
+          $match: {
+            // status: "open",
+            "location.city": { $nin: [null, ""] }
+          }
+        },
+        {
+          $group: {
+            _id: { $toLower: "$location.city" }
+          }
+        },
+        {
+          $sort: { _id: 1 }
+        },
+        {
+          $project: {
+            city: "$_id",
+            _id: 0
+          }
+        }
+      ]);
+
+      if (!cities || cities.length === 0) {
+        return res
+          .status(200)
+          .json(new ApiResponse(200, [], "No cities found with job listings"));
+      }
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            cities.map(c => c.city),
+            "Cities fetched successfully"
+          )
         );
     } catch (err) {
       next(err);

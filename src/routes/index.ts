@@ -39,6 +39,10 @@ import complianceCalendarRoutes from "../admin/compliancecalendar/compliancecale
 import projectBasedHiringRoutes from "../admin/projectbasedhiring/projectbasedhiring.routes";
 import faqRoutes from "../admin/faq/faq.routes";
 import faqCategoryRoutes from "../admin/faqcategory/faqcategory.routes";
+import jobRoleRoutes from "../admin/jobrole/jobrole.routes";
+import supportServiceRoutes from "../admin/supportservice/supportservice.routes";
+import serviceLocationRoutes from "../admin/servicelocation/servicelocation.routes";
+import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -121,6 +125,10 @@ router.use("/subscriptionplan", subscriptionPlanRoutes);
 router.use("/projectbasedhiring", projectBasedHiringRoutes);
 router.use("/faq", faqRoutes);
 router.use("/faqcategory", faqCategoryRoutes);
+router.use("/jobrole", jobRoleRoutes);
+router.use("/supportservice", supportServiceRoutes);
+router.use("/servicelocation", serviceLocationRoutes);
+router.use("/subindustry", subIndustryRoutes);
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);

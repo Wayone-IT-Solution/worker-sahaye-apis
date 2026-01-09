@@ -45,7 +45,7 @@ export const createBooking = async (req: Request, res: Response) => {
   const session = await mongoose.startSession();
   try {
     const { id: user } = (req as any).user;
-    const { assistantId, slotId, amount, supportServiceId } = req.body;
+    const { assistantId, slotId, amount, supportServiceId, serviceLocationId, userLocation } = req.body;
     if (!assistantId || !slotId) {
       return res
         .status(400)
@@ -89,6 +89,8 @@ export const createBooking = async (req: Request, res: Response) => {
             totalAmount: amount,
             assistant: assistantId,
             supportService: supportServiceId || null,
+            serviceLocationId: serviceLocationId || null,
+            userLocation: userLocation || null,
             canCall: true,
             metaDetails: metaDetails,
           },

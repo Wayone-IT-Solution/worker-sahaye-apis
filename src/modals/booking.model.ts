@@ -16,6 +16,8 @@ export interface IBooking extends Document {
   timeslotId: Types.ObjectId;
   paymentStatus: PaymentStatus;
   supportService?: Types.ObjectId;
+  serviceLocationId?: Types.ObjectId;
+  userLocation?: string;
   canCall: boolean;
 }
 
@@ -33,6 +35,14 @@ const BookingSchema = new Schema<IBooking>(
     supportService: {
       ref: "SupportService",
       type: Schema.Types.ObjectId,
+    },
+    serviceLocationId: {
+      ref: "ServiceLocation",
+      type: Schema.Types.ObjectId,
+    },
+    userLocation: {
+      type: String,
+      trim: true,
     },
     notes: { type: String },
     timeslotId: { type: Schema.Types.ObjectId },

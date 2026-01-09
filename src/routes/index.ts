@@ -84,6 +84,8 @@ import bestPracticesFacilityRoutes from "../public/bestpracticesfacility/bestpra
 import candidateBrandingBadgeRoutes from "../public/candidatebrandingbadge/candidatebrandingbadge.routes";
 import preInterviewedContractorRoutes from "../public/preinterviewedcontractor/preinterviewedcontractor.routes";
 import publicComplianceCalendarRoutes from "../public/compliancecalendar/compliancecalendar.routes";
+import headerRoutes from "../public/header/header.routes"
+import pdfFileRoutes from "../public/pdffile/pdffile.routes"
 
 // Create main router
 const router = Router();
@@ -166,5 +168,7 @@ router.use("/bestpracticesfacility", bestPracticesFacilityRoutes);
 router.use("/candidatebrandingbadge", candidateBrandingBadgeRoutes);
 router.use("/preinterviewedcontractor", preInterviewedContractorRoutes);
 router.use("/compliancecalendar", publicComplianceCalendarRoutes);
+router.use("/header", headerRoutes);
+router.use("/pdffile", pdfFileRoutes);
 
 export default router;

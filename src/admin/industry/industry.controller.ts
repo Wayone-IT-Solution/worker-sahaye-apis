@@ -3,6 +3,12 @@ import ApiResponse from "../../utils/ApiResponse";
 import Industry from "../../modals/industry.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import {
+  buildMatchStage,
+  buildSortObject,
+  buildPaginationResponse,
+  SEARCH_FIELD_MAP,
+} from "../../utils/queryBuilder";
 
 const IndustryService = new CommonService(Industry);
 
@@ -52,10 +58,40 @@ export class IndustryController {
     next: NextFunction
   ) {
     try {
-      const result = await IndustryService.getAll(req.query);
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
+      const matchStage = buildMatchStage(
+        {
+          status: req.query.status as string,
+          search: req.query.search as string,
+          searchKey: req.query.searchKey as string,
+          startDate: req.query.startDate as string,
+          endDate: req.query.endDate as string,
+        },
+        SEARCH_FIELD_MAP.industry
+      );
+
+      const sortObj = buildSortObject(
+        req.query.sortKey as string,
+        req.query.sortDir as string
+      );
+
+      const total = await Industry.countDocuments(matchStage);
+      const industries = await Industry.find(matchStage)
+        .populate("createdBy updatedBy", "name email")
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limit);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          buildPaginationResponse(industries, total, page, limit),
+          "Data fetched successfully"
+        )
+      );
     } catch (err) {
       next(err);
     }

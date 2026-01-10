@@ -4,6 +4,12 @@ import { Header, IHeader } from "../../modals/header.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import mongoose from "mongoose";
+import {
+  buildMatchStage,
+  buildSortObject,
+  buildPaginationResponse,
+  SEARCH_FIELD_MAP,
+} from "../../utils/queryBuilder";
 
 const HeaderService = new CommonService<IHeader>(Header);
 
@@ -28,8 +34,39 @@ export class HeaderController {
   // Get all headers
   static async getAllHeaders(req: Request, res: Response, next: NextFunction) {
     try {
-      const allHeadersResult = await HeaderService.getAll(req.query);
-      return res.status(200).json(new ApiResponse(200, allHeadersResult, "Headers fetched successfully"));
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
+      const matchStage = buildMatchStage(
+        {
+          status: req.query.status as string,
+          search: req.query.search as string,
+          searchKey: req.query.searchKey as string,
+          startDate: req.query.startDate as string,
+          endDate: req.query.endDate as string,
+        },
+        SEARCH_FIELD_MAP.header
+      );
+
+      const sortObj = buildSortObject(
+        req.query.sortKey as string,
+        req.query.sortDir as string
+      );
+
+      const total = await Header.countDocuments(matchStage);
+      const headers = await Header.find(matchStage)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limit);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          buildPaginationResponse(headers, total, page, limit),
+          "Headers fetched successfully"
+        )
+      );
     } catch (err) {
       next(err);
     }

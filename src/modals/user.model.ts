@@ -55,6 +55,8 @@ export interface IUser extends Document {
   };
   primaryLocation?: ILocation;
   gender?: "male" | "female" | "other" | "prefer_not_to_say";
+  userAadhar?: string;
+  userPan?: string;
   profile: {
     // Worker
     designation?: string;
@@ -286,6 +288,14 @@ const userSchema = new Schema<IUser>(
     referralCode: { type: String, unique: true },
     referredCode: { type: String, unique: true },
     referredBy: { type: Schema.Types.ObjectId, ref: "User" },
+    userAadhar: {
+      type: String,
+      required: false,
+    },
+    userPan: {
+      type: String,
+      required: false,
+    },
   },
   { timestamps: true }
 );

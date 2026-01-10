@@ -3,6 +3,12 @@ import ApiResponse from "../../utils/ApiResponse";
 import { JobRole } from "../../modals/jobrole.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import {
+  buildMatchStage,
+  buildSortObject,
+  buildPaginationResponse,
+  SEARCH_FIELD_MAP,
+} from "../../utils/queryBuilder";
 
 const jobRoleService = new CommonService(JobRole);
 
@@ -71,7 +77,30 @@ export class JobRoleController {
     next: NextFunction
   ) {
     try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
+      const matchStage = buildMatchStage(
+        {
+          status: req.query.status as string,
+          search: req.query.search as string,
+          searchKey: req.query.searchKey as string,
+          startDate: req.query.startDate as string,
+          endDate: req.query.endDate as string,
+          categoryId: req.query.categoryId as string,
+        },
+        SEARCH_FIELD_MAP.jobrole
+      );
+
+      const sortObj = buildSortObject(
+        req.query.sortKey as string,
+        req.query.sortDir as string,
+        { createdAt: -1 }
+      );
+
       const pipeline = [
+        ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
         {
           $lookup: {
             from: "jobcategories",
@@ -86,34 +115,51 @@ export class JobRoleController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        { $sort: sortObj },
         {
-          $project: {
-            _id: 1,
-            name: 1,
-            slug: 1,
-            description: 1,
-            status: 1,
-            salaryRange: 1,
-            requiredExperience: 1,
-            tags: 1,
-            icon: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            category: {
-              _id: "$categoryDetails._id",
-              name: "$categoryDetails.name",
-              type: "$categoryDetails.type",
-              description: "$categoryDetails.description",
-              icon: "$categoryDetails.icon",
-            },
+          $facet: {
+            metadata: [{ $count: "total" }],
+            data: [
+              { $skip: skip },
+              { $limit: limit },
+              {
+                $project: {
+                  _id: 1,
+                  name: 1,
+                  slug: 1,
+                  description: 1,
+                  status: 1,
+                  salaryRange: 1,
+                  requiredExperience: 1,
+                  tags: 1,
+                  icon: 1,
+                  createdAt: 1,
+                  updatedAt: 1,
+                  category: {
+                    _id: "$categoryDetails._id",
+                    name: "$categoryDetails.name",
+                    type: "$categoryDetails.type",
+                    description: "$categoryDetails.description",
+                    icon: "$categoryDetails.icon",
+                  },
+                },
+              },
+            ],
           },
         },
       ];
 
-      const result = await jobRoleService.getAll(req.query, pipeline);
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Job roles fetched successfully"));
+      const result = await JobRole.aggregate(pipeline);
+      const total = result[0]?.metadata?.[0]?.total || 0;
+      const jobRoles = result[0]?.data || [];
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          buildPaginationResponse(jobRoles, total, page, limit),
+          "Job roles fetched successfully"
+        )
+      );
     } catch (err) {
       next(err);
     }

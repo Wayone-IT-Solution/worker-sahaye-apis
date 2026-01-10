@@ -35,6 +35,7 @@ const BookingSchema = new Schema<IBooking>(
     supportService: {
       ref: "SupportService",
       type: Schema.Types.ObjectId,
+      required: true,
     },
     serviceLocationId: {
       ref: "ServiceLocation",

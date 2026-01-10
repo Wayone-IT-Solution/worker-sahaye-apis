@@ -15,10 +15,10 @@ const router = Router();
 router.get("/industry/:industryId", getSubIndustriesByIndustry);
 
 // Admin routes
-router.post("/", isAdmin, authenticateToken, createSubIndustry);
-router.get("/", isAdmin, authenticateToken, getAllSubIndustries);
-router.get("/:id", isAdmin, authenticateToken, getSubIndustryById);
-router.put("/:id", isAdmin, authenticateToken, updateSubIndustry);
-router.delete("/:id", isAdmin, authenticateToken, deleteSubIndustry);
+router.post("/",  authenticateToken, createSubIndustry);
+router.get("/",  authenticateToken, getAllSubIndustries);
+router.get("/:id",  authenticateToken, getSubIndustryById);
+router.put("/:id",  authenticateToken, updateSubIndustry);
+router.delete("/:id",  authenticateToken, deleteSubIndustry);
 
 export default router;

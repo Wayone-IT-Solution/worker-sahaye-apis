@@ -1,6 +1,20 @@
 import { Request, Response } from "express";
 import SupportService from "../../modals/supportservice.model";
 import { PipelineStage } from "mongoose";
+import {
+  buildMatchStage,
+  buildSortObject,
+  buildPaginationResponse,
+} from "../../utils/queryBuilder";
+
+// Search field mapping for support service
+const SUPPORT_SERVICE_SEARCH_FIELDS = {
+  title: ["title"],
+  subtitle: ["subtitle"],
+  description: ["description"],
+  serviceFor: ["serviceFor"],
+  status: ["status"],
+};
 
 // Create a new support service
 export const createSupportService = async (req: Request, res: Response) => {
@@ -57,27 +71,59 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
-    const serviceFor = req.query.serviceFor as string;
-    const status = req.query.status as string;
-
     const skip = (page - 1) * limit;
 
-    // Build match stage
     const matchStage: any = {};
-    if (serviceFor) {
-      matchStage.serviceFor = serviceFor;
+    
+    // Add direct filters
+    if (req.query.serviceFor) {
+      matchStage.serviceFor = req.query.serviceFor as string;
     }
-    if (status) {
-      matchStage.status = status;
+    if (req.query.status) {
+      matchStage.status = req.query.status as string;
+    }
+
+    // Search functionality
+    const search = req.query.search as string;
+    const searchKey = req.query.searchKey as string;
+    if (search && searchKey && SUPPORT_SERVICE_SEARCH_FIELDS[searchKey as keyof typeof SUPPORT_SERVICE_SEARCH_FIELDS]) {
+      const fields = SUPPORT_SERVICE_SEARCH_FIELDS[searchKey as keyof typeof SUPPORT_SERVICE_SEARCH_FIELDS];
+      if (fields.length === 1) {
+        matchStage[fields[0]] = { $regex: search, $options: "i" };
+      }
+    }
+
+    // Date range filtering
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) {
+        matchStage.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        matchStage.createdAt.$lte = new Date(endDate);
+      }
+    }
+
+    // Build sort object
+    const sortKey = req.query.sortKey as string;
+    const sortDir = req.query.sortDir as string;
+    const sortObj: any = {};
+    if (sortKey && sortDir) {
+      sortObj[sortKey] = parseInt(sortDir) === -1 ? -1 : 1;
+    } else {
+      sortObj.order = 1;
+      sortObj.createdAt = -1;
     }
 
     const pipeline: PipelineStage[] = [
-      { $match: matchStage },
+      ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
       {
         $facet: {
           metadata: [{ $count: "total" }],
           data: [
-            { $sort: { order: 1, createdAt: -1 } },
+            { $sort: sortObj as any },
             { $skip: skip },
             { $limit: limit },
             {
@@ -102,6 +148,7 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
                 description: 1,
                 serviceFor: 1,
                 status: 1,
+                order: 1,
                 createdAt: 1,
                 updatedAt: 1,
                 createdBy: {
@@ -111,7 +158,7 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
                 },
               },
             },
-          ],
+          ] as any,
         },
       },
     ];
@@ -123,13 +170,7 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Support services fetched successfully",
-      data: services,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
+      data: buildPaginationResponse(services, total, page, limit),
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -233,7 +274,29 @@ export const getSupportServiceById = async (req: Request, res: Response) => {
 export const updateSupportService = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, subtitle, description, serviceFor, status, order } = req.body;
+    let { title, subtitle, description, serviceFor, status, order } = req.body;
+
+    console.log("Update Request Received:", { 
+      id, 
+      title, 
+      subtitle, 
+      description, 
+      serviceFor, 
+      status, 
+      order 
+    });
+
+    // Normalize status to lowercase
+    if (status !== undefined && typeof status === 'string') {
+      status = status.toLowerCase();
+    }
+
+    // Parse order as integer if provided
+    if (order !== undefined && order !== null) {
+      const parsedOrder = parseInt(String(order), 10);
+      order = isNaN(parsedOrder) ? undefined : parsedOrder;
+      console.log("Parsed Order:", order);
+    }
 
     // Validate serviceFor if provided
     if (serviceFor) {
@@ -255,13 +318,15 @@ export const updateSupportService = async (req: Request, res: Response) => {
     }
 
     const updateData: any = {};
-    if (title) updateData.title = title;
-    if (subtitle) updateData.subtitle = subtitle;
-    if (description) updateData.description = description;
-    if (serviceFor) updateData.serviceFor = serviceFor;
-    if (status) updateData.status = status;
+    if (title !== undefined) updateData.title = title;
+    if (subtitle !== undefined) updateData.subtitle = subtitle;
+    if (description !== undefined) updateData.description = description;
+    if (serviceFor !== undefined) updateData.serviceFor = serviceFor;
+    if (status !== undefined) updateData.status = status;
     if (order !== undefined) updateData.order = order;
     updateData.updatedBy = (req as any).user?._id;
+
+    console.log("Update Data to save:", updateData);
 
     const updatedService = await SupportService.findByIdAndUpdate(id, updateData, {
       new: true,
@@ -275,12 +340,15 @@ export const updateSupportService = async (req: Request, res: Response) => {
       });
     }
 
+    console.log("Updated Service:", updatedService);
+
     return res.status(200).json({
       success: true,
       message: "Support service updated successfully",
       data: updatedService,
     });
   } catch (error: any) {
+    console.error("Update error:", error.message);
     return res.status(500).json({
       success: false,
       message: error.message || "Error updating support service",

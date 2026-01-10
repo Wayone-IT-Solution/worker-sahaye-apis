@@ -4,6 +4,12 @@ import { Pdf, IPdf } from "../../modals/pdffile.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import mongoose from "mongoose";
+import {
+  buildMatchStage,
+  buildSortObject,
+  buildPaginationResponse,
+  SEARCH_FIELD_MAP,
+} from "../../utils/queryBuilder";
 
 const PdfService = new CommonService<IPdf>(Pdf);
 
@@ -28,25 +34,42 @@ export class PdfController {
   // Get all PDFs
   static async getAllPdfs(req: Request, res: Response, next: NextFunction) {
     try {
-      const allPdfsResult = await PdfService.getAll(req.query);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
 
-      const pdfs = Array.isArray(allPdfsResult)
-        ? allPdfsResult
-        : allPdfsResult.result || [];
+      const matchStage = buildMatchStage(
+        {
+          status: req.query.status as string,
+          search: req.query.search as string,
+          searchKey: req.query.searchKey as string,
+          startDate: req.query.startDate as string,
+          endDate: req.query.endDate as string,
+          headerId: req.query.headerId as string,
+        },
+        SEARCH_FIELD_MAP.pdffile
+      );
 
-      const response = {
-        result: pdfs,
-        pagination: !Array.isArray(allPdfsResult)
-          ? allPdfsResult.pagination
-          : {
-              totalItems: pdfs.length,
-              totalPages: 1,
-              currentPage: 1,
-              itemsPerPage: pdfs.length,
-            },
-      };
+      const sortObj = buildSortObject(
+        req.query.sortKey as string,
+        req.query.sortDir as string,
+        { order: 1 }
+      );
 
-      return res.status(200).json(new ApiResponse(200, response, "PDFs fetched successfully"));
+      const total = await Pdf.countDocuments(matchStage);
+      const pdfs = await Pdf.find(matchStage)
+        .populate("header", "title icon description")
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limit);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          buildPaginationResponse(pdfs, total, page, limit),
+          "PDFs fetched successfully"
+        )
+      );
     } catch (err) {
       next(err);
     }

@@ -196,6 +196,8 @@ export interface IJob extends Document {
   jobType: JobType;
   workMode: WorkMode;
   industry: Industry;
+  industryId?: Types.ObjectId; // Reference to industry document
+  subIndustryId?: Types.ObjectId; // Reference to sub-industry document
   workSchedule: IWorkSchedule;
   experienceLevel: ExperienceLevel;
 
@@ -360,6 +362,16 @@ const JobSchema = new Schema<IJob>(
       index: true,
       type: String,
       enum: Object.values(Industry),
+    },
+    industryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Industry",
+      index: true,
+    },
+    subIndustryId: {
+      type: Schema.Types.ObjectId,
+      ref: "SubIndustry",
+      index: true,
     },
     history: [JobHistorySchema],
     workSchedule: {

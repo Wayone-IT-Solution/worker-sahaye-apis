@@ -70,7 +70,7 @@ export class JobController {
 
   static async getAllJobs(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobRole, category, city, workMode, jobType, minSalary, maxSalary, experience, search } = req.query;
+      const { jobRole, category, city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
 
       // Build match stage dynamically
       const matchStage: any = {
@@ -80,6 +80,16 @@ export class JobController {
       // Filter by category
       if (category) {
         matchStage.category = new (require("mongoose")).Types.ObjectId(category as string);
+      }
+
+      // Filter by industry
+      if (industryId) {
+        matchStage.industryId = new (require("mongoose")).Types.ObjectId(industryId as string);
+      }
+
+      // Filter by sub-industry
+      if (subIndustryId) {
+        matchStage.subIndustryId = new (require("mongoose")).Types.ObjectId(subIndustryId as string);
       }
 
       // Filter by city
@@ -206,6 +216,34 @@ export class JobController {
         },
         {
           $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
             from: "trades",
             localField: "trades",
             foreignField: "_id",
@@ -240,6 +278,8 @@ export class JobController {
             benefits: 1,
             workMode: 1,
             industry: 1,
+            industryId: 1,
+            subIndustryId: 1,
             userType: 1,
             createdAt: 1,
             updatedAt: 1,
@@ -269,6 +309,18 @@ export class JobController {
             categoryInfo: {
               name: "$categoryDetails.name",
               description: "$categoryDetails.description",
+            },
+            industryInfo: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+              icon: "$industryDetails.icon",
+              description: "$industryDetails.description",
+            },
+            subIndustryInfo: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
+              icon: "$subIndustryDetails.icon",
+              description: "$subIndustryDetails.description",
             },
             jobRole: {
               _id: "$jobRoleDetails._id",

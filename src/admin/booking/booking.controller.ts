@@ -10,6 +10,8 @@ import { CommonService } from "../../services/common.services";
 import { PersonalAssistant } from "../../modals/personalassistant.model";
 import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
 import { SubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import SupportService from "../../modals/supportservice.model";
+import ServiceLocation from "../../modals/servicelocation.model";
 
 const bookingService = new CommonService(Booking);
 
@@ -46,10 +48,10 @@ export const createBooking = async (req: Request, res: Response) => {
   try {
     const { id: user } = (req as any).user;
     const { assistantId, slotId, amount, supportServiceId, serviceLocationId, userLocation } = req.body;
-    if (!assistantId || !slotId) {
+    if (!assistantId || !slotId || !supportServiceId) {
       return res
         .status(400)
-        .json(new ApiError(400, "assistantId, slotId are required"));
+        .json(new ApiError(400, "assistantId, slotId, and supportServiceId are required"));
     }
 
     const exact = await exactAmount(user);
@@ -74,13 +76,20 @@ export const createBooking = async (req: Request, res: Response) => {
       ts.bookedBy = user;
       await slotDoc.save({ session });
 
-      const [userData, assistant]: any = await Promise.all([
+      const [userData, assistant, serviceData, locationData]: any = await Promise.all([
         User.findById(user).select("fullName email mobile"),
         PersonalAssistant.findById(assistantId).select(
           "name email phoneNumber"
         ),
+        SupportService.findById(supportServiceId).select("title subtitle description serviceFor"),
+        serviceLocationId ? ServiceLocation.findById(serviceLocationId).select("location serviceId") : null,
       ]);
-      const metaDetails = { user: userData, assistant, timeslot: ts };
+      
+      if (!serviceData) {
+        throw new ApiError(404, "Support service not found");
+      }
+
+      const metaDetails = { user: userData, assistant, timeslot: ts, service: serviceData, serviceLocation: locationData };
       const booking = await Booking.create(
         [
           {
@@ -88,7 +97,7 @@ export const createBooking = async (req: Request, res: Response) => {
             timeslotId: ts._id,
             totalAmount: amount,
             assistant: assistantId,
-            supportService: supportServiceId || null,
+            supportService: supportServiceId,
             serviceLocationId: serviceLocationId || null,
             userLocation: userLocation || null,
             canCall: true,
@@ -399,14 +408,14 @@ export const getServiceCallStatus = async (req: Request, res: Response) => {
         .json(new ApiError(404, "No booking found for this service"));
     }
 
-    // Check if user has active premium/enterprise/professional subscription
+    // Check if user has active basic or premium subscription
     const enrolledPlan = await EnrolledPlan.findOne({
       user: userId,
       status: "active",
     }).populate("plan");
 
-    const premiumPlanTypes = [PlanType.PREMIUM, PlanType.ENTERPRISE, PlanType.PROFESSIONAL];
-    const hasActiveSubscription = enrolledPlan && premiumPlanTypes.includes((enrolledPlan.plan as any).planType);
+    const activePlanTypes = [PlanType.BASIC, PlanType.PREMIUM];
+    const hasActiveSubscription = enrolledPlan && activePlanTypes.includes((enrolledPlan.plan as any).planType);
 
     // Return canCall status, serviceId, bookingId, and hasActiveSubscription
     return res

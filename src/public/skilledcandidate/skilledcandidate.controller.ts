@@ -10,6 +10,8 @@ import {
   VerificationStatus,
 } from "./../../modals/skilledcandidate.model";
 import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const SkilledCandidateService = new CommonService(SkilledCandidate);
 
@@ -27,6 +29,23 @@ export class SkilledCandidateController {
         return res
           .status(400)
           .json(new ApiError(400, "Document are required."));
+      }
+
+      // Check if user has premium plan subscription
+      const enrolledPlan: any = await EnrolledPlan.findOne({
+        user,
+        status: "active",
+      }).populate("plan");
+
+      if (!enrolledPlan || enrolledPlan.plan.planType !== PlanType.PREMIUM) {
+        return res
+          .status(403)
+          .json(
+            new ApiError(
+              403,
+              "You need an active Premium plan subscription to upload skilled candidate documents."
+            )
+          );
       }
 
       const existingVerificationRecord: any = await SkilledCandidate.findOne({

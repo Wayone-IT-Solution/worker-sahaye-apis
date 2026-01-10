@@ -90,6 +90,7 @@ import preInterviewedContractorRoutes from "../public/preinterviewedcontractor/p
 import publicComplianceCalendarRoutes from "../public/compliancecalendar/compliancecalendar.routes";
 import headerRoutes from "../public/header/header.routes"
 import pdfFileRoutes from "../public/pdffile/pdffile.routes"
+import loanSupportRoutes from "../public/loansupport/loansupport.routes"
 
 // Create main router
 const router = Router();
@@ -178,5 +179,6 @@ router.use("/preinterviewedcontractor", preInterviewedContractorRoutes);
 router.use("/compliancecalendar", publicComplianceCalendarRoutes);
 router.use("/header", headerRoutes);
 router.use("/pdffile", pdfFileRoutes);
+router.use("/loansupport", loanSupportRoutes);
 
 export default router;

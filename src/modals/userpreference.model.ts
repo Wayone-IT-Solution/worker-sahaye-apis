@@ -44,6 +44,8 @@ export interface IUserPreference extends Document {
   preferredLocations: string[];
   userId: mongoose.Types.ObjectId;
   jobRole: mongoose.Types.ObjectId;
+  industryId?: mongoose.Types.ObjectId;
+  subIndustryId?: mongoose.Types.ObjectId;
   salaryExpectation: {
     amount: number;
     frequency: SalaryPeriod;
@@ -68,6 +70,16 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
       required: true,
       ref: "JobCategory",
       type: Schema.Types.ObjectId,
+    },
+    industryId: {
+      ref: "Industry",
+      type: Schema.Types.ObjectId,
+      index: true,
+    },
+    subIndustryId: {
+      ref: "SubIndustry",
+      type: Schema.Types.ObjectId,
+      index: true,
     },
     preferredLocations: { type: [String], default: [] },
     salaryExpectation: {
@@ -102,6 +114,10 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
 
 // 🔍 Filter & join optimization
 UserPreferenceSchema.index({ jobRole: 1 }); // useful for filtering or joining with JobCategory
+
+// 🏭 Industry-based filtering
+UserPreferenceSchema.index({ industryId: 1 }); // useful for filtering by industry
+UserPreferenceSchema.index({ subIndustryId: 1 }); // useful for filtering by sub-industry
 
 // 📍 Location-based filtering
 UserPreferenceSchema.index({ preferredLocations: 1 }); // useful for searching by preferred cities

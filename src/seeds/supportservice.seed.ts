@@ -2,72 +2,62 @@ import SupportService from "../modals/supportservice.model";
 
 export const seedSupportServices = async (adminUserId?: string) => {
   try {
-    // Check if services already exist
-    const existingCount = await SupportService.countDocuments();
-    if (existingCount > 0) {
-      console.log(`✅ Support Services already exist (${existingCount} records). Skipping seed.`);
-      return;
-    }
-
-    const defaultAdminId = "507f1f77bcf86cd799439011"; // Placeholder, use actual admin ID
+    const defaultAdminId = "507f1f77bcf86cd799439011";
 
     const services = [
       // ==================== EPFO SERVICES ====================
       {
+        order: 1,
         title: "Activate UAN & KYC",
         subtitle: "Activate your UAN in 2 minutes – start managing your PF online today",
         description: [
           "Update KYC (Aadhaar, PAN, Bank)",
           "Activate your UAN instantly",
-          "Link to EPFO portal",
         ],
         serviceFor: "EPFO",
         createdBy: adminUserId || defaultAdminId,
       },
       {
+        order: 2,
         title: "Check Balance & Passbook",
         subtitle: "Know your PF savings instantly – just enter UAN & OTP",
         description: [
           "View Passbook",
           "Check Balance via SMS/Missed Call",
-          "Download passbook statement",
-          "Track contribution history",
         ],
         serviceFor: "EPFO",
         createdBy: adminUserId || defaultAdminId,
       },
       {
+        order: 3,
         title: "Apply for PF Withdrawal",
-        subtitle: "Need funds? Apply for PF withdrawal directly from your phone – paperless and secure",
+        subtitle: "Need funds? Apply for PF withdrawal directly from your phone – paperless and secure.",
         description: [
-          "Apply for Full Withdrawal",
+          "Apply for PF withdrawal",
           "Apply for Partial Withdrawal",
           "Apply for Pension",
-          "Track withdrawal status",
         ],
         serviceFor: "EPFO",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Download Payslip & Deductions",
-        subtitle: "Access your payslips and contribution details anytime, anywhere",
+        order: 4,
+        title: "Transfer PF Account",
+        subtitle: "Switching jobs? Transfer your PF account in a few steps.",
         description: [
-          "Download monthly payslip",
-          "View PF contributions",
-          "Check income tax deductions",
-          "Verify salary records",
+          "Transfer PF Account",
+          "Track Transfer Status",
         ],
         serviceFor: "EPFO",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Transfer PF to New Job",
-        subtitle: "Seamlessly transfer your PF account when you switch jobs",
+        order: 5,
+        title: "Lodge Complaint",
+        subtitle: "Facing an issue? Raise a complaint and get official EPFO help",
         description: [
-          "Form 13 submission",
-          "Transfer PF to new employer",
-          "Track transfer status",
-          "Get transfer certificate",
+          "Lodge Complaint",
+          "Check Complaint Status",
         ],
         serviceFor: "EPFO",
         createdBy: adminUserId || defaultAdminId,
@@ -75,197 +65,168 @@ export const seedSupportServices = async (adminUserId?: string) => {
 
       // ==================== ESIC SERVICES ====================
       {
-        title: "Register for ESIC",
-        subtitle: "Get ESIC coverage for your family – complete medical protection",
+        order: 1,
+        title: "Medical Benefits",
+        subtitle: "Full healthcare for you and your family – right from day one of coverage.",
         description: [
-          "ESIC registration for workers",
-          "Add family members to coverage",
-          "Get ESIC card instantly",
-          "Verify registration status",
+          "Full Medical Care (OPD, hospitalization, medicines)",
+          "Specialist & Super-Specialty Services",
+          "Diagnostic & Laboratory Services",
         ],
         serviceFor: "ESIC",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Claim Medical Benefits",
-        subtitle: "Access cashless treatment at ESIC hospitals nationwide",
+        order: 2,
+        title: "Sickness Benefits",
+        subtitle: "Get paid while you recover from illness.",
         description: [
-          "Find ESIC hospitals near you",
-          "Get emergency treatment",
-          "Avail outpatient services",
-          "Download treatment authorization",
+          "Standard Sickness Benefit – 70% wages up to 91 days/year",
+          "Enhanced Sickness Benefit – 90% wages for sterilization leave",
+          "Extended Sickness Benefit – Long-term diseases (up to 2 years)",
         ],
         serviceFor: "ESIC",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Claim Disability Benefits",
-        subtitle: "Get financial support if you've suffered work-related injury or disability",
+        order: 3,
+        title: "Maternity Benefits",
+        subtitle: "Financial support and medical care during pregnancy, delivery, or adoption.",
         description: [
-          "File disability claim",
-          "Get monthly disability allowance",
-          "Track claim status",
-          "Appeal against claim decision",
+          "Medical care during maternity",
+          "Cash benefit during leave period",
         ],
         serviceFor: "ESIC",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Claim Maternity/Paternity Benefits",
-        subtitle: "Receive financial assistance during maternity and paternity leave",
+        order: 4,
+        title: "Disablement Benefits",
+        subtitle: "Disablement Benefits",
         description: [
-          "Maternity benefit claim",
-          "Paternity benefit claim",
-          "Bonus assistance",
-          "Get payment status updates",
+          "Temporary Disablement – 90% wages until recovery",
+          "Permanent Disablement – Lifetime pension based on disability %",
         ],
         serviceFor: "ESIC",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Download ESIC Statement",
-        subtitle: "Get your ESIC payment and contribution records anytime",
+        order: 5,
+        title: "Dependants’ Benefits",
+        subtitle: "Support for your family in case of work-related death.",
         description: [
-          "Download contribution statement",
-          "View payment history",
-          "Get benefit certificates",
-          "Export records as PDF",
+          "Monthly pension – 90% wages to dependents",
+          "Funeral Expenses – Up to ₹15,000",
+        ],
+        serviceFor: "ESIC",
+        createdBy: adminUserId || defaultAdminId,
+      },
+      {
+        order: 6,
+        title: "Unemployment Benefits (ABVKY)",
+        subtitle: "Financial support if you lose your job unexpectedly.",
+        description: [
+          "50% of wages up to 90 days for eligible unemployed persons",
+        ],
+        serviceFor: "ESIC",
+        createdBy: adminUserId || defaultAdminId,
+      },
+      {
+        order: 7,
+        title: "Rehabilitation Benefits",
+        subtitle: "Helping you recover and get back to work.",
+        description: [
+          "Vocational Rehabilitation",
+          "Physical Rehabilitation Services",
+        ],
+        serviceFor: "ESIC",
+        createdBy: adminUserId || defaultAdminId,
+      },
+      {
+        order: 8,
+        title: "Old Age Medical Care",
+        subtitle: "Affordable medical cover after retirement.",
+        description: [
+          "Annual medical cover for ₹120 for retired insured persons and spouse",
+        ],
+        serviceFor: "ESIC",
+        createdBy: adminUserId || defaultAdminId,
+      },
+      {
+        order: 9,
+        title: "ESIC Locations",
+        subtitle: "Find & locate ESIC offices, dispensaries and hospitals.",
+        description: [
+          "Find ESIC Hospitals & Dispensaries",
+          "GPS-enabled ESIC Office locator",
         ],
         serviceFor: "ESIC",
         createdBy: adminUserId || defaultAdminId,
       },
 
-      // ==================== LOAN SERVICES ====================
+      // ==================== LWF SERVICES ====================
       {
-        title: "Personal Loan Application",
-        subtitle: "Get quick personal loans with minimal documentation – approve in 24 hours",
+        order: 1,
+        title: "Higher Education Assistance Scheme",
+        subtitle: "Invest in your child’s future with financial help for higher education.",
         description: [
-          "Apply for instant personal loan",
-          "Easy approval process",
-          "Minimal documents required",
-          "Flexible repayment options",
+          "₹20,000 for MBBS, ₹10,000 for other UG courses",
+          "Std. 12 ≥70 percentile, parent employed ≥1 year, LWF deposited",
         ],
-        serviceFor: "LOAN",
+        serviceFor: "LWF",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Emergency Loan",
-        subtitle: "Get emergency financial support within hours of application",
+        order: 2,
+        title: "Worker Accident Assistance Scheme",
+        subtitle: "Financial support for workplace accidents.",
         description: [
-          "Ultra-fast approval (within 2 hours)",
-          "No collateral required",
-          "Instant disbursal",
-          "Flexible EMI options",
+          "40–70% disability → ₹25,000",
+          "Above 70% disability → ₹50,000",
+          "Apply within 2 years, LWF deposited ≥1 year",
         ],
-        serviceFor: "LOAN",
+        serviceFor: "LWF",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Business Loan",
-        subtitle: "Start or expand your business with affordable business loans",
+        order: 3,
+        title: "Worker Cycle Subsidy Assistance Scheme",
+        subtitle: "Get ₹1,500 subsidy to purchase a bicycle.",
         description: [
-          "Loans for business setup",
-          "Working capital assistance",
-          "Equipment financing",
-          "Special rates for self-employed",
+          "₹1,500 once during employment",
+          "Employed ≥1 year, valid bill, chassis ≥22 inches",
         ],
-        serviceFor: "LOAN",
+        serviceFor: "LWF",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Education Loan",
-        subtitle: "Finance your or your child's education with special education loan schemes",
+        order: 4,
+        title: "Women Worker Marriage Assistance Scheme",
+        subtitle: "Marriage assistance of ₹11,000 for women workers.",
         description: [
-          "Study abroad loan",
-          "Domestic education loan",
-          "Low interest rates",
-          "Easy moratorium options",
+          "₹11,000 Kanyadan",
+          "Apply within 1 year of marriage, LWF deposited",
         ],
-        serviceFor: "LOAN",
+        serviceFor: "LWF",
         createdBy: adminUserId || defaultAdminId,
       },
       {
-        title: "Track Loan Status",
-        subtitle: "Monitor your loan application, approval, and disbursement progress",
+        order: 5,
+        title: "Labourer Accidental Death Assistance Scheme",
+        subtitle: "Financial protection for worker’s family.",
         description: [
-          "Real-time application tracking",
-          "Check approval status",
-          "View disbursement timeline",
-          "Get SMS notifications",
+          "₹2,00,000 assistance",
+          "Apply within 2 years, LWF deposited",
         ],
-        serviceFor: "LOAN",
-        createdBy: adminUserId || defaultAdminId,
-      },
-
-      // ==================== LABOUR SERVICES ====================
-      {
-        title: "Workplace Safety Guidelines",
-        subtitle: "Learn essential workplace safety practices to prevent injuries",
-        description: [
-          "Safety equipment guidance",
-          "Emergency procedures",
-          "Hazard identification",
-          "Incident reporting process",
-        ],
-        serviceFor: "LABOUR",
-        createdBy: adminUserId || defaultAdminId,
-      },
-      {
-        title: "Know Your Rights as a Worker",
-        subtitle: "Understand your legal rights and protections as an employee",
-        description: [
-          "Minimum wage information",
-          "Working hours regulations",
-          "Leave and holiday entitlements",
-          "Grievance redressal process",
-        ],
-        serviceFor: "LABOUR",
-        createdBy: adminUserId || defaultAdminId,
-      },
-      {
-        title: "File Labour Complaint",
-        subtitle: "Report unfair labor practices and wage-related issues officially",
-        description: [
-          "Illegal termination complaint",
-          "Wage non-payment complaint",
-          "Harassment/discrimination report",
-          "Track complaint status online",
-        ],
-        serviceFor: "LABOUR",
-        createdBy: adminUserId || defaultAdminId,
-      },
-      {
-        title: "Claim Gratuity & Severance",
-        subtitle: "Understand and claim gratuity, bonus, and severance benefits due to you",
-        description: [
-          "Gratuity calculation",
-          "Severance package details",
-          "File claim application",
-          "Get payment assistance",
-        ],
-        serviceFor: "LABOUR",
-        createdBy: adminUserId || defaultAdminId,
-      },
-      {
-        title: "Occupational Health Services",
-        subtitle: "Access health checkups and wellness programs for workers",
-        description: [
-          "Annual health screening",
-          "Occupational disease prevention",
-          "Mental health support",
-          "Wellness program enrollment",
-        ],
-        serviceFor: "LABOUR",
+        serviceFor: "LWF",
         createdBy: adminUserId || defaultAdminId,
       },
     ];
 
+    await SupportService.deleteMany({});
     const result = await SupportService.insertMany(services);
+
     console.log(`✅ ${result.length} support services seeded successfully!`);
-    console.log(`   - EPFO: 5 services`);
-    console.log(`   - ESIC: 5 services`);
-    console.log(`   - LOAN: 5 services`);
-    console.log(`   - LABOUR: 5 services`);
   } catch (error: any) {
     console.error("❌ Error seeding support services:", error.message);
     throw error;

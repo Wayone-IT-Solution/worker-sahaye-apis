@@ -25,8 +25,8 @@ const SupportServiceSchema = new mongoose.Schema(
     serviceFor: {
       type: String,
       enum: {
-        values: ["ESIC", "EPFO", "LOAN", "LABOUR"],
-        message: "Service type must be one of: ESIC, EPFO, LOAN, LABOUR",
+        values: ["ESIC", "EPFO", "LOAN", "LWF"],
+        message: "Service type must be one of: ESIC, EPFO, LOAN, LWF",
       },
       required: [true, "Service type (serviceFor) is required"],
       index: true,

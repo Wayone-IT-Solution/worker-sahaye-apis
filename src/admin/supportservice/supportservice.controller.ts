@@ -65,7 +65,7 @@ export const createSupportService = async (req: Request, res: Response) => {
       });
     }
 
-    const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LABOUR"];
+    const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
     if (!validServiceTypes.includes(serviceFor)) {
       return res.status(400).json({
         success: false,
@@ -228,7 +228,7 @@ export const getServicesByType = async (req: Request, res: Response) => {
     const { serviceFor } = req.params;
     const userId = (req as any).user?.id || null;
 
-    const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LABOUR"];
+    const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
     if (!validServiceTypes.includes(serviceFor)) {
       return res.status(400).json({
         success: false,
@@ -364,7 +364,7 @@ export const updateSupportService = async (req: Request, res: Response) => {
 
     // Validate serviceFor if provided
     if (serviceFor) {
-      const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LABOUR"];
+      const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
       if (!validServiceTypes.includes(serviceFor)) {
         return res.status(400).json({
           success: false,

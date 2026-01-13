@@ -1,11 +1,40 @@
 import { Request, Response } from "express";
 import SupportService from "../../modals/supportservice.model";
 import { PipelineStage } from "mongoose";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { Booking } from "../../modals/booking.model";
+import { SubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 import {
   buildMatchStage,
   buildSortObject,
   buildPaginationResponse,
 } from "../../utils/queryBuilder";
+
+// Helper function to get canCall and hasActivePlan for a user and service
+const getCallStatusForService = async (userId: string | null, serviceId: string) => {
+  if (!userId) {
+    return { canCall: false, hasActivePlan: false };
+  }
+
+  // Find booking for this user and service
+  const booking = await Booking.findOne({
+    user: userId,
+    supportService: serviceId,
+    status: { $ne: "cancelled" },
+  });
+
+  // Check if user has active basic or premium subscription
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  const activePlanTypes = [PlanType.BASIC, PlanType.PREMIUM];
+  const hasActivePlan = enrolledPlan && activePlanTypes.includes((enrolledPlan.plan as any).planType);
+  const canCall = booking?.canCall || false;
+
+  return { canCall, hasActivePlan };
+};
 
 // Search field mapping for support service
 const SUPPORT_SERVICE_SEARCH_FIELDS = {
@@ -69,6 +98,7 @@ export const createSupportService = async (req: Request, res: Response) => {
 // Get all support services with pagination and filters
 export const getAllSupportServices = async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id || null;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
@@ -167,10 +197,22 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     const total = result[0]?.metadata?.[0]?.total || 0;
     const services = result[0]?.data || [];
 
+    // Add canCall and hasActivePlan for each service
+    const servicesWithCallStatus = await Promise.all(
+      services.map(async (service: any) => {
+        const callStatus = await getCallStatusForService(userId, service._id.toString());
+        return {
+          ...service,
+          canCall: callStatus.canCall,
+          hasActivePlan: callStatus.hasActivePlan,
+        };
+      })
+    );
+
     return res.status(200).json({
       success: true,
       message: "Support services fetched successfully",
-      data: buildPaginationResponse(services, total, page, limit),
+      data: buildPaginationResponse(servicesWithCallStatus, total, page, limit),
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -184,6 +226,7 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
 export const getServicesByType = async (req: Request, res: Response) => {
   try {
     const { serviceFor } = req.params;
+    const userId = (req as any).user?.id || null;
 
     const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LABOUR"];
     if (!validServiceTypes.includes(serviceFor)) {
@@ -229,11 +272,23 @@ export const getServicesByType = async (req: Request, res: Response) => {
 
     const services = await SupportService.aggregate(pipeline);
 
+    // Add canCall and hasActivePlan for each service
+    const servicesWithCallStatus = await Promise.all(
+      services.map(async (service: any) => {
+        const callStatus = await getCallStatusForService(userId, service._id.toString());
+        return {
+          ...service,
+          canCall: callStatus.canCall,
+          hasActivePlan: callStatus.hasActivePlan,
+        };
+      })
+    );
+
     return res.status(200).json({
       success: true,
       message: `Services for ${serviceFor} fetched successfully`,
-      data: services,
-      count: services.length,
+      data: servicesWithCallStatus,
+      count: servicesWithCallStatus.length,
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -247,6 +302,7 @@ export const getServicesByType = async (req: Request, res: Response) => {
 export const getSupportServiceById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = (req as any).user?.id || null;
 
     const service = await SupportService.findById(id).populate("createdBy", "name email");
 
@@ -257,10 +313,18 @@ export const getSupportServiceById = async (req: Request, res: Response) => {
       });
     }
 
+    // Add canCall and hasActivePlan
+    const callStatus = await getCallStatusForService(userId, id);
+    const serviceData = {
+      ...service.toObject(),
+      canCall: callStatus.canCall,
+      hasActivePlan: callStatus.hasActivePlan,
+    };
+
     return res.status(200).json({
       success: true,
       message: "Support service fetched successfully",
-      data: service,
+      data: serviceData,
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -387,6 +451,7 @@ export const deleteSupportService = async (req: Request, res: Response) => {
 export const searchSupportServices = async (req: Request, res: Response) => {
   try {
     const { query, serviceFor } = req.query;
+    const userId = (req as any).user?.id || null;
 
     if (!query) {
       return res.status(400).json({
@@ -440,11 +505,23 @@ export const searchSupportServices = async (req: Request, res: Response) => {
       },
     ]);
 
+    // Add canCall and hasActivePlan for each service
+    const servicesWithCallStatus = await Promise.all(
+      services.map(async (service: any) => {
+        const callStatus = await getCallStatusForService(userId, service._id.toString());
+        return {
+          ...service,
+          canCall: callStatus.canCall,
+          hasActivePlan: callStatus.hasActivePlan,
+        };
+      })
+    );
+
     return res.status(200).json({
       success: true,
       message: "Support services search results",
-      data: services,
-      count: services.length,
+      data: servicesWithCallStatus,
+      count: servicesWithCallStatus.length,
     });
   } catch (error: any) {
     return res.status(500).json({

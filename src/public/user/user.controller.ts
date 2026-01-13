@@ -704,6 +704,9 @@ export class UserController {
         }
       );
       
+      // Check if user has active plan
+      const hasActivePlan = enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
+      
       // Fetch documents from FileUpload model
       const documents = await FileUpload.find(
         { userId },
@@ -727,7 +730,7 @@ export class UserController {
         .json(
           new ApiResponse(
             200,
-            { user: userWithProfilePic, enrollmentCourses, enrollSubscriptionPlans, documents },
+            { user: userWithProfilePic, enrollmentCourses, enrollSubscriptionPlans, documents, hasActivePlan },
             `User fetched successfully`
           )
         );

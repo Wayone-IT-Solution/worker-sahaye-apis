@@ -12,6 +12,7 @@ import {
   getAssistantBookings,
   markCallAsUsed,
   getServiceCallStatus,
+  getLoggedInUserBookings ,
 } from "./booking.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
 import {
@@ -21,7 +22,7 @@ import {
 } from "../../middlewares/authMiddleware";
 
 const router = express.Router();
-
+router.get("/my/bookings", authenticateToken, asyncHandler(getLoggedInUserBookings));
 router.patch("/", authenticateToken, asyncHandler(getExactAmount));
 router.get("/", authenticateToken, isAdmin, asyncHandler(getAllBookings));
 router.put("/", authenticateToken, isWorker, asyncHandler(updateBooking));

@@ -4,12 +4,6 @@ import { Pdf, IPdf } from "../../modals/pdffile.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import mongoose from "mongoose";
-import {
-  buildMatchStage,
-  buildSortObject,
-  buildPaginationResponse,
-  SEARCH_FIELD_MAP,
-} from "../../utils/queryBuilder";
 
 const PdfService = new CommonService<IPdf>(Pdf);
 
@@ -31,44 +25,13 @@ export class PdfController {
     }
   }
 
-  // Get all PDFs
+
   static async getAllPdfs(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const skip = (page - 1) * limit;
-
-      const matchStage = buildMatchStage(
-        {
-          status: req.query.status as string,
-          search: req.query.search as string,
-          searchKey: req.query.searchKey as string,
-          startDate: req.query.startDate as string,
-          endDate: req.query.endDate as string,
-          headerId: req.query.headerId as string,
-        },
-        SEARCH_FIELD_MAP.pdffile
-      );
-
-      const sortObj = buildSortObject(
-        req.query.sortKey as string,
-        req.query.sortDir as string,
-        { order: 1 }
-      );
-
-      const total = await Pdf.countDocuments(matchStage);
-      const pdfs = await Pdf.find(matchStage)
-        .populate("header", "title icon description")
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limit);
+      const data = await PdfService.getAll(req.query);
 
       return res.status(200).json(
-        new ApiResponse(
-          200,
-          buildPaginationResponse(pdfs, total, page, limit),
-          "PDFs fetched successfully"
-        )
+        new ApiResponse(200, data, "PDFs fetched successfully")
       );
     } catch (err) {
       next(err);
@@ -79,10 +42,15 @@ export class PdfController {
   static async getPdfById(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await PdfService.getById(req.params.id);
-      if (!result) return res.status(404).json(new ApiError(404, "PDF not found"));
-
-      return res.status(200).json(new ApiResponse(200, result, "PDF fetched successfully"));
-    } catch (err) {
+      return res.status(200).json(
+        new ApiResponse(200, result, "PDF fetched successfully")
+      );
+    } catch (err: any) {
+      if (err.message === "Record not found") {
+        return res.status(404).json(
+          new ApiError(404, "PDF not found")
+        );
+      }
       next(err);
     }
   }

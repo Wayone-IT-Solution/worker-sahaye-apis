@@ -215,6 +215,27 @@ export const getUserBookings = async (req: Request, res: Response) => {
   }
 };
 
+
+export const getLoggedInUserBookings = async (req: Request, res: Response) => {
+  try {
+    const { id: userId } = (req as any).user;
+    if (!userId) {
+      return res
+        .status(401)
+        .json(new ApiError(401, "User not authenticated"));
+    }
+
+    const bookings = await bookingService.getAll({ ...req.query, user: userId });
+    return res
+      .status(200)
+      .json(new ApiResponse(200, bookings, "Logged-in user bookings fetched successfully"));
+  } catch (error: any) {
+    return res
+      .status(500)
+      .json(new ApiError(500, "Failed to fetch bookings", error.message));
+  }
+};
+
 export const updateBookingStatus = async (req: Request, res: Response) => {
   try {
     const { status } = req.body;

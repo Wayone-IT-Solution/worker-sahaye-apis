@@ -7,6 +7,7 @@ export enum VerificationStatus {
 }
 
 export interface ISkilledCandidate extends Document {
+  skillName: string;
   remarks?: string;
   document: string;
   verifiedAt?: Date;
@@ -16,6 +17,7 @@ export interface ISkilledCandidate extends Document {
 
 const SkilledCandidateSchema = new Schema<ISkilledCandidate>(
   {
+    skillName: { type: String, required: true, trim: true,  lowercase: true },
     document: { type: String, required: true },
     status: {
       type: String,

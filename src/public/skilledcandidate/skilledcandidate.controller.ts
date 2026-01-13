@@ -23,7 +23,17 @@ export class SkilledCandidateController {
   ) {
     try {
       const { id: user } = (req as any).user;
+      const { skillName } = req.body;
+      
+      console.log("body", req.body);
+      
       const document = req?.body?.document?.[0]?.url;
+
+      if (!skillName) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Skill name is required."));
+      }
 
       if (!document) {
         return res
@@ -58,7 +68,7 @@ export class SkilledCandidateController {
           .status(404)
           .json(new ApiError(404, "Skilled Candidate Doc already exists"));
       }
-      const result = await SkilledCandidateService.create({ user, document });
+      const result = await SkilledCandidateService.create({ user, document, skillName });
       if (!result) {
         return res
           .status(500)
@@ -129,6 +139,7 @@ export class SkilledCandidateController {
         {
           $project: {
             _id: 1,
+            skillName: 1,
             status: 1,
             remarks: 1,
             document: 1,
@@ -215,7 +226,7 @@ export class SkilledCandidateController {
           .status(404)
           .json(new ApiError(404, "Skilled Candidate already approved"));
 
-      const { status, remarks, document, slug } = req.body;
+      const { status, remarks, document, skillName, slug } = req.body;
       const normalizedData = {
         remarks: remarks?.trim() || existingVerificationRecord.remarks || "",
         status:

@@ -15,6 +15,7 @@ export interface IPoliceVerification extends Document {
   status: VerificationStatus;
   createdAt: Date;
   updatedAt: Date;
+  isAcknowledged?: boolean;
 }
 
 const PoliceVerificationSchema = new Schema<IPoliceVerification>(
@@ -34,6 +35,7 @@ const PoliceVerificationSchema = new Schema<IPoliceVerification>(
     },
     remarks: { type: String },
     verifiedAt: { type: Date },
+    isAcknowledged: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

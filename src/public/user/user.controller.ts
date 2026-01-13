@@ -39,6 +39,7 @@ export class UserController {
         referralCode,
         agreedToTerms,
         privacyPolicyAccepted,
+        relocate,
       } = req.body;
 
       // 1. Validation (basic example)
@@ -55,6 +56,7 @@ export class UserController {
         userType,
         agreedToTerms,
         privacyPolicyAccepted,
+        relocate,
       };
 
       const mobileExist = await User.findOne({ mobile });
@@ -147,6 +149,7 @@ export class UserController {
         fullName,
         dateOfBirth,
         preferences,
+        relocate,
       } = req.body;
 
       const data = {
@@ -155,6 +158,7 @@ export class UserController {
         fullName,
         dateOfBirth,
         preferences, // Get the entire preferences object as sent from frontend
+        relocate,
         primaryLocation: { city, state, pincode, address, country },
       };
 

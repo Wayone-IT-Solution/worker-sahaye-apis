@@ -20,7 +20,10 @@ export class PoliceVerificationController {
     next: NextFunction
   ) {
     try {
-      const name = req.body.name;
+      const { name } = req.body;
+      const isAcknowledged =
+        req.body.isAcknowledged === true ||
+        req.body.isAcknowledged === "true";
       const { id: user } = (req as any).user;
       const document = req?.body?.document?.[0]?.url;
 
@@ -29,6 +32,16 @@ export class PoliceVerificationController {
           .status(400)
           .json(new ApiError(400, "Name and document are required."));
       }
+
+      if (!isAcknowledged) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            "Please acknowledge before submitting verification"
+          )
+        );
+      }
+
 
       const existingVerificationRecord: any = await PoliceVerification.findOne({
         user,
@@ -45,6 +58,7 @@ export class PoliceVerificationController {
         name,
         user,
         document,
+        isAcknowledged,
       });
       if (!result) {
         return res

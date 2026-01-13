@@ -7,11 +7,13 @@ import {
 import {
   SubscriptionPlan,
   calculateExpiryDate,
+  PlanType,
 } from "../../modals/subscriptionplan.model";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
+import { User } from "../../modals/user.model";
 
 const enrollPlanService = new CommonService(EnrolledPlan);
 
@@ -142,6 +144,12 @@ export class EnrollPlanController {
         );
         result.expiredAt = expiredAt;
         await result.save();
+
+        if (planDetails.planType !== PlanType.FREE) {
+          await User.findByIdAndUpdate(user, {
+            hasPremiumPlan: true,
+          });
+        }
       }
       if (!result)
         return res
@@ -317,10 +325,19 @@ export class EnrollPlanController {
       switch (status) {
         case PlanPaymentStatus.SUCCESS:
           enrollment.status = PlanEnrollmentStatus.ACTIVE;
+          const plan = await SubscriptionPlan.findById(enrollment.plan);
+          if (plan && plan.planType !== PlanType.FREE) {
+            await User.findByIdAndUpdate(user, {
+              hasPremiumPlan: true,
+            });
+          }
           break;
         case PlanPaymentStatus.REFUNDED:
           enrollment.status = PlanEnrollmentStatus.REFUNDED;
           enrollment.refundedAt = new Date();
+          await User.findByIdAndUpdate(user, {
+            hasPremiumPlan: false,
+          });
           break;
         case PlanPaymentStatus.FAILED:
           enrollment.status = PlanEnrollmentStatus.FAILED;

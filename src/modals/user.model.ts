@@ -135,6 +135,8 @@ export interface IUser extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+  hasPremiumPlan?: boolean;
+  relocate?: boolean;
 }
 
 // --- Custom Mobile Validator ---
@@ -232,6 +234,14 @@ const userSchema = new Schema<IUser>(
     isMobileVerified: {
       type: Boolean,
       required: true,
+      default: false,
+    },
+    hasPremiumPlan: {
+      type: Boolean,
+      default: false,
+    },
+    relocate: {
+      type: Boolean,
       default: false,
     },
     privacyPolicyAccepted: {

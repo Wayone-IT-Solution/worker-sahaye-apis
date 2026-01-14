@@ -10,6 +10,7 @@ import {
   UserType,
   UserStatus,
   generateReferralCode,
+  calculateProfileCompletion,
 } from "../../modals/user.model";
 import {
   EnrolledPlan,
@@ -95,6 +96,8 @@ export class UserController {
       console.log("userData", userData);
       const newUser: any = await userService.create(userData);
       newUser.referralCode = generateReferralCode(newUser._id);
+      newUser.profileCompletion = calculateProfileCompletion(newUser);
+
       await newUser.save();
 
       return res
@@ -163,6 +166,9 @@ export class UserController {
       };
 
       const result = await userService.updateById(id, data);
+      result.profileCompletion = calculateProfileCompletion(result);
+      await result.save();
+
       const { userType } = result;
       return res
         .status(200)

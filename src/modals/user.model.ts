@@ -137,6 +137,7 @@ export interface IUser extends Document {
   updatedAt: Date;
   hasPremiumPlan?: boolean;
   relocate?: boolean;
+  profileCompletion?: number;
 }
 
 // --- Custom Mobile Validator ---
@@ -306,9 +307,69 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: false,
     },
+    profileCompletion: {
+      type: Number,
+      default: 0, // starts at 0%
+    },
   },
   { timestamps: true }
 );
+
+// Utility to check if a value is filled
+const isFilled = (value: any): boolean => {
+  if (value === null || value === undefined) return false;
+
+  if (typeof value === "string") return value.trim() !== "";
+  if (typeof value === "number") return true;
+  if (typeof value === "boolean") return true;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+
+  return false;
+};
+
+// Function to calculate profile completion
+export const calculateProfileCompletion = (user: any): number => {
+  let totalPoints = 0;
+  let earnedPoints = 0;
+
+  const fields: Array<{ path: string; weight?: number }> = [
+    { path: "fullName", weight: 2 },
+    { path: "mobile", weight: 2 },
+    { path: "email", weight: 1 },
+    { path: "dateOfBirth", weight: 1 },
+    { path: "gender", weight: 1 },
+    { path: "userAadhar", weight: 1 },
+    { path: "userPan", weight: 1 },
+    { path: "primaryLocation.city", weight: 1 },
+    { path: "primaryLocation.state", weight: 1 },
+    { path: "primaryLocation.country", weight: 1 },
+    { path: "primaryLocation.pincode", weight: 1 },
+    { path: "profile.designation", weight: 2 },
+    { path: "profile.shortDescription", weight: 2 },
+    { path: "profile.skills", weight: 3 },
+    { path: "profile.education", weight: 2 },
+    { path: "profile.experience", weight: 3 },
+    { path: "profile.availability", weight: 2 },
+    { path: "profile.employmentPreferences", weight: 2 },
+    { path: "profile.company", weight: 3 },
+    { path: "profile.business", weight: 3 },
+  ];
+
+  fields.forEach(({ path, weight = 1 }) => {
+    totalPoints += weight;
+    const value = path.split(".").reduce((obj: any, key) => obj?.[key], user);
+
+    if (Array.isArray(value)) {
+      if (value.length > 0) earnedPoints += weight;
+    } else if (isFilled(value)) {
+      earnedPoints += weight;
+    }
+  });
+
+  return Math.round((earnedPoints / totalPoints) * 100);
+};
+
 
 export const generateReferralCode = (userId: string) => {
   const prefix = "REF";

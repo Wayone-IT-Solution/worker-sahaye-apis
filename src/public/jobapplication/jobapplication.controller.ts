@@ -133,6 +133,15 @@ export const applyToJob = async (
         senderRole: UserType.WORKER,
         receiverRole: receiver.userType,
       });
+    
+    // Update fast responder score after job application
+    try {
+      const { updateFastResponderScore } = await import("../../services/fastResponder.service");
+      await updateFastResponderScore(applicantId);
+    } catch (error) {
+      console.error("Error updating fast responder score:", error);
+    }
+    
     await resetJobMetrics(job);
     return res
       .status(201)

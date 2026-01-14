@@ -19,7 +19,14 @@ userRouter.post("/send-otp", asyncHandler(UserController.generateOtp));
 userRouter.post("/admin/send-otp", asyncHandler(UserController.generateAdminOtp));
 userRouter.post("/verify-otp", asyncHandler(UserController.verifyOtp));
 userRouter.post("/admin/verify-otp", asyncHandler(UserController.verifyAdminOtp));
+userRouter.post("/verify-email-otp", asyncHandler(UserController.verifyEmailOtp));
 userRouter.put("/", authenticateToken, asyncHandler(UserController.updateUser));
+
+// Admin: Early Access Badge Management
+userRouter.post("/admin/early-access/:userId", asyncHandler(UserController.grantEarlyAccessBadge));
+userRouter.delete("/admin/early-access/:userId", asyncHandler(UserController.revokeEarlyAccessBadge));
+userRouter.get("/admin/early-access", asyncHandler(UserController.getEarlyAccessBadgeUsers));
+
 userRouter.get(
   "/all",
   authenticateToken,

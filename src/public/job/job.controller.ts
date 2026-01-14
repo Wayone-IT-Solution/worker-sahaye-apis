@@ -302,6 +302,8 @@ export class JobController {
             profilePicUrl: "$profilePicFile.url",
             creatorMobile: "$userDetails.mobile",
             creatorUserType: "$userDetails.userType",
+            creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
+            creatorHasPremium: "$userDetails.hasPremiumPlan",
             nature: {
               name: "$natureDetails.name",
               description: "$natureDetails.description",
@@ -338,6 +340,14 @@ export class JobController {
           },
         },
       ];
+
+      // Add sorting: Early access badge jobs first, then by creation date
+      pipeline.push({
+        $sort: {
+          creatorHasEarlyAccessBadge: -1, // Early access badge holders first (true = 1, false = 0, so -1 sorts true first)
+          createdAt: -1, // Then by newest first
+        }
+      } as any);
 
       const result = await JobService.getAll(req.query, pipeline);
       return res

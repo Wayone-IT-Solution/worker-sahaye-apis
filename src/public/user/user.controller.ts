@@ -177,9 +177,19 @@ export class UserController {
         dateOfBirth,
         preferences,
         relocate,
+        email,
+        mobile,
       } = req.body;
 
-      const data = {
+      // Fetch the current user to check for email/mobile changes
+      const currentUser = await User.findById(id);
+      if (!currentUser) {
+        return res.status(404).json(
+          new ApiError(404, "User not found")
+        );
+      }
+
+      const data: any = {
         gender,
         profile,
         fullName,
@@ -189,8 +199,27 @@ export class UserController {
         primaryLocation: { city, state, pincode, address, country },
       };
 
+      // Check if email was updated - if yes, set isEmailVerified to false
+      if (email && email !== currentUser.email) {
+        data.email = email;
+        data.isEmailVerified = false;
+      }
+
+      // Check if mobile was updated - if yes, set isMobileVerified to false
+      if (mobile && mobile !== currentUser.mobile) {
+        data.mobile = mobile;
+        data.isMobileVerified = false;
+      }
+
       const result = await userService.updateById(id, data);
       result.profileCompletion = calculateProfileCompletion(result);
+      
+      // Update fast responder score if it's a worker
+      if (result.userType === UserType.WORKER) {
+        const { updateFastResponderScore } = await import("../../services/fastResponder.service");
+        await updateFastResponderScore(result._id);
+      }
+      
       await result.save();
 
       const { userType } = result;
@@ -255,6 +284,15 @@ export class UserController {
             },
           },
         },
+        // Sort: Early Access Badge first, then Premium users, then by profile completion
+        {
+          $sort: {
+            hasEarlyAccessBadge: -1, // Early access badge holders first
+            hasPremiumPlan: -1,       // Then premium users
+            profileCompletion: -1,    // Then by profile completion
+            createdAt: -1,            // Then by newest
+          }
+        }
       ];
 
       const result = await userService.getAll(req.query, pipeline);
@@ -603,6 +641,63 @@ export class UserController {
     }
   }
 
+  static async verifyEmailOtp(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const { email, otp } = req.body;
+
+      if (!email || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and OTP are required",
+        });
+      }
+
+      const otpDoc = await Otp.findOne({ email, otp });
+
+      if (!otpDoc || otpDoc.expiresAt < new Date()) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired OTP",
+        });
+      }
+
+      if (otpDoc.verified) {
+        return res.status(400).json({
+          success: false,
+          message: "OTP has already been used",
+        });
+      }
+
+      otpDoc.verified = true;
+      await otpDoc.save();
+
+      const user: any = await User.findOne({ email });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Set email as verified
+      if (!user?.isEmailVerified) user.isEmailVerified = true;
+      await user.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Email verified successfully",
+        user,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getUserById(
     req: Request,
     res: Response,
@@ -910,5 +1005,110 @@ export class UserController {
         error,
       });
     }
-  };
+  }
+
+  // Admin: Grant Early Access Badge
+  static async grantEarlyAccessBadge(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const { userId } = req.params;
+      const { duration } = req.body; // Optional: duration in days (0 = permanent)
+
+      if (!userId) {
+        return res.status(400).json(
+          new ApiError(400, "User ID is required")
+        );
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json(
+          new ApiError(404, "User not found")
+        );
+      }
+
+      // Only allow for EMPLOYER, CONTRACTOR, or AGENT
+      if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(user.userType as UserType)) {
+        return res.status(400).json(
+          new ApiError(400, `Early Access Badge is only for Employers and Contractors. User type is: ${user.userType}`)
+        );
+      }
+
+      user.hasEarlyAccessBadge = true;
+      await user.save();
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          user,
+          `Early Access Badge granted to ${user.fullName}`
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Admin: Revoke Early Access Badge
+  static async revokeEarlyAccessBadge(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const { userId } = req.params;
+
+      if (!userId) {
+        return res.status(400).json(
+          new ApiError(400, "User ID is required")
+        );
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json(
+          new ApiError(404, "User not found")
+        );
+      }
+
+      user.hasEarlyAccessBadge = false;
+      await user.save();
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          user,
+          `Early Access Badge revoked from ${user.fullName}`
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Admin: Get users with Early Access Badge
+  static async getEarlyAccessBadgeUsers(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const users = await User.find({ hasEarlyAccessBadge: true })
+        .select("fullName email mobile userType hasPremiumPlan hasEarlyAccessBadge createdAt");
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          users,
+          `Found ${users.length} users with Early Access Badge`
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
 }
+

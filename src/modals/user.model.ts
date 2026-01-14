@@ -139,6 +139,8 @@ export interface IUser extends Document {
   relocate?: boolean;
   profileCompletion?: number;
   isEmailVerified?: boolean;
+  fastResponder?: number; // 0-100 scale: 0 = bad, 100 = good
+  hasEarlyAccessBadge?: boolean; // Early Access badge - full premium access
 }
 
 // --- Custom Mobile Validator ---
@@ -327,6 +329,18 @@ const userSchema = new Schema<IUser>(
         );
       },
     },
+    fastResponder: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+      description: "Fast responder score: 0-100 (0=bad, 100=good)",
+    },
+    hasEarlyAccessBadge: {
+      type: Boolean,
+      default: false,
+      description: "Early Access badge - user can access all premium features",
+    },
   },
   { timestamps: true }
 );
@@ -392,6 +406,79 @@ export const generateReferralCode = (userId: string) => {
   const randomPart = crypto.randomBytes(2).toString("hex");
   const userPart = userId.toString().slice(-4);
   return `${prefix}-${randomPart}-${userPart}`.toUpperCase();
+};
+
+// Calculate Fast Responder Score (0-100)
+// Components:
+// - Profile Completion: 0-30 points
+// - Job Application Speed: 0-40 points  
+// - Job Application Rate (last 30 days): 0-30 points
+export const calculateFastResponderScore = (profileCompletionPoints: number, applicationSpeedPoints: number, applicationRatePoints: number): number => {
+  // Ensure all components are within their max range
+  const profilePoints = Math.min(Math.max(profileCompletionPoints, 0), 30);
+  const speedPoints = Math.min(Math.max(applicationSpeedPoints, 0), 40);
+  const ratePoints = Math.min(Math.max(applicationRatePoints, 0), 30);
+  
+  const totalScore = profilePoints + speedPoints + ratePoints;
+  return Math.min(totalScore, 100); // Cap at 100
+};
+
+// Calculate Profile Completion Points (0-30)
+export const calculateProfileCompletionPoints = (user: any): number => {
+  let points = 30; // Start with full points
+  
+  const requiredFields = [
+    { field: "fullName", weight: 2 },
+    { field: "email", weight: 2 },
+    { field: "mobile", weight: 2 },
+    { field: "dateOfBirth", weight: 2 },
+    { field: "gender", weight: 1 },
+    { field: "userAadhar", weight: 3 },
+    { field: "userPan", weight: 3 },
+    { field: "primaryLocation.city", weight: 1 },
+    { field: "primaryLocation.state", weight: 1 },
+    { field: "primaryLocation.address", weight: 1 },
+    { field: "profile.skills", weight: 2 },
+    { field: "profile.education", weight: 2 },
+    { field: "profile.experience", weight: 2 },
+    { field: "industry", weight: 2 },
+  ];
+
+  let totalWeight = 0;
+  let filledWeight = 0;
+
+  requiredFields.forEach(({ field, weight }) => {
+    totalWeight += weight;
+    const value = field.split(".").reduce((obj: any, key) => obj?.[key], user);
+    
+    if (isFilled(value)) {
+      filledWeight += weight;
+    }
+  });
+
+  if (totalWeight === 0) return 0;
+  return Math.round((filledWeight / totalWeight) * 30);
+};
+
+// Calculate Application Speed Points (0-40) based on time between job creation and application
+export const calculateApplicationSpeedPoints = (hoursDifference: number): number => {
+  if (hoursDifference <= 3) return 30;
+  if (hoursDifference <= 12) return 25;
+  if (hoursDifference <= 24) return 20;
+  if (hoursDifference <= 72) return 15;
+  if (hoursDifference <= 120) return 10;
+  if (hoursDifference <= 168) return 5;
+  return 0;
+};
+
+// Calculate Application Rate Points (0-30) based on percentage of preferred jobs applied to
+export const calculateApplicationRatePoints = (applicationPercentage: number): number => {
+  if (applicationPercentage >= 100) return 30;
+  if (applicationPercentage >= 80) return 24;
+  if (applicationPercentage >= 60) return 18;
+  if (applicationPercentage >= 40) return 12;
+  if (applicationPercentage >= 20) return 6;
+  return 0;
 };
 
 // Indexes

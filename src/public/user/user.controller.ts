@@ -5,6 +5,8 @@ import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
+import { sendEmail } from "../../utils/emailService";
+import crypto from "crypto";
 import {
   User,
   UserType,
@@ -50,6 +52,16 @@ export class UserController {
           .json(new ApiError(400, "Missing required fields"));
       }
 
+      if (
+        (userType === UserType.EMPLOYER ||
+          userType === UserType.CONTRACTOR) &&
+        !email
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Email is required for this user type"));
+      }
+
       const userData: any = {
         email,
         mobile,
@@ -59,6 +71,18 @@ export class UserController {
         privacyPolicyAccepted,
         relocate,
       };
+
+      // Email is optional for WORKER
+      if (email) {
+        userData.email = email;
+      }
+
+      if (
+        userType === UserType.EMPLOYER ||
+        userType === UserType.CONTRACTOR
+      ) {
+        userData.isEmailVerified = false;
+      }
 
       const mobileExist = await User.findOne({ mobile });
       if (mobileExist) {
@@ -253,59 +277,106 @@ export class UserController {
     }
   }
 
-  static async generateOtp(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<any> {
+  static async generateOtp(req: Request, res: Response, next: NextFunction) {
     try {
-      const { mobile, userType } = req.body;
+      const { mobile, email, userType } = req.body;
 
-      if (!mobile) {
+      if (!mobile && !email) {
         return res.status(400).json({
           success: false,
-          message: "Phone number is required",
+          message: "Mobile number or email is required",
         });
       }
 
-      const user = await User.findOne({ mobile, userType });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "No user found with this phone number",
-        });
-      }
-
-      const otpCode =
-        mobile.toString() === "6397228522"
-          ? "123456"
-          : Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
 
-      // Save or update OTP
+      // Save or update OTP in DB
       await Otp.findOneAndUpdate(
-        { mobile },
-        {
-          expiresAt,
-          mobile,
-          otp: otpCode,
-          verified: false,
-        },
+        mobile ? { mobile } : { email },
+        { otp: otpCode, expiresAt, verified: false, mobile, email },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      // TODO: Integrate real SMS service like Twilio or Fast2SMS
-      console.log(`OTP sent to ${mobile}: ${otpCode}`);
+      if (email) {
+        // Send OTP via email
+        await sendEmail({
+          to: email,
+          from: { name: "Worker Sahay" }, // optional, fallback to config.email.from
+          subject: "Your OTP Code",
+          text: `Your OTP is ${otpCode}`,
+        });
+        console.log(`OTP sent to email: ${email}`);
+      } else if (mobile) {
+        // Send OTP via SMS (integrate your SMS provider)
+        console.log(`OTP sent to mobile: ${mobile} -> ${otpCode}`);
+        // Example: await smsService.sendOtp(mobile, otpCode);
+      }
 
       return res.status(200).json({
-        otp: otpCode,
         success: true,
         message: "OTP has been sent successfully",
+        otp: otpCode, // Remove this in production for security
       });
     } catch (error) {
       next(error);
     }
   }
+
+
+  // static async generateOtp(
+  //   req: Request,
+  //   res: Response,
+  //   next: NextFunction
+  // ): Promise<any> {
+  //   try {
+  //     const { mobile, userType } = req.body;
+
+  //     if (!mobile) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: "Phone number is required",
+  //       });
+  //     }
+
+  //     const user = await User.findOne({ mobile, userType });
+  //     if (!user) {
+  //       return res.status(404).json({
+  //         success: false,
+  //         message: "No user found with this phone number",
+  //       });
+  //     }
+
+  //     const otpCode =
+  //       mobile.toString() === "6397228522"
+  //         ? "123456"
+  //         : Math.floor(100000 + Math.random() * 900000).toString();
+  //     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
+
+  //     // Save or update OTP
+  //     await Otp.findOneAndUpdate(
+  //       { mobile },
+  //       {
+  //         expiresAt,
+  //         mobile,
+  //         otp: otpCode,
+  //         verified: false,
+  //       },
+  //       { upsert: true, new: true, setDefaultsOnInsert: true }
+  //     );
+
+  //     // TODO: Integrate real SMS service like Twilio or Fast2SMS
+  //     console.log(`OTP sent to ${mobile}: ${otpCode}`);
+
+  //     return res.status(200).json({
+  //       otp: otpCode,
+  //       success: true,
+  //       message: "OTP has been sent successfully",
+  //     });
+  //   } catch (error) {
+  //     next(error);
+  //   }
+  // }
 
   static async generateAdminOtp(
     req: Request,
@@ -365,13 +436,14 @@ export class UserController {
     }
   }
 
+
   static async verifyOtp(
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<any> {
     try {
-      const { mobile, otp, userType } = req.body;
+      const { mobile, email, otp, userType } = req.body;
 
       if (!mobile || !otp) {
         return res.status(400).json({
@@ -446,6 +518,8 @@ export class UserController {
       next(error);
     }
   }
+
+
 
   static async verifyAdminOtp(
     req: Request,
@@ -697,14 +771,14 @@ export class UserController {
       let enrollSubscriptionPlans: any;
       const { id: userId } = (req as any).user;
       const result = await userService.getById(userId);
-      
+
       enrollmentCourses = await Enrollment.find(
         {
           user: userId,
           status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
         }
       );
-      
+
       enrollSubscriptionPlans = await EnrolledPlan.find(
         {
           user: userId,
@@ -713,28 +787,28 @@ export class UserController {
           },
         }
       );
-      
+
       // Check if user has active plan
       const hasActivePlan = enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
-      
+
       // Fetch documents from FileUpload model
       const documents = await FileUpload.find(
         { userId },
         { url: 1, tag: 1, originalName: 1, uploadedAt: 1, _id: 1 }
       ).sort({ uploadedAt: -1 }).lean();
-      
+
       // Fetch profilePic from FileUpload model
       const profilePic = await FileUpload.findOne({
         userId,
         tag: "profilePic",
       }).sort({ createdAt: -1 });
-      
+
       // Add profilePicUrl to user object
       const userWithProfilePic = {
         ...result?.toObject(),
         profilePicUrl: profilePic?.url || null,
       };
-      
+
       return res
         .status(200)
         .json(

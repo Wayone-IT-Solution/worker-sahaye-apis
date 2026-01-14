@@ -138,6 +138,7 @@ export interface IUser extends Document {
   hasPremiumPlan?: boolean;
   relocate?: boolean;
   profileCompletion?: number;
+  isEmailVerified?: boolean;
 }
 
 // --- Custom Mobile Validator ---
@@ -196,11 +197,16 @@ const userSchema = new Schema<IUser>(
       },
     },
     email: {
-      required: false,
       unique: true,
       sparse: true,
       lowercase: true,
       type: Schema.Types.String,
+      required: function (this: IUser) {
+        return (
+          this.userType === UserType.EMPLOYER ||
+          this.userType === UserType.CONTRACTOR
+        );
+      },
       validate: {
         validator: (val: string) => !val || validator.isEmail(val),
         message: "Invalid email address",
@@ -310,6 +316,16 @@ const userSchema = new Schema<IUser>(
     profileCompletion: {
       type: Number,
       default: 0, // starts at 0%
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+      required: function (this: IUser) {
+        return (
+          this.userType === UserType.EMPLOYER ||
+          this.userType === UserType.CONTRACTOR
+        );
+      },
     },
   },
   { timestamps: true }

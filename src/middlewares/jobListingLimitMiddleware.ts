@@ -105,16 +105,16 @@ export const enforceJobListingLimit = async (
 
     const usage = await getJobListingUsage(user.id);
 
-    if (!usage.plan?._id) {
-      return res
-        .status(403)
-        .json(
-          new ApiError(
-            403,
-            "No active subscription plan found. Please subscribe to post jobs."
-          )
-        );
-    }
+    // if (!usage.plan?._id) {
+    //   return res
+    //     .status(403)
+    //     .json(
+    //       new ApiError(
+    //         403,
+    //         "No active subscription plan found. Please subscribe to post jobs."
+    //       )
+    //     );
+    // }
 
     if (usage.expired) {
       return res

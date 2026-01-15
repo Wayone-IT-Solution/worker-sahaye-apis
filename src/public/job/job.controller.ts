@@ -28,16 +28,16 @@ export class JobController {
       const usage =
         limitContext && typeof limitContext.usedThisMonth === "number"
           ? {
-              ...limitContext,
-              usedThisMonth: limitContext.usedThisMonth + 1,
-              remaining:
-                limitContext.limit !== null
-                  ? Math.max(
-                      limitContext.limit - (limitContext.usedThisMonth + 1),
-                      0
-                    )
-                  : null,
-            }
+            ...limitContext,
+            usedThisMonth: limitContext.usedThisMonth + 1,
+            remaining:
+              limitContext.limit !== null
+                ? Math.max(
+                  limitContext.limit - (limitContext.usedThisMonth + 1),
+                  0
+                )
+                : null,
+          }
           : limitContext || null;
 
       const responsePayload =
@@ -202,7 +202,7 @@ export class JobController {
         },
         {
           $lookup: {
-            from: "jobcategories",
+            from: "workercategories",
             localField: "category",
             foreignField: "_id",
             as: "categoryDetails",
@@ -272,7 +272,7 @@ export class JobController {
             metrics: 1,
             jobType: 1,
             priority: 1,
-            category: 1,
+            // category: 1,
             teamSize: 1,
             location: 1,
             benefits: 1,
@@ -308,8 +308,9 @@ export class JobController {
               name: "$natureDetails.name",
               description: "$natureDetails.description",
             },
-            categoryInfo: {
-              name: "$categoryDetails.name",
+            category: {
+              _id: "$categoryDetails._id",
+              type: "$categoryDetails.type",   
               description: "$categoryDetails.description",
             },
             industryInfo: {
@@ -693,7 +694,7 @@ export class JobController {
       // Check if user is authenticated and has applied for this job
       let isApplied = false;
       const userId = (req as any).user?.id;
-      
+
       if (userId) {
         const application = await JobApplication.findOne({
           job: req.params.id,

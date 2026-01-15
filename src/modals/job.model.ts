@@ -39,7 +39,7 @@ export interface IJobHistory {
 }
 
 export enum JobStatus {
-  OPEN = "open",
+  OPEN = "booiin",
   DRAFT = "draft",
   PAUSED = "paused",
   FILLED = "filled",

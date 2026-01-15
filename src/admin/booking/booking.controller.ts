@@ -226,9 +226,41 @@ export const getLoggedInUserBookings = async (req: Request, res: Response) => {
     }
 
     const bookings = await bookingService.getAll({ ...req.query, user: userId });
+    
+    // Extract bookings data (handle both paginated and non-paginated responses)
+    const bookingList = Array.isArray(bookings) ? bookings : (bookings as any).result || bookings;
+    
+    // Get all service location IDs
+    const serviceLocationIds = bookingList
+      .map((b: any) => b.serviceLocationId)
+      .filter((id: any) => id);
+    
+    // Fetch all service locations in one query
+    const serviceLocations = await ServiceLocation.find({ _id: { $in: serviceLocationIds } });
+    
+    // Create a map for quick lookup
+    const locationMap: { [key: string]: any } = {};
+    serviceLocations.forEach((loc: any) => {
+      locationMap[loc._id.toString()] = loc;
+    });
+    
+    // Replace serviceLocationId with full object
+    const enrichedBookings = bookingList.map((booking: any) => {
+      const bookingObj = booking.toObject ? booking.toObject() : booking;
+      return {
+        ...bookingObj,
+        serviceLocationId: locationMap[booking.serviceLocationId?.toString()] || booking.serviceLocationId,
+      };
+    });
+
+    // Prepare response maintaining original structure
+    const response = !Array.isArray(bookings) && (bookings as any).pagination 
+      ? { result: enrichedBookings, pagination: (bookings as any).pagination }
+      : { result: enrichedBookings };
+    
     return res
       .status(200)
-      .json(new ApiResponse(200, bookings, "Logged-in user bookings fetched successfully"));
+      .json(new ApiResponse(200, response, "Logged-in user bookings fetched successfully"));
   } catch (error: any) {
     return res
       .status(500)

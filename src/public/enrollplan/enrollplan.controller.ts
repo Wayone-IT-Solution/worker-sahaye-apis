@@ -116,7 +116,7 @@ export class EnrollPlanController {
           );
       }
 
-      const isFree = planDetails.basePrice === 0;
+      const isFree = planDetails.planType === PlanType.FREE;
       const data: any = {
         user,
         plan,
@@ -145,7 +145,7 @@ export class EnrollPlanController {
         result.expiredAt = expiredAt;
         await result.save();
 
-        if (planDetails.planType !== PlanType.FREE) {
+        if (!isFree) {
           await User.findByIdAndUpdate(user, {
             hasPremiumPlan: true,
           });

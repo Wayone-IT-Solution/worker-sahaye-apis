@@ -212,4 +212,15 @@ export const NotificationMessages: Record<
       message: ctx?.message || "You have a new important alert.",
     }),
   },
+
+  "feedback-request": {
+    sender: (ctx) => ({
+      title: `Feedback Request Sent to ${ctx?.workerName || "Worker"}`,
+      message: `You have sent a feedback request to ${ctx?.workerName || "the worker"}. They will receive your feedback request shortly.`,
+    }),
+    receiver: (ctx) => ({
+      title: `⭐ Feedback Request from ${ctx?.senderName || "Employer/Contractor"}`,
+      message: `${ctx?.senderName || "An employer/contractor"} is requesting your feedback. Please review and provide your valuable feedback.`,
+    }),
+  },
 };

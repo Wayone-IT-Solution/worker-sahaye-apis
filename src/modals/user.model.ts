@@ -248,6 +248,7 @@ const userSchema = new Schema<IUser>(
     hasPremiumPlan: {
       type: Boolean,
       default: false,
+      required: true,
     },
     relocate: {
       type: Boolean,
@@ -344,6 +345,29 @@ const userSchema = new Schema<IUser>(
   },
   { timestamps: true }
 );
+
+// Check if user has an active premium plan
+// This helper verifies the actual enrollment status instead of relying on the hasPremiumPlan boolean
+export const checkUserHasActivePremiumPlan = async (userId: string): Promise<boolean> => {
+  try {
+    // Import here to avoid circular dependency
+    const { EnrolledPlan, PlanEnrollmentStatus } = require('./enrollplan.model');
+    const { PlanType } = require('./subscriptionplan.model');
+
+    const activeEnrollment = await EnrolledPlan.findOne({
+      user: userId,
+      status: PlanEnrollmentStatus.ACTIVE,
+    }).populate('plan', 'planType');
+
+    if (!activeEnrollment) return false;
+    
+    const plan = activeEnrollment.plan as any;
+    return plan && plan.planType !== PlanType.FREE;
+  } catch (error) {
+    console.error('Error checking premium plan status:', error);
+    return false;
+  }
+};
 
 // Utility to check if a value is filled
 const isFilled = (value: any): boolean => {

@@ -91,6 +91,7 @@ import publicComplianceCalendarRoutes from "../public/compliancecalendar/complia
 import headerRoutes from "../public/header/header.routes"
 import pdfFileRoutes from "../public/pdffile/pdffile.routes"
 import loanSupportRoutes from "../public/loansupport/loansupport.routes"
+import notificationRoutes from "../public/notification/notification.routes"
 
 // Create main router
 const router = Router();
@@ -180,5 +181,6 @@ router.use("/compliancecalendar", publicComplianceCalendarRoutes);
 router.use("/header", headerRoutes);
 router.use("/pdffile", pdfFileRoutes);
 router.use("/loansupport", loanSupportRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

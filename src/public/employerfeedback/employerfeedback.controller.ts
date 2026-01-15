@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { ConnectionModel } from "../../modals/connection.model";
 import { EmployerFeedback } from "../../modals/employerfeedback.model";
+import { Notification } from "../../modals/notification.model";
 
 const employerFeedbackService = new CommonService(EmployerFeedback);
 
@@ -14,18 +15,59 @@ export class EmployerFeedbackController {
     next: NextFunction
   ) {
     try {
-      const { employerId } = req.body;
-      const { id: user } = (req as any).user;
+      const { notificationId } = req.body;
+      const { id: workerId } = (req as any).user;
 
-      // Disallow feedback to self
-      if (user === employerId) {
+      // Validate notification ID is provided
+      if (!notificationId) {
         return res
           .status(400)
-          .json(new ApiError(400, "EmployerId and UserId can't be same"));
+          .json(new ApiError(400, "notificationId is required in request body"));
       }
 
+      // Fetch notification to get sender (employer/contractor) and receiver (worker)
+      const notification = await Notification.findById(notificationId);
+      if (!notification) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Notification not found"));
+      }
+
+      // Verify notification type is feedback-request
+      if (notification.type !== "feedback-request") {
+        return res
+          .status(400)
+          .json(new ApiError(400, "This notification is not a feedback request"));
+      }
+
+      // Verify notification has sender info
+      if (!notification.from || !notification.from.user) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Notification does not have valid sender information"));
+      }
+
+      // Extract sender (employer/contractor) and receiver (worker) from notification
+      const employerId = notification.from.user;
+      const notificationWorkerId = notification.to.user;
+
+      // Verify the worker submitting feedback is the one who received the request
+      if (workerId.toString() !== notificationWorkerId.toString()) {
+        return res
+          .status(403)
+          .json(new ApiError(403, "You are not authorized to submit feedback for this request"));
+      }
+
+      // Disallow feedback to self (extra safety check)
+      if (workerId.toString() === employerId.toString()) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Cannot submit feedback to yourself"));
+      }
+
+      // Check if feedback already exists
       const exists = await EmployerFeedback.findOne({
-        userId: user,
+        userId: workerId,
         employerId,
       });
       if (exists) {
@@ -39,8 +81,8 @@ export class EmployerFeedbackController {
       // Check if a valid connection exists (in either direction)
       const hasConnection = await ConnectionModel.findOne({
         $or: [
-          { requester: user, recipient: employerId },
-          { requester: employerId, recipient: user },
+          { requester: workerId, recipient: employerId },
+          { requester: employerId, recipient: workerId },
         ],
         status: "accepted",
       });
@@ -53,7 +95,14 @@ export class EmployerFeedbackController {
           );
       }
 
-      const data = { ...req.body, userId: user };
+      // Create feedback with extracted IDs
+      const data = {
+        ...req.body,
+        userId: workerId,
+        employerId,
+        notificationId, // Store notification ID for reference
+      };
+
       const result = await employerFeedbackService.create(data);
       if (!result)
         return res
@@ -61,7 +110,7 @@ export class EmployerFeedbackController {
           .json(new ApiError(400, "Failed to create feedback"));
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+        .json(new ApiResponse(201, result, "Feedback submitted successfully"));
     } catch (err) {
       next(err);
     }

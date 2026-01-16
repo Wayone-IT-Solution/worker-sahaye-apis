@@ -88,11 +88,15 @@ export class BadgeController {
         if (!statusMap.has(key)) statusMap.set(key, status);
       });
 
-      const badgeList = allRoleBadges.map((badge) => {
-        const status = statusMap.get(badge.slug);
-        const updatedStatus = status && status === "pending" ? "requested" : status || "pending";
-        return { ...badge, status: updatedStatus };
-      });
+      const badgeList = allRoleBadges
+        .map((badge) => {
+          const status = statusMap.get(badge.slug);
+          // Only include badges that have been applied for (have a status)
+          if (!status) return null;
+          const updatedStatus = status === "pending" ? "requested" : status;
+          return { ...badge, status: updatedStatus };
+        })
+        .filter(Boolean); // Remove null entries
       return res
         .status(200)
         .json(new ApiResponse(200, badgeList, "Badges fetched successfully"));

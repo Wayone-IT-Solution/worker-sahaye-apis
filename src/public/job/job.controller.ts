@@ -404,6 +404,34 @@ export class JobController {
           },
         },
         {
+          $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
           $project: {
             _id: 1,
             tags: 1,
@@ -418,6 +446,8 @@ export class JobController {
             benefits: 1,
             workMode: 1,
             industry: 1,
+            industryId: 1,
+            subIndustryId: 1,
             createdAt: 1,
             updatedAt: 1,
             expiresAt: 1,
@@ -436,6 +466,14 @@ export class JobController {
             applicationDeadline: 1,
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
+            industryDetails: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+            },
+            subIndustryDetails: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
+            },
             category: {
               _id: "$categoryDetails._id",
               type: "$categoryDetails.type",

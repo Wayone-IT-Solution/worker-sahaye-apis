@@ -18,7 +18,7 @@ export const FileUploadController = {
           .status(400)
           .json({ success: false, message: "No files uploaded." });
       }
-
+      console.log("req.body.files", req.body);
       // Prepare file data for upsert
       const fileDataArray = files.map((file: any) => ({
         s3Key: file.url.split(".com/")[1],

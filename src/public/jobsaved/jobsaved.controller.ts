@@ -176,17 +176,29 @@ export const JobSaveController = {
     }
   },
 
-  async getSavedJobs(req: Request, res: Response, next: NextFunction) {
-    try {
-      const user = (req as any).user.id;
-      const jobs = await JobSave.find({ user }).populate("job");
-      return res
-        .status(200)
-        .json(new ApiResponse(200, jobs, "Saved jobs fetched"));
-    } catch (err) {
-      next(err);
-    }
-  },
+async getSavedJobs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = (req as any).user.id;
+
+    const jobs = await JobSave.find({ user })
+      .populate({
+        path: "job",
+        populate: {
+          path: "category",
+          model: "WorkerCategory",
+          select: "_id type description",
+        },
+      });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, jobs, "Saved jobs fetched"));
+  } catch (err) {
+    next(err);
+  }
+},
+
+
 
   async getJobRecommendations(req: Request, res: Response, next: NextFunction) {
     try {

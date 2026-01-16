@@ -310,7 +310,7 @@ export class JobController {
             },
             category: {
               _id: "$categoryDetails._id",
-              type: "$categoryDetails.type",   
+              type: "$categoryDetails.type",
               description: "$categoryDetails.description",
             },
             industryInfo: {
@@ -413,7 +413,6 @@ export class JobController {
             metrics: 1,
             jobType: 1,
             priority: 1,
-            category: 1,
             teamSize: 1,
             location: 1,
             benefits: 1,
@@ -437,6 +436,11 @@ export class JobController {
             applicationDeadline: 1,
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
+            category: {
+              _id: "$categoryDetails._id",
+              type: "$categoryDetails.type",
+              description: "$categoryDetails.description",
+            },
           },
         },
       ];
@@ -556,7 +560,6 @@ export class JobController {
             salary: 1,
             jobType: 1,
             priority: 1,
-            category: 1,
             teamSize: 1,
             location: 1,
             benefits: 1,
@@ -572,6 +575,11 @@ export class JobController {
             applicationDeadline: 1,
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
+            category: {
+              _id: "$categoryDetails._id",
+              type: "$categoryDetails.type",
+              description: "$categoryDetails.description",
+            },
           },
         },
       ];
@@ -606,6 +614,7 @@ export class JobController {
 
   static async getJobById(req: Request, res: Response, next: NextFunction) {
     try {
+
       const pipeline = [
         {
           $lookup: {
@@ -644,6 +653,21 @@ export class JobController {
           },
         },
         {
+          $lookup: {
+            from: "workercategories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$categoryInfo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
           $project: {
             _id: 1,
             tags: 1,
@@ -653,7 +677,7 @@ export class JobController {
             metrics: 1,
             jobType: 1,
             priority: 1,
-            category: 1,
+            // category: 1,
             teamSize: 1,
             location: 1,
             benefits: 1,
@@ -678,6 +702,12 @@ export class JobController {
             creatorID: "$userDetails._id",
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
+            category: {
+              _id: "$categoryInfo._id",
+              type: "$categoryInfo.type",
+              description: "$categoryInfo.description",
+              isActive: "$categoryInfo.isActive",
+            },
           },
         },
       ];

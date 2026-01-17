@@ -134,4 +134,63 @@ export class UserPreferenceController {
       next(err);
     }
   }
+
+  static async getAllUniquePreferredLocations(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const pipeline = [
+        { $unwind: "$preferredLocations" },
+
+        // normalize to lowercase and trim
+        {
+          $project: {
+            location: { $toLower: { $trim: { input: "$preferredLocations" } } }
+          }
+        },
+
+        // group to get unique values (case-insensitive)
+        {
+          $group: {
+            _id: null,
+            locations: { $addToSet: "$location" }
+          }
+        },
+
+        // convert each location to title case
+        {
+          $project: {
+            _id: 0,
+            locations: {
+              $map: {
+                input: "$locations",
+                as: "loc",
+                in: {
+                  $concat: [
+                    { $toUpper: { $substrCP: ["$$loc", 0, 1] } }, // first letter uppercase
+                    { $substrCP: ["$$loc", 1, { $strLenCP: "$$loc" }] } // rest lowercase
+                  ]
+                }
+              }
+            }
+          }
+        },
+
+        // optional: sort alphabetically
+        { $project: { locations: { $sortArray: { input: "$locations", sortBy: 1 } } } }
+      ];
+
+      const result = await UserPreference.aggregate(pipeline);
+      const locations = result[0]?.locations || [];
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, locations, "Unique preferred locations fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
 }

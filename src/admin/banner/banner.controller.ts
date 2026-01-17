@@ -5,159 +5,165 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import mongoose from "mongoose";
 import { extractImageUrl } from "../community/community.controller";
+import { Job } from "../../modals/job.model";
+import { Community } from "../../modals/community.model";
 
 const BannerService = new CommonService(BannerModel);
 
 export class BannerController {
-  static async createBanner(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  // CREATE
+  static async createBanner(req: Request, res: Response, next: NextFunction) {
     try {
       const image = req?.body?.image?.[0]?.url;
-      if (!image) return res.status(403).json(new ApiError(403, "Banner Image is Required."));
-      const result = await BannerService.create({ ...req.body, image });
-      if (!result)
-        return res
-          .status(400)
-          .json(new ApiError(400, "Failed to create banner"));
-      return res
-        .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+      if (!image)
+        return res.status(403).json(new ApiError(403, "Banner Image is Required."));
+
+      const { bannerType, job, community, othersUrl } = req.body;
+
+      // Conditional validation
+      if (bannerType === "job" && !job)
+        return res.status(400).json(new ApiError(400, "Job ID is required for job banner."));
+      if (bannerType === "community" && !community)
+        return res.status(400).json(new ApiError(400, "Community ID is required for community banner."));
+      if (bannerType === "other" && !othersUrl)
+        return res.status(400).json(new ApiError(400, "othersUrl is required for other banner type."));
+
+      const banner = await BannerService.create({ ...req.body, image });
+      return res.status(201).json(new ApiResponse(201, banner, "Banner created successfully"));
     } catch (err) {
       next(err);
     }
   }
 
-  static async getAllBanners(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  // GET ALL
+  static async getAllBanners(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
       const isAdmin = user?.role === "admin";
       const { usertype, ...restQuery } = req.query;
-      
-      // Get all banners first
+
       const allBannersResult = await BannerService.getAll(restQuery);
-      
-      // Extract result array
-      const allBanners = Array.isArray(allBannersResult) 
-        ? allBannersResult 
-        : (allBannersResult.result || []);
-      
-      // Apply filters in controller
+
+      const allBanners = Array.isArray(allBannersResult)
+        ? allBannersResult
+        : allBannersResult.result || [];
+
       let filteredBanners = allBanners;
-      
-      // Filter by userType if provided
+
       if (usertype) {
         filteredBanners = filteredBanners.filter(
-          (banner: any) => banner.userType === usertype
+          (b: any) => b.userType === usertype
         );
       }
-      
-      // Filter by isActive if not admin
+
       if (!isAdmin) {
         filteredBanners = filteredBanners.filter(
-          (banner: any) => banner.isActive === "active"
+          (b: any) => b.isActive === "active"
         );
       }
-      
-      // Return formatted response
-      const response = {
-        result: filteredBanners,
-        pagination: !Array.isArray(allBannersResult) 
-          ? allBannersResult.pagination 
-          : {
-              totalItems: filteredBanners.length,
+
+      // ✅ Populate job and community fields
+      const populatedBanners = await Promise.all(
+        filteredBanners.map(async (banner: any) => {
+          const newBanner = { ...banner };
+
+          if (banner.bannerType === "job" && banner.job) {
+            // populate Job
+            const job = await Job.findById(banner.job)
+              .select(
+                "title jobType status"
+              )
+              .lean();
+            newBanner.job = job;
+          }
+
+          if (banner.bannerType === "community" && banner.community) {
+            // populate Community
+            const community = await Community.findById(banner.community)
+              .select(
+                "name type status shortDescription"
+              )
+              .lean();
+            newBanner.community = community;
+          }
+
+          return newBanner;
+        })
+      );
+
+      return res.status(200).json(
+        new ApiResponse(200, {
+          result: populatedBanners,
+          pagination: !Array.isArray(allBannersResult)
+            ? allBannersResult.pagination
+            : {
+              totalItems: populatedBanners.length,
               totalPages: 1,
               currentPage: 1,
-              itemsPerPage: filteredBanners.length,
-            }
-      };
-      
-      return res
-        .status(200)
-        .json(new ApiResponse(200, response, "Data fetched successfully"));
+              itemsPerPage: populatedBanners.length,
+            },
+        }, "Data fetched successfully")
+      );
     } catch (err) {
       next(err);
     }
   }
 
-  static async getBannerById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  // GET BY ID
+  static async getBannerById(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await BannerService.getById(req.params.id);
-      if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "banner not found"));
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
-    } catch (err) {
+      const banner = await BannerService.getById(req.params.id);
+      return res.status(200).json(new ApiResponse(200, banner, "Data fetched successfully"));
+    } catch (err: any) {
+      if (err.message === "Record not found")
+        return res.status(404).json(new ApiError(404, "Banner not found"));
       next(err);
     }
   }
 
-  static async updateBannerById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  // UPDATE
+  static async updateBannerById(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id;
       const image = req?.body?.image?.[0]?.url;
+
       if (!mongoose.Types.ObjectId.isValid(id))
-        return res.status(400).json(new ApiError(400, "Invalid banner doc ID"));
+        return res.status(400).json(new ApiError(400, "Invalid banner ID"));
 
       const record = await BannerService.getById(id);
-      if (!record) {
-        return res
-          .status(404)
-          .json(new ApiError(404, "Banner not found."));
-      }
+
+      const { bannerType, job, community, othersUrl } = req.body;
+
+      if (bannerType === "job" && !job)
+        return res.status(400).json(new ApiError(400, "Job ID is required for job banner."));
+      if (bannerType === "community" && !community)
+        return res.status(400).json(new ApiError(400, "Community ID is required for community banner."));
+      if (bannerType === "other" && !othersUrl)
+        return res.status(400).json(new ApiError(400, "othersUrl is required for other banner type."));
 
       let imageUrl;
       if (req?.body?.image && record.image)
         imageUrl = await extractImageUrl(req?.body?.image, record.image as string);
 
-      const result = await BannerService.updateById(
-        req.params.id,
-        { ...req.body, image: imageUrl || image }
-      );
-      if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Failed to update banner"));
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Updated successfully"));
+      const updated = await BannerService.updateById(id, {
+        ...req.body,
+        image: imageUrl || image,
+      });
+
+      return res.status(200).json(new ApiResponse(200, updated, "Updated successfully"));
     } catch (err) {
       next(err);
     }
   }
 
-  static async deleteBannerById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  // DELETE
+  static async deleteBannerById(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await BannerService.deleteById(req.params.id);
-      if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Failed to delete banner"));
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Deleted successfully"));
-    } catch (err) {
+      const deleted = await BannerService.deleteById(req.params.id);
+      return res.status(200).json(new ApiResponse(200, deleted, "Deleted successfully"));
+    } catch (err: any) {
+      if (err.message === "Record not found for delete")
+        return res.status(404).json(new ApiError(404, "Banner not found"));
       next(err);
     }
   }

@@ -21,9 +21,6 @@ export interface IVirtualHRRequest extends Document {
   mobileNumber: string;
   contactPerson: string;
 
-  salesPersonAt?: Date;
-  salesPersonTo?: Types.ObjectId;
-
   userId: Types.ObjectId;
   expectedStartDate: Date;
   serviceType: "Virtual HR";
@@ -107,18 +104,11 @@ const VirtualHRRequestSchema = new Schema<IVirtualHRRequest>(
     },
     assignedTo: {
       type: Schema.Types.ObjectId,
-      ref: "VirtualHR",
+      ref: "Admin",
     },
     assignedBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
-    },
-    salesPersonTo: {
-      type: Schema.Types.ObjectId,
-      ref: "Salesperson",
-    },
-    salesPersonAt: {
-      type: Date,
     },
     assignedAt: { type: Date },
     completedAt: { type: Date },

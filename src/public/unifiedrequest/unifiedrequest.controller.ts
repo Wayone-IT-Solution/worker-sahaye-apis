@@ -8,8 +8,8 @@ import { UnifiedRequestStatus, UnifiedServiceRequest } from "../../modals/unifie
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { User } from "../../modals/user.model";
+import Admin from "../../modals/admin.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
-import { Salesperson } from "../../modals/salesperson.model";
 
 const unifiedRequestService = new CommonService(UnifiedServiceRequest);
 
@@ -97,29 +97,15 @@ export class UnifiedRequestController {
       const pipeline: any[] = [
         {
           $lookup: {
-            from: "virtualhrs",
+            from: "admins",
             localField: "assignedTo",
             foreignField: "_id",
-            as: "assignedTo",
+            as: "assignedToDetails",
           },
         },
         {
           $unwind: {
-            path: "$assignedTo",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $lookup: {
-            from: "salespeople",
-            localField: "salesPersonTo",
-            foreignField: "_id",
-            as: "salesPersonToDetails",
-          },
-        },
-        {
-          $unwind: {
-            path: "$salesPersonToDetails",
+            path: "$assignedToDetails",
             preserveNullAndEmptyArrays: true,
           },
         },
@@ -141,12 +127,10 @@ export class UnifiedRequestController {
             __v: 0,
             updatedAt: 0,
             quotationMatch: 0,
-            "assignedTo.__v": 0,
-            "assignedTo.createdAt": 0,
-            "assignedTo.updatedAt": 0,
-            "salesPersonToDetails.__v": 0,
-            "salesPersonToDetails.createdAt": 0,
-            "salesPersonToDetails.updatedAt": 0,
+            "assignedToDetails.__v": 0,
+            "assignedToDetails.createdAt": 0,
+            "assignedToDetails.updatedAt": 0,
+            "assignedToDetails.password": 0,
           },
         },
       ];
@@ -312,7 +296,7 @@ export class UnifiedRequestController {
       ) {
         return res
           .status(400)
-          .json(new ApiError(400, "Invalid request or Unified Service Request ID."));
+          .json(new ApiError(400, "Invalid request or employee user ID."));
       }
 
       const request = await UnifiedServiceRequest.findById(requestId);
@@ -322,8 +306,8 @@ export class UnifiedRequestController {
           .json(new ApiError(404, "Unified Service Request Doc not found."));
       }
 
-      // ✅ Allow only certain statuses
-      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+      // ✅ Allow only certain statuses for assignment/reassignment
+      if (!["Pending", "Assigned", "In Progress", "Cancelled", "Completed"].includes(request.status)) {
         return res.status(400).json(
           new ApiError(
             400,
@@ -332,24 +316,22 @@ export class UnifiedRequestController {
         );
       }
 
-      // ✅ Check if already assigned
-      if (request.salesPersonTo) {
+      // ✅ Verify that the employee (admin user) exists
+      const employeeUser = await Admin.findById(salesPersonTo);
+      if (!employeeUser) {
         return res
-          .status(409)
-          .json(
-            new ApiError(409, "This request is already assigned to a Unified Service Request.")
-          );
+          .status(404)
+          .json(new ApiError(404, "Employee user not found."));
       }
 
-      if (!request.salesPersonTo && role === "admin") {
+      if (!request.assignedTo && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        const salesperson = await Salesperson.findById(salesPersonTo);
-        if (userDetails && salesperson) {
+        if (userDetails && employeeUser) {
           await sendSingleNotification({
             type: "task-assigned-to-sales",
             context: {
               taskTitle: "Exclusive Request",
-              assigneeName: salesperson?.name
+              assigneeName: employeeUser?.username || employeeUser?.email || "Employee"
             },
             toRole: userDetails.userType,
             toUserId: (userDetails?._id as any),
@@ -357,8 +339,11 @@ export class UnifiedRequestController {
           });
         }
       }
-      request.salesPersonTo = salesPersonTo;
-      request.salesPersonAt = new Date();
+      // ✅ Assign to employee (admin user with support/sales/manager/operation head role)
+      request.assignedTo = salesPersonTo;
+      request.assignedBy = adminId;
+      request.assignedAt = new Date();
+      request.status = UnifiedRequestStatus.ASSIGNED;
 
       await request.save();
       return res
@@ -367,7 +352,7 @@ export class UnifiedRequestController {
           new ApiResponse(
             200,
             request,
-            `Request assigned successfully to Unified Service Request.`
+            `Request assigned successfully to employee.`
           )
         );
     } catch (err) {

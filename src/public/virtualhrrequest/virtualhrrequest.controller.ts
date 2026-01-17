@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { User } from "../../modals/user.model";
+import Admin from "../../modals/admin.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { deleteFromS3 } from "../../config/s3Uploader";
 import { VirtualHR } from "../../modals/virtualhr.model";
@@ -9,7 +10,6 @@ import { CommonService } from "../../services/common.services";
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
-import { Salesperson } from "../../modals/salesperson.model";
 
 const virtualHRRequestService = new CommonService(VirtualHRRequest);
 
@@ -87,29 +87,15 @@ export class VirtualHRRequestController {
       const pipeline: any[] = [
         {
           $lookup: {
-            from: "virtualhrs",
+            from: "admins",
             localField: "assignedTo",
             foreignField: "_id",
-            as: "assignedTo",
+            as: "assignedToDetails",
           },
         },
         {
           $unwind: {
-            path: "$assignedTo",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $lookup: {
-            from: "salespeople",
-            localField: "salesPersonTo",
-            foreignField: "_id",
-            as: "salesPersonToDetails",
-          },
-        },
-        {
-          $unwind: {
-            path: "$salesPersonToDetails",
+            path: "$assignedToDetails",
             preserveNullAndEmptyArrays: true,
           },
         },
@@ -131,12 +117,10 @@ export class VirtualHRRequestController {
             __v: 0,
             updatedAt: 0,
             quotationMatch: 0,
-            "assignedTo.__v": 0,
-            "assignedTo.createdAt": 0,
-            "assignedTo.updatedAt": 0,
-            "salesPersonToDetails.__v": 0,
-            "salesPersonToDetails.createdAt": 0,
-            "salesPersonToDetails.updatedAt": 0,
+            "assignedToDetails.__v": 0,
+            "assignedToDetails.createdAt": 0,
+            "assignedToDetails.updatedAt": 0,
+            "assignedToDetails.password": 0,
           },
         },
       ];
@@ -189,8 +173,8 @@ export class VirtualHRRequestController {
           .json(new ApiError(404, "Virtual HR request not found."));
       }
 
-      // ✅ Only allow update if status is PENDING or IN_PROGRESS
-      const allowedStatuses = ["Pending", "In Progress"];
+      // ✅ Only allow update if status is PENDING, IN_PROGRESS, or ASSIGNED
+      const allowedStatuses = ["Pending", "In Progress", "Assigned"];
       if (!allowedStatuses.includes(record.status)) {
         return res.status(403).json(
           new ApiError(
@@ -276,18 +260,18 @@ export class VirtualHRRequestController {
       ) {
         return res
           .status(400)
-          .json(new ApiError(400, "Invalid request or Virtual HR Hiring ID."));
+          .json(new ApiError(400, "Invalid request or employee user ID."));
       }
 
       const request = await VirtualHRRequest.findById(requestId);
       if (!request) {
         return res
           .status(404)
-          .json(new ApiError(404, "Virtual HR Hiring Doc not found."));
+          .json(new ApiError(404, "Virtual HR request not found."));
       }
 
-      // ✅ Allow only certain statuses
-      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+      // ✅ Allow only certain statuses for assignment/reassignment
+      if (!["Pending", "Assigned", "In Progress", "Cancelled", "Completed"].includes(request.status)) {
         return res.status(400).json(
           new ApiError(
             400,
@@ -296,24 +280,23 @@ export class VirtualHRRequestController {
         );
       }
 
-      // ✅ Check if already assigned
-      if (request.salesPersonTo) {
+      // ✅ Verify that the employee (admin user) exists
+      const employeeUser = await Admin.findById(salesPersonTo);
+      if (!employeeUser) {
         return res
-          .status(409)
-          .json(
-            new ApiError(409, "This request is already assigned to a Virtual HR Hiring.")
-          );
+          .status(404)
+          .json(new ApiError(404, "Employee user not found."));
       }
 
-      if (!request.salesPersonTo && role === "admin") {
+      // ✅ Send notification to original request creator
+      if (!request.assignedTo && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        const salesperson = await Salesperson.findById(salesPersonTo);
-        if (userDetails && salesperson) {
+        if (userDetails && employeeUser) {
           await sendSingleNotification({
             type: "task-assigned-to-sales",
             context: {
-              taskTitle: "Virtual HR Hiring",
-              assigneeName: salesperson?.name
+              taskTitle: "Virtual HR Request",
+              assigneeName: employeeUser?.username || employeeUser?.email || "Employee"
             },
             toRole: userDetails.userType,
             toUserId: (userDetails?._id as any),
@@ -321,8 +304,12 @@ export class VirtualHRRequestController {
           });
         }
       }
-      request.salesPersonTo = salesPersonTo;
-      request.salesPersonAt = new Date();
+
+      // ✅ Assign to employee (admin user with support/sales/manager/operation head role)
+      request.assignedTo = salesPersonTo;
+      request.assignedBy = adminId;
+      request.assignedAt = new Date();
+      request.status = VirtualHRRequestStatus.ASSIGNED;
 
       await request.save();
       return res
@@ -331,7 +318,7 @@ export class VirtualHRRequestController {
           new ApiResponse(
             200,
             request,
-            `Request assigned successfully to Virtual HR Hiring.`
+            `Request assigned successfully to admin.`
           )
         );
     } catch (err) {

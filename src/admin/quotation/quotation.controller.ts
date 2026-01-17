@@ -25,9 +25,9 @@ export class QuotationController {
         return res.status(404).json(new ApiError(404, "Request has been already fulfilled"));
 
       const userId = requestDoc.userId;
-      const agentId = requestDoc.salesPersonTo;
+      const agentId = requestDoc.assignedTo;
 
-      if (!agentId) return res.status(404).json(new ApiError(404, "Please Assign Sales person first!"));
+      if (!agentId) return res.status(404).json(new ApiError(404, "Please assign an employee first!"));
       const existingQuotation = await Quotation.findOne({
         userId,
         requestId,
@@ -149,8 +149,36 @@ export class QuotationController {
         rawQuotations.map(async (q) => {
           const Model = modelMap[q.requestModel];
           if (!Model || !q.requestId) return q;
-          const requestDetails = await Model.findById(q.requestId).lean();
-          return { ...q, requestDetails: requestDetails || null };
+          
+          // Use aggregation to populate assignedToDetails
+          const requestDetailsPipeline = [
+            { $match: { _id: new mongoose.Types.ObjectId(q.requestId) } },
+            {
+              $lookup: {
+                from: "admins",
+                localField: "assignedTo",
+                foreignField: "_id",
+                as: "assignedToDetails",
+              },
+            },
+            {
+              $unwind: {
+                path: "$assignedToDetails",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            {
+              $project: {
+                "assignedToDetails.password": 0,
+                "assignedToDetails.createdAt": 0,
+                "assignedToDetails.updatedAt": 0,
+              },
+            },
+          ];
+          
+          const requestDetailsArr = await Model.aggregate(requestDetailsPipeline);
+          const requestDetails = requestDetailsArr.length > 0 ? requestDetailsArr[0] : null;
+          return { ...q, requestDetails };
         })
       );
 

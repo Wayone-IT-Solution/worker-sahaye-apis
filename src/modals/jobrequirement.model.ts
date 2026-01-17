@@ -112,7 +112,7 @@ const JobRequirementSchema = new Schema<IJobRequirement>(
     },
     assignedTo: {
       type: Schema.Types.ObjectId,
-      ref: "VirtualHR",
+      ref: "Admin",
     },
     assignedAt: { type: Date },
 

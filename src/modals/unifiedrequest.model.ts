@@ -2,9 +2,10 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export enum CommunicationMode {
   EMAIL = "Email",
-  PHONE = "Phone",
-  OTHER = "Other",
+  PHONE_CALL = "Phone Call",
   WHATSAPP = "WhatsApp",
+  GOOGLE_MEET = "Google Meet",
+  ZOOM = "Zoom",
 }
 
 export enum UnifiedRequestStatus {
@@ -42,7 +43,7 @@ export interface IUnifiedServiceRequest extends Document {
   assignedTo?: Types.ObjectId;
   status: UnifiedRequestStatus;
   location: { state: string; city: string };
-  preferredCommunicationMode: CommunicationMode;
+  preferredCommunicationMode: "Email" | "Phone Call" | "WhatsApp" | "Google Meet" | "Zoom" | string;
 }
 
 const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
@@ -66,10 +67,6 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     mobileNumber: {
       type: String,
       required: true,
-      match: [
-        /^\+91\d{10}$/,
-        "Invalid Indian mobile number format (+91XXXXXXXXXX)",
-      ],
     },
     email: {
       type: String,
@@ -118,7 +115,7 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     assignedTo: {
       type: Schema.Types.ObjectId,
-      ref: "VirtualHR",
+      ref: "Admin",
     },
     assignedBy: {
       type: Schema.Types.ObjectId,

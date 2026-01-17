@@ -29,7 +29,7 @@ export function getModelFromType(model: RequestModelType) {
     case RequestModelType.ONDEMAND:
       return JobRequirement;
     case RequestModelType.VirtualHR:
-      return VirtualHR;
+      return VirtualHRRequest;
     case RequestModelType.PROJECT:
       return ProjectBasedHiring;
     case RequestModelType.SUPPORT:

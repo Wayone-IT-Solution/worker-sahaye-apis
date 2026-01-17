@@ -1,7 +1,6 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { BulkHiringController } from "./bulkhiring.controller";
-import { authorizeFeature } from "../../middlewares/enrollMiddleware";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
@@ -18,10 +17,10 @@ const {
 const router = express.Router();
 
 router
-  .post("/", authenticateToken, authorizeFeature("bulk_hiring"), asyncHandler(createBulkHiring))
-  .get("/", authenticateToken, authorizeFeature("bulk_hiring"), asyncHandler(getAllBulkHirings))
+  .post("/", authenticateToken, asyncHandler(createBulkHiring))
+  .get("/", authenticateToken, asyncHandler(getAllBulkHirings))
   .get("/:id", authenticateToken, asyncHandler(getBulkHiringById))
-  .put("/:id", authenticateToken, authorizeFeature("bulk_hiring"), asyncHandler(updateBulkHiringById))
+  .put("/:id", authenticateToken, asyncHandler(updateBulkHiringById))
   .delete("/:id", authenticateToken, asyncHandler(deleteBulkHiringById))
   .post(
     "/:id/assign",

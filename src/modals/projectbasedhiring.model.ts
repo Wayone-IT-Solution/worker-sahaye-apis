@@ -84,7 +84,7 @@ const ProjectBasedHiringSchema = new Schema<IProjectBasedHiring>(
     },
     assignedTo: {
       type: Schema.Types.ObjectId,
-      ref: "VirtualHR",
+      ref: "Admin",
     },
     assignedBy: {
       type: Schema.Types.ObjectId,

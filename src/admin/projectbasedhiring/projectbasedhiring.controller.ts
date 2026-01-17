@@ -1,13 +1,13 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { User } from "../../modals/user.model";
+import Admin from "../../modals/admin.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { ProjectBasedHiring, ProjectHiringStatus } from "../../modals/projectbasedhiring.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
-import { Salesperson } from "../../modals/salesperson.model";
 
 const projectBasedHiringService = new CommonService(ProjectBasedHiring);
 
@@ -79,29 +79,15 @@ export class ProjectHiringController {
       const pipeline: any[] = [
         {
           $lookup: {
-            from: "virtualhrs",
+            from: "admins",
             localField: "assignedTo",
             foreignField: "_id",
-            as: "assignedTo",
+            as: "assignedToDetails",
           },
         },
         {
           $unwind: {
-            path: "$assignedTo",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $lookup: {
-            from: "salespeople",
-            localField: "salesPersonTo",
-            foreignField: "_id",
-            as: "salesPersonToDetails",
-          },
-        },
-        {
-          $unwind: {
-            path: "$salesPersonToDetails",
+            path: "$assignedToDetails",
             preserveNullAndEmptyArrays: true,
           },
         },
@@ -249,7 +235,7 @@ export class ProjectHiringController {
       ) {
         return res
           .status(400)
-          .json(new ApiError(400, "Invalid request or Project Based Hiring ID."));
+          .json(new ApiError(400, "Invalid request or employee user ID."));
       }
 
       const request = await ProjectBasedHiring.findById(requestId);
@@ -259,8 +245,8 @@ export class ProjectHiringController {
           .json(new ApiError(404, "Project Based Hiring Doc not found."));
       }
 
-      // ✅ Allow only certain statuses
-      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+      // ✅ Allow only certain statuses for assignment/reassignment
+      if (!["Pending", "Assigned", "In Progress", "Cancelled", "Completed"].includes(request.status)) {
         return res.status(400).json(
           new ApiError(
             400,
@@ -269,24 +255,22 @@ export class ProjectHiringController {
         );
       }
 
-      // ✅ Check if already assigned
-      if (request.salesPersonTo) {
+      // ✅ Verify that the employee (admin user) exists
+      const employeeUser = await Admin.findById(salesPersonTo);
+      if (!employeeUser) {
         return res
-          .status(409)
-          .json(
-            new ApiError(409, "This request is already assigned to a Project Based Hiring.")
-          );
+          .status(404)
+          .json(new ApiError(404, "Employee user not found."));
       }
 
-      if (!request.salesPersonTo && role === "admin") {
+      if (!request.assignedTo && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        const salesperson = await Salesperson.findById(salesPersonTo);
-        if (userDetails && salesperson) {
+        if (userDetails && employeeUser) {
           await sendSingleNotification({
             type: "task-assigned-to-sales",
             context: {
               taskTitle: "Project Based Hiring",
-              assigneeName: salesperson?.name
+              assigneeName: employeeUser?.username || employeeUser?.email || "Employee"
             },
             toRole: userDetails.userType,
             toUserId: (userDetails?._id as any),
@@ -294,8 +278,11 @@ export class ProjectHiringController {
           });
         }
       }
-      request.salesPersonTo = salesPersonTo;
-      request.salesPersonAt = new Date();
+      // ✅ Assign to employee (admin user with support/sales/manager/operation head role)
+      request.assignedTo = salesPersonTo;
+      request.assignedBy = adminId;
+      request.assignedAt = new Date();
+      request.status = ProjectHiringStatus.ASSIGNED;
 
       await request.save();
       return res
@@ -304,7 +291,7 @@ export class ProjectHiringController {
           new ApiResponse(
             200,
             request,
-            `Request assigned successfully to Project Based Hiring.`
+            `Request assigned successfully to employee.`
           )
         );
     } catch (err) {

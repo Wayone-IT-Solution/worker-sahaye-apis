@@ -1,10 +1,10 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { User } from "../../modals/user.model";
+import Admin from "../../modals/admin.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { VirtualHR } from "../../modals/virtualhr.model";
 import { NextFunction, Request, Response } from "express";
-import { Salesperson } from "../../modals/salesperson.model";
 import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { BulkHiringRequest, BulkHiringStatus } from "../../modals/bulkhiring.model";
@@ -62,29 +62,15 @@ export class BulkHiringController {
       const pipeline: any[] = [
         {
           $lookup: {
-            from: "virtualhrs",
+            from: "admins",
             localField: "assignedTo",
             foreignField: "_id",
-            as: "assignedTo",
+            as: "assignedToDetails",
           },
         },
         {
           $unwind: {
-            path: "$assignedTo",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $lookup: {
-            from: "salespeople",
-            localField: "salesPersonTo",
-            foreignField: "_id",
-            as: "salesPersonToDetails",
-          },
-        },
-        {
-          $unwind: {
-            path: "$salesPersonToDetails",
+            path: "$assignedToDetails",
             preserveNullAndEmptyArrays: true,
           },
         },
@@ -227,7 +213,7 @@ export class BulkHiringController {
       ) {
         return res
           .status(400)
-          .json(new ApiError(400, "Invalid request or Bulk Hiring ID."));
+          .json(new ApiError(400, "Invalid request or employee user ID."));
       }
 
       const request = await BulkHiringRequest.findById(requestId);
@@ -237,8 +223,8 @@ export class BulkHiringController {
           .json(new ApiError(404, "Bulk Hiring Doc not found."));
       }
 
-      // ✅ Allow only certain statuses
-      if (!["Pending", "In Progress", "Cancelled"].includes(request.status)) {
+      // ✅ Allow only certain statuses for assignment/reassignment
+      if (!["Pending", "Assigned", "In Progress", "Cancelled", "Completed"].includes(request.status)) {
         return res.status(400).json(
           new ApiError(
             400,
@@ -247,24 +233,22 @@ export class BulkHiringController {
         );
       }
 
-      // ✅ Check if already assigned
-      if (request.salesPersonTo) {
+      // ✅ Verify that the employee (admin user) exists
+      const employeeUser = await Admin.findById(salesPersonTo);
+      if (!employeeUser) {
         return res
-          .status(409)
-          .json(
-            new ApiError(409, "This request is already assigned to a Bulk Hiring.")
-          );
+          .status(404)
+          .json(new ApiError(404, "Employee user not found."));
       }
 
-      if (!request.salesPersonTo && role === "admin") {
+      if (!request.assignedTo && role === "admin") {
         const userDetails = await User.findById(request.userId);
-        const salesperson = await Salesperson.findById(salesPersonTo);
-        if (userDetails && salesperson) {
+        if (userDetails && employeeUser) {
           await sendSingleNotification({
             type: "task-assigned-to-sales",
             context: {
               taskTitle: "Bulk Hiring",
-              assigneeName: salesperson?.name
+              assigneeName: employeeUser?.username || employeeUser?.email || "Employee"
             },
             toRole: userDetails.userType,
             toUserId: (userDetails?._id as any),
@@ -272,8 +256,11 @@ export class BulkHiringController {
           });
         }
       }
-      request.salesPersonTo = salesPersonTo;
-      request.salesPersonAt = new Date();
+      // ✅ Assign to employee (admin user with support/sales/manager/operation head role)
+      request.assignedTo = salesPersonTo;
+      request.assignedBy = adminId;
+      request.assignedAt = new Date();
+      request.status = BulkHiringStatus.ASSIGNED;
 
       await request.save();
       return res
@@ -282,7 +269,7 @@ export class BulkHiringController {
           new ApiResponse(
             200,
             request,
-            `Request assigned successfully to Bulk Hiring.`
+            `Request assigned successfully to employee.`
           )
         );
     } catch (err) {

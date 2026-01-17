@@ -181,22 +181,54 @@ export class CommunityController {
       next(err);
     }
   }
-
   static async getCommunityById(
     req: Request,
     res: Response,
     next: NextFunction
-  ) {
+  ): Promise<void> {
     try {
-      const { role } = (req as any)?.user;
-      const result = await communityService.getById(req.params.id, role !== "admin");
-      if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Worker category not found"));
-      return res
-        .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
+      // 1️⃣ Get logged-in user info
+      const user = (req as any)?.user;
+      const role: string = user?.role;
+      const userId = user?.id;
+      console.log("userId", userId);
+      const communityId: string = req.params.id;
+
+      if (!communityId) {
+        res.status(400).json(new ApiError(400, "Community ID is required"));
+        return;
+      }
+
+      // 2️⃣ Check if the logged-in user is a member of this community
+      const communityMember = await CommunityMember.findOne({
+        user: userId,
+        community: communityId,
+        // status: MemberStatus.JOINED, // consider only joined members
+      }).exec();
+
+      const isMember: boolean = !!communityMember;
+
+      // 3️⃣ Fetch the community document
+      const communityDoc = await communityService.getById(
+        communityId,
+        role !== "admin"
+      );
+
+      if (!communityDoc) {
+        res.status(404).json(new ApiError(404, "Community not found"));
+        return;
+      }
+
+      // 4️⃣ Convert Mongoose document to plain object
+      const community = {
+        ...communityDoc.toObject(),
+        member: isMember,
+      };
+
+
+
+      // 5️⃣ Return API response
+      res.status(200).json(new ApiResponse(200, community, "Data fetched successfully"));
     } catch (err) {
       next(err);
     }

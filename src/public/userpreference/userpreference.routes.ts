@@ -8,12 +8,14 @@ const {
   getUserPreferenceById,
   updateUserPreferenceById,
   deleteUserPreferenceById,
+  getAllUniquePreferredLocations,
 } = UserPreferenceController;
 
 const router = express.Router();
 
 router
   .get("/", authenticateToken, asyncHandler(getAllUserPreferences))
+  .get("/location", authenticateToken, asyncHandler(getAllUniquePreferredLocations))
   .get("/:id", authenticateToken, asyncHandler(getUserPreferenceById))
   .put("/", authenticateToken, isWorker, asyncHandler(updateUserPreferenceById))
   .delete("/:id", authenticateToken, asyncHandler(deleteUserPreferenceById));

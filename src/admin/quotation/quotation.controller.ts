@@ -10,7 +10,12 @@ const QuotationService = new CommonService(Quotation);
 export class QuotationController {
   static async createQuotation(req: Request, res: Response, next: NextFunction) {
     try {
-      const { requestId, requestModel } = req.body;
+      const { requestModel: requestModelFromUrl } = req.params;
+      const { requestId, requestModel: requestModelFromBody } = req.body;
+      
+      // requestModel can come from URL params or body, URL params take precedence
+      const requestModel = requestModelFromUrl || requestModelFromBody;
+      
       if (!requestId || !requestModel)
         return res.status(400).json(new ApiError(400, "RequestId and model type are required"));
 

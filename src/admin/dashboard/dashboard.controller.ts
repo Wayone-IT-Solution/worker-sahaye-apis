@@ -45,6 +45,7 @@ import { BestPracticesFacility } from "../../modals/bestpracticesfacility.model"
 import { PreInterviewedContractor } from "../../modals/preinterviewedcontractor.model";
 import { Quotation, QuotationStatus, RequestModelType } from "../../modals/quotation.model";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
+import { VirtualHrRecruiter } from "../../modals/virtualhrecruiter.model";
 import { Job } from "../../modals/job.model";
 
 export class DashboardController {
@@ -859,6 +860,7 @@ export class DashboardController {
         "loan_request": LoanRequestModel,
         "on_demand_hiring": JobRequirement,
         "virtual_hr_hiring": VirtualHRRequest,
+        "virtual_hr_recruiter": VirtualHrRecruiter,
         "support_service": UnifiedServiceRequest,
         "project_based_hiring": ProjectBasedHiring,
       };
@@ -988,6 +990,7 @@ export class DashboardController {
       const requestModels = [
         "BulkHiringRequest",
         "VirtualHRRequest",
+        "VirtualHrRecruiter",
         "JobRequirement",
         "ProjectBasedHiring",
         "UnifiedServiceRequest"

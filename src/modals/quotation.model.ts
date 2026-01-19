@@ -4,6 +4,7 @@ import { JobRequirement } from "./jobrequirement.model";
 import { VirtualHRRequest } from "./virtualhrrequest.model";
 import { UnifiedServiceRequest } from "./unifiedrequest.model";
 import { ProjectBasedHiring } from "./projectbasedhiring.model";
+import { VirtualHrRecruiter } from "./virtualhrecruiter.model";
 import mongoose, { Schema, Document, Types, model } from "mongoose";
 
 export enum RequestModelType {
@@ -12,6 +13,7 @@ export enum RequestModelType {
   VirtualHR = "VirtualHRRequest",
   PROJECT = "ProjectBasedHiring",
   SUPPORT = "UnifiedServiceRequest",
+  VIRTUAL_HR_RECRUITER = "VirtualHrRecruiter",
 }
 
 export const modelMap: Record<string, mongoose.Model<any>> = {
@@ -20,6 +22,7 @@ export const modelMap: Record<string, mongoose.Model<any>> = {
   BulkHiringRequest: BulkHiringRequest,
   ProjectBasedHiring: ProjectBasedHiring,
   UnifiedServiceRequest: UnifiedServiceRequest,
+  VirtualHrRecruiter: VirtualHrRecruiter,
 };
 
 export function getModelFromType(model: RequestModelType) {
@@ -34,6 +37,8 @@ export function getModelFromType(model: RequestModelType) {
       return ProjectBasedHiring;
     case RequestModelType.SUPPORT:
       return UnifiedServiceRequest;
+    case RequestModelType.VIRTUAL_HR_RECRUITER:
+      return VirtualHrRecruiter;
     default:
       return null;
   }

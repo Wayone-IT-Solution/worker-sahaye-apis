@@ -80,6 +80,7 @@ import highlyPreferredRoutes from "../public/highlypreferred/highlypreferred.rou
 import communityMemberRoutes from "../public/communitymember/communitymember.routes";
 import employerFeedbackRoutes from "../public/employerfeedback/employerfeedback.routes";
 import virtualHRRequestRoutes from "../public/virtualhrrequest/virtualhrrequest.routes";
+import virtualHrRecruiterRoutes from "../public/virtualhrecruiter/virtualhrecruiter.routes";
 import skilledCandidateRoutes from "../public/skilledcandidate/skilledcandidate.routes";
 import unifiedServcieRequestRoutes from "../public/unifiedrequest/unifiedrequest.routes";
 import policeVerificationRoutes from "../public/policeverification/policeverification.routes";
@@ -171,6 +172,7 @@ router.use("/communitymember", communityMemberRoutes);
 router.use("/skilledcandidate", skilledCandidateRoutes);
 router.use("/employerfeedback", employerFeedbackRoutes);
 router.use("/virtualhrrequest", virtualHRRequestRoutes);
+router.use("/virtualhrecruiter", virtualHrRecruiterRoutes);
 router.use("/policeverification", policeVerificationRoutes);
 router.use("/compliancechecklist", complianceChecklistRoutes);
 router.use("/unifiedservicerequest", unifiedServcieRequestRoutes);

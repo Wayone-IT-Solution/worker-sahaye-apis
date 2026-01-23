@@ -14,8 +14,6 @@ import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model
 import { ForumPost } from "../../modals/forumpost.model";
 import { ForumComment } from "../../modals/forumcomment.model";
 import { Community, CommunityPrivacy } from "../../modals/community.model";
-import { EnrolledPlan } from "../../modals/enrollplan.model";
-import { PlanType } from "../../modals/subscriptionplan.model";
 
 const CommunityMemberService = new CommonService(CommunityMember);
 

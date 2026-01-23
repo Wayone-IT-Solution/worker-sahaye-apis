@@ -11,6 +11,8 @@ import { User } from "../../modals/user.model";
 import { UserType } from "../../modals/notification.model";
 import { CommonService } from "../../services/common.services";
 import { sendDualNotification } from "../../services/notification.service";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 
 const JobApplicationService = new CommonService(JobApplication);
 
@@ -133,7 +135,7 @@ export const applyToJob = async (
         senderRole: UserType.WORKER,
         receiverRole: receiver.userType,
       });
-    
+
     // Update fast responder score after job application
     try {
       const { updateFastResponderScore } = await import("../../services/fastResponder.service");
@@ -141,7 +143,7 @@ export const applyToJob = async (
     } catch (error) {
       console.error("Error updating fast responder score:", error);
     }
-    
+
     await resetJobMetrics(job);
     return res
       .status(201)
@@ -308,6 +310,15 @@ export const getReceivedApplications = async (
 
     if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(role)) {
       return res.status(404).json(new ApiError(403, "Unauthorized access."));
+    }
+
+    // If the requester is a contractor, enforce subscription plan check
+    if (role === UserType.CONTRACTOR) {
+      const enrolled = await EnrolledPlan.findOne({ user: userId, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+      const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+      if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing received applications"));
+      }
     }
 
     // Pagination

@@ -12,6 +12,8 @@ import {
   CommunityMember,
 } from "../../modals/communitymember.model";
 import { resetStats } from "../communitymember/communitymember.controller";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 
 const hiringPatterns: RegExp[] = [
   /h[!1i¡]*r[!1i¡]*[e3a@u][!1i¡]*[n9gq]/i,                       // hiring, h1ring, h!ring, h¡ring
@@ -89,6 +91,20 @@ export class ForumPostController {
         return res
           .status(400)
           .json(new ApiError(400, "User is not a member of the community"));
+      }
+
+      // If contractor, enforce subscription plan: only GROWTH or ENTERPRISE can post
+      if (userType === UserType.CONTRACTOR) {
+        const enrolled = await EnrolledPlan.findOne({ user, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+        const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+        if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+          if (attachments && attachments.length > 0) {
+            attachments.map(async (file: any) => {
+              await extractImageUrl(file);
+            });
+          }
+          return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating forum posts"));
+        }
       }
 
       // Check if user has already posted today

@@ -10,6 +10,8 @@ import {
 } from "../../modals/compliancecalendarstatus.model";
 import { ComplianceCalendarReminder } from "../../modals/compliancecalendarreminder.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 
 const complianceCalendarService = new CommonService(ComplianceCalendar);
 const complianceStatusService = new CommonService(ComplianceCalendarStatus);
@@ -55,7 +57,7 @@ export class PublicComplianceCalendarController {
           }).select("channels status").lean();
 
           // Extract active channels (flatten array of arrays)
-          const activeChannels = reminders.length > 0 
+          const activeChannels = reminders.length > 0
             ? [...new Set(reminders.flatMap((r: any) => r.channels || []))]
             : [];
 
@@ -263,6 +265,13 @@ export class PublicComplianceCalendarController {
       const { id: employerId } = (req as any).user;
       const { id: calendarId } = req.params;
       const { channels = ["IN_APP"] } = req.body;
+
+      // Enforce subscription plan: only GROWTH or ENTERPRISE can set reminders
+      const enrolled = await EnrolledPlan.findOne({ user: employerId, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+      const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+      if (!enrolled || !(planType === PlanType.GROWTH || planType === PlanType.ENTERPRISE)) {
+        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow setting compliance reminders"));
+      }
 
       if (!mongoose.Types.ObjectId.isValid(calendarId)) {
         return res

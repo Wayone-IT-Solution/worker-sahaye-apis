@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
-import { Job } from "../../modals/job.model";
+import { Job, JobStatus } from "../../modals/job.model";
 import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
@@ -10,40 +10,129 @@ import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
 import { sendDualNotification } from "../../services/notification.service";
 import { getJobListingUsage as fetchJobListingUsage } from "../../middlewares/jobListingLimitMiddleware";
+import { SubscriptionPlan, ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 
 const JobService = new CommonService(Job);
 
 export class JobController {
   static async createJob(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = { ...req.body, postedBy: (req as any).user.id };
-      delete data.status;
-      const result = await JobService.create(data);
-      if (!result)
-        return res
-          .status(400)
-          .json(new ApiError(400, "Failed to create worker category"));
+      const userId = (req as any).user.id;
 
-      const limitContext: any = (req as any).jobListingLimit;
-      const usage =
-        limitContext && typeof limitContext.usedThisMonth === "number"
-          ? {
-            ...limitContext,
-            usedThisMonth: limitContext.usedThisMonth + 1,
-            remaining:
-              limitContext.limit !== null
-                ? Math.max(
-                  limitContext.limit - (limitContext.usedThisMonth + 1),
-                  0
-                )
-                : null,
+      // Fetch user's active enrollment plan
+      const enrollment = await EnrolledPlan.findOne({
+        user: userId,
+        status: PlanEnrollmentStatus.ACTIVE,
+      });
+      if (!enrollment) {
+        throw new ApiError(403, "No active subscription plan found");
+      }
+
+      // Fetch subscription plan
+      const plan = await SubscriptionPlan.findById(enrollment.plan);
+      if (!plan?.contractorFeatures?.jobPostingCandidates) {
+        throw new ApiError(403, "No active subscription plan found");
+      }
+
+      const features = plan.contractorFeatures.jobPostingCandidates;
+
+      // Determine job status
+      const jobStatus =
+        req.body.status === JobStatus.DRAFT
+          ? JobStatus.DRAFT
+          : JobStatus.PENDING_APPROVAL;
+
+      /* ----------------------------------------------------
+       * DRAFT JOB LIMIT CHECK
+       * ---------------------------------------------------- */
+      if (jobStatus === JobStatus.DRAFT) {
+        const draftFeature = features.saveJobDrafts;
+
+        if (!draftFeature?.enabled) {
+          throw new ApiError(403, "Your plan does not allow saving job drafts");
+        }
+
+        // limit !== null → enforce limit
+        if (draftFeature.limit !== null) {
+          const draftCount = await Job.countDocuments({
+            postedBy: userId,
+            status: JobStatus.DRAFT,
+          });
+
+          if (draftCount >= draftFeature.limit) {
+            throw new ApiError(
+              403,
+              `Draft job limit reached. Your plan allows only ${draftFeature.limit} draft jobs`
+            );
           }
-          : limitContext || null;
+        }
+      }
 
+      /* ----------------------------------------------------
+       * POSTED JOB LIMIT CHECK (NON-DRAFT)
+       * ---------------------------------------------------- */
+      let postedJobsCount = 0;
+
+      if (jobStatus !== JobStatus.DRAFT) {
+        const postJobFeature = features.postJob;
+
+        if (!postJobFeature?.enabled) {
+          throw new ApiError(403, "Your plan does not allow posting jobs");
+        }
+
+        if (!postJobFeature.unlimited && postJobFeature.limit !== null) {
+          postedJobsCount = await Job.countDocuments({
+            postedBy: userId,
+            status: { $ne: JobStatus.DRAFT },
+            createdAt: {
+              $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            },
+          });
+
+          if (postedJobsCount >= postJobFeature.limit) {
+            throw new ApiError(
+              403,
+              `Job posting limit reached. Your plan allows ${postJobFeature.limit} jobs per month`
+            );
+          }
+        }
+      }
+
+      /* ----------------------------------------------------
+       * CREATE JOB
+       * ---------------------------------------------------- */
+      const data = {
+        ...req.body,
+        postedBy: userId,
+        status: jobStatus,
+      };
+
+      const result = await JobService.create(data);
+      if (!result) {
+        throw new ApiError(400, "Failed to create job");
+      }
+
+      /* ----------------------------------------------------
+       * RESPONSE (only for posted jobs)
+       * ---------------------------------------------------- */
       const responsePayload =
-        result?.toObject && typeof result.toObject === "function"
-          ? { ...result.toObject(), jobListingUsage: usage }
-          : { ...(result as any), jobListingUsage: usage };
+        jobStatus === JobStatus.DRAFT
+          ? result.toObject()
+          : {
+            ...result.toObject(),
+            jobListingUsage: {
+              limit: features.postJob.limit,
+              usedThisMonth: postedJobsCount + 1,
+              remaining:
+                features.postJob.limit !== null
+                  ? Math.max(
+                    features.postJob.limit - (postedJobsCount + 1),
+                    0
+                  )
+                  : null,
+            },
+          };
 
       return res
         .status(201)
@@ -52,6 +141,8 @@ export class JobController {
       next(err);
     }
   }
+
+
 
   static async uploadJobUpdated(
     req: Request,
@@ -72,9 +163,20 @@ export class JobController {
     try {
       const { jobRole, category, city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
 
+      // If user is logged in and is a contractor, enforce plan check
+      const currentUser = (req as any).user;
+      if (currentUser && currentUser.role === "contractor") {
+        const enrolled = await EnrolledPlan.findOne({ user: currentUser.id, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+        // If no enrollment or plan is Free/Basic, do not show data
+        const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+        if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+          return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing job listings"));
+        }
+      }
+
       // Build match stage dynamically
       const matchStage: any = {
-        status: "open"
+        status: "open",
       };
 
       // Filter by category
@@ -342,12 +444,29 @@ export class JobController {
         },
       ];
 
-      // Add sorting: Early access badge jobs first, then by creation date
+      // Add priority ranking and sorting:
+      // 1 = PRIORITY, 2 = STANDARD, 3 = others
+      pipeline.push({
+        $addFields: {
+          priorityRank: {
+            $switch: {
+              branches: [
+                { case: { $eq: ["$priority", "priority"] }, then: 1 },
+                { case: { $eq: ["$priority", "standard"] }, then: 2 },
+              ],
+              default: 3,
+            },
+          },
+        },
+      } as any);
+
+      // Sort by priorityRank (ascending), early access badge, then newest
       pipeline.push({
         $sort: {
-          creatorHasEarlyAccessBadge: -1, // Early access badge holders first (true = 1, false = 0, so -1 sorts true first)
-          createdAt: -1, // Then by newest first
-        }
+          priorityRank: 1,
+          creatorHasEarlyAccessBadge: -1, // Early access badge holders first
+          createdAt: -1,
+        },
       } as any);
 
       const result = await JobService.getAll(req.query, pipeline);

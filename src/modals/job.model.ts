@@ -54,6 +54,8 @@ export enum Priority {
   HIGH = "high",
   NORMAL = "normal",
   URGENT = "urgent",
+  PRIORITY = "priority",
+  STANDARD = "standard"
 }
 
 export enum Industry {

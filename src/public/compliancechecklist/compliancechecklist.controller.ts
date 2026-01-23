@@ -5,6 +5,8 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { ComplianceChecklist, VerificationStatus } from "../../modals/compliancechecklist.model";
 import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 
 const ComplianceChecklistService = new CommonService(ComplianceChecklist);
 
@@ -24,6 +26,14 @@ export class ComplianceChecklistController {
           .status(404)
           .json(new ApiError(404, "Compliance Pro Doc already exists"));
       }
+
+      // Only users with plan types other than FREE can create compliance checklists
+      const enrolled = await EnrolledPlan.findOne({ user, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+      const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+      if (!enrolled || planType === PlanType.FREE) {
+        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating compliance checklists"));
+      }
+
       const result = await ComplianceChecklistService.create({ user, ...req.body });
       if (!result) {
         return res

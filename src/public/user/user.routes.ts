@@ -27,6 +27,9 @@ userRouter.post("/admin/early-access/:userId", asyncHandler(UserController.grant
 userRouter.delete("/admin/early-access/:userId", asyncHandler(UserController.revokeEarlyAccessBadge));
 userRouter.get("/admin/early-access", asyncHandler(UserController.getEarlyAccessBadgeUsers));
 
+// Get candidate branding eligibility based on subscription plan
+userRouter.get("/branding/status", authenticateToken, asyncHandler(UserController.getCandidateBrandingStatus));
+
 userRouter.get(
   "/all",
   authenticateToken,

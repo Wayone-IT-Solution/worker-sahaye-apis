@@ -1,5 +1,6 @@
 import express, { Router } from "express";
 import { LoanSupportController } from "./loansupport.controller";
+import { authenticateToken } from "../../middlewares/authMiddleware";
 
 const router: Router = express.Router();
 
@@ -7,6 +8,7 @@ const router: Router = express.Router();
 router.post("/", LoanSupportController.createLoanRequest);
 router.get("/", LoanSupportController.getAllLoanRequests);
 router.get("/stats", LoanSupportController.getLoanStatistics);
+router.get("/eligibility/check", authenticateToken, LoanSupportController.checkLoanEligibility);
 router.get("/:id", LoanSupportController.getLoanRequestById);
 
 // Update

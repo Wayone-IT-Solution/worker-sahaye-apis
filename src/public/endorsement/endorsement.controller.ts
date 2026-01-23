@@ -6,8 +6,45 @@ import { NextFunction, Request, Response } from "express";
 import { Endorsement } from "../../modals/endorsement.model";
 import { CommonService } from "../../services/common.services";
 import { ConnectionModel, ConnectionStatus } from "../../modals/connection.model";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const endorsementService = new CommonService(Endorsement);
+
+// Helper function to check endorsement eligibility based on subscription plan
+const getEndorsementEligibility = async (userId: string) => {
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // If no active plan, user is on FREE plan - not eligible for endorsement requests
+  if (!enrolledPlan) {
+    return {
+      eligible: false,
+      planType: PlanType.FREE,
+      message: "Endorsement requests are available for BASIC and PREMIUM plan members. Please upgrade your subscription to request endorsements.",
+    };
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // BASIC and PREMIUM plans are eligible, FREE plan is not
+  if (planType === PlanType.FREE) {
+    return {
+      eligible: false,
+      planType: PlanType.FREE,
+      message: "Endorsement requests are available for BASIC and PREMIUM plan members. Please upgrade your subscription to request endorsements.",
+    };
+  }
+
+  return {
+    eligible: true,
+    planType: planType,
+    message: "You are eligible to request endorsements.",
+  };
+};
 
 export class EndorsementController {
   static async createEndorsement(req: Request, res: Response, next: NextFunction) {
@@ -17,6 +54,14 @@ export class EndorsementController {
 
       if (!endorsedBy) {
         return res.status(400).json(new ApiError(400, "Missing endorsedBy field"));
+      }
+
+      // Check endorsement eligibility based on subscription plan
+      const endorsementEligibility = await getEndorsementEligibility(userId);
+      if (!endorsementEligibility.eligible) {
+        return res.status(403).json(
+          new ApiError(403, endorsementEligibility.message)
+        );
       }
 
       // ✅ Ensure A & B have accepted connection
@@ -608,6 +653,23 @@ export class EndorsementController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async checkEndorsementEligibility(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(400).json(new ApiError(400, "User ID is required"));
+      }
+
+      const eligibility = await getEndorsementEligibility(userId);
+      return res.status(200).json(
+        new ApiResponse(200, eligibility, "Endorsement eligibility checked successfully")
+      );
     } catch (err) {
       next(err);
     }

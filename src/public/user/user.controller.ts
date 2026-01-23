@@ -18,6 +18,7 @@ import {
   EnrolledPlan,
   PlanEnrollmentStatus,
 } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import FileUpload from "../../modals/fileupload.model";
@@ -31,6 +32,86 @@ import { UserPreference } from "../../modals/userpreference.model";
 const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
 
+// Helper function to get candidate branding eligibility based on subscription plan
+const getCandidateBrandingEligibility = async (userId: string | null) => {
+  // Default eligibility for FREE plan (no subscription)
+  const defaultEligibility = {
+    planType: PlanType.FREE,
+    verifiedWorker: true,
+    policeVerified: true,
+    fastResponder: true,
+    skilledCandidate: false,
+    trainedByWorkerSahay: false,
+    preInterviewedCandidate: false,
+    profileFeaturedToEmployers: false,
+  };
+
+  if (!userId) {
+    return defaultEligibility;
+  }
+
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // If no active plan, return FREE plan eligibility
+  if (!enrolledPlan) {
+    return defaultEligibility;
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // Define branding eligibility based on plan type
+  const eligibilityMap: Record<
+    string,
+    {
+      planType: string;
+      verifiedWorker: boolean;
+      policeVerified: boolean;
+      fastResponder: boolean;
+      skilledCandidate: boolean;
+      trainedByWorkerSahay: boolean;
+      preInterviewedCandidate: boolean;
+      profileFeaturedToEmployers: boolean;
+    }
+  > = {
+    [PlanType.FREE]: {
+      planType: PlanType.FREE,
+      verifiedWorker: true,
+      policeVerified: true,
+      fastResponder: true,
+      skilledCandidate: false,
+      trainedByWorkerSahay: false,
+      preInterviewedCandidate: false,
+      profileFeaturedToEmployers: false,
+    },
+    [PlanType.BASIC]: {
+      planType: PlanType.BASIC,
+      verifiedWorker: true,
+      policeVerified: true,
+      fastResponder: true,
+      skilledCandidate: true,
+      trainedByWorkerSahay: false,
+      preInterviewedCandidate: false,
+      profileFeaturedToEmployers: false,
+    },
+    [PlanType.PREMIUM]: {
+      planType: PlanType.PREMIUM,
+      verifiedWorker: true,
+      policeVerified: true,
+      fastResponder: true,
+      skilledCandidate: true,
+      trainedByWorkerSahay: true,
+      preInterviewedCandidate: true,
+      profileFeaturedToEmployers: true,
+    },
+  };
+
+  return eligibilityMap[planType] ?? defaultEligibility;
+};
+
 export class UserController {
   static async createUser(req: Request, res: Response, next: NextFunction) {
     try {
@@ -43,6 +124,7 @@ export class UserController {
         agreedToTerms,
         privacyPolicyAccepted,
         relocate,
+        workerCategory,
       } = req.body;
 
       // 1. Validation (basic example)
@@ -70,6 +152,7 @@ export class UserController {
         agreedToTerms,
         privacyPolicyAccepted,
         relocate,
+        workerCategory,
       };
 
       // Email is optional for WORKER
@@ -179,6 +262,7 @@ export class UserController {
         relocate,
         email,
         mobile,
+        workerCategory,
       } = req.body;
 
       // Fetch the current user to check for email/mobile changes
@@ -196,6 +280,7 @@ export class UserController {
         dateOfBirth,
         preferences, // Get the entire preferences object as sent from frontend
         relocate,
+        workerCategory,
         primaryLocation: { city, state, pincode, address, country },
       };
 
@@ -1108,6 +1193,65 @@ export class UserController {
       );
     } catch (error) {
       next(error);
+    }
+  }
+
+  static async getCandidateBrandingStatus(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json(new ApiError(401, "Authentication required"));
+      }
+
+      // Get user's branding eligibility
+      const eligibility = await getCandidateBrandingEligibility(userId);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            planType: eligibility.planType,
+            eligibleBadges: {
+              verifiedWorker: eligibility.verifiedWorker,
+              policeVerified: eligibility.policeVerified,
+              fastResponder: eligibility.fastResponder,
+              skilledCandidate: eligibility.skilledCandidate,
+              trainedByWorkerSahay: eligibility.trainedByWorkerSahay,
+              preInterviewedCandidate: eligibility.preInterviewedCandidate,
+              profileFeaturedToEmployers: eligibility.profileFeaturedToEmployers,
+            },
+            summary: {
+              totalEligible: Object.values(eligibility).filter(
+                (v) => typeof v === "boolean" && v
+              ).length,
+              message: this.getBrandingMessage(eligibility.planType),
+            },
+          },
+          "Candidate branding eligibility fetched successfully"
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static getBrandingMessage(planType: string): string {
+    switch (planType) {
+      case PlanType.FREE:
+        return "Upgrade to BASIC to unlock Skilled Candidate badge and more!";
+      case PlanType.BASIC:
+        return "Upgrade to PREMIUM to unlock exclusive badges and get featured!";
+      case PlanType.PREMIUM:
+        return "You have access to all premium branding features!";
+      default:
+        return "Check your plan for available branding features.";
     }
   }
 }

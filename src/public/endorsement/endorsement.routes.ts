@@ -12,10 +12,14 @@ const {
   getAllEndorsementsGiven,
   getAllEndorsementsReceived,
   showPendingRequestsICanFulfill,
-  showMyPendingEndorsementRequests
+  showMyPendingEndorsementRequests,
+  checkEndorsementEligibility
 } = EndorsementController;
 
 const router = express.Router();
+
+// Check endorsement eligibility
+router.get("/eligibility/check", authenticateToken, asyncHandler(checkEndorsementEligibility));
 
 router.get("/", authenticateToken, asyncHandler(getAllEndorsements));
 

@@ -5,8 +5,75 @@ import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { getReviewStats } from "../../public/coursereview/coursereview.controller";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const courseService = new CommonService(Course);
+
+// Helper function to get course access and pricing benefits based on subscription plan
+const getCourseAccessBenefits = async (userId: string | null) => {
+  // Default benefits for FREE plan (no subscription)
+  const defaultBenefits = {
+    planType: PlanType.FREE,
+    canViewTrainingPrograms: true,
+    trainingFeeDiscount: 0,
+    canGetSkillCertification: false,
+    canGetSkillBadge: false,
+  };
+
+  if (!userId) {
+    return defaultBenefits;
+  }
+
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // If no active plan, return FREE plan benefits
+  if (!enrolledPlan) {
+    return defaultBenefits;
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // Define course benefits based on plan type
+  const benefitsMap: Record<
+    string,
+    {
+      planType: string;
+      canViewTrainingPrograms: boolean;
+      trainingFeeDiscount: number;
+      canGetSkillCertification: boolean;
+      canGetSkillBadge: boolean;
+    }
+  > = {
+    [PlanType.FREE]: {
+      planType: PlanType.FREE,
+      canViewTrainingPrograms: true,
+      trainingFeeDiscount: 0,
+      canGetSkillCertification: false,
+      canGetSkillBadge: false,
+    },
+    [PlanType.BASIC]: {
+      planType: PlanType.BASIC,
+      canViewTrainingPrograms: true,
+      trainingFeeDiscount: 10,
+      canGetSkillCertification: true,
+      canGetSkillBadge: false,
+    },
+    [PlanType.PREMIUM]: {
+      planType: PlanType.PREMIUM,
+      canViewTrainingPrograms: true,
+      trainingFeeDiscount: 30,
+      canGetSkillCertification: true,
+      canGetSkillBadge: true,
+    },
+  };
+
+  return benefitsMap[planType] ?? defaultBenefits;
+};
 
 export class CourseController {
   static async createCourse(req: Request, res: Response, next: NextFunction) {
@@ -35,6 +102,9 @@ export class CourseController {
 
   static async getAllCourses(req: Request, res: Response, next: NextFunction) {
     try {
+      const userId = (req as any).user?.id || null;
+      const benefits = await getCourseAccessBenefits(userId);
+
       const pipeline: any[] = [
         {
           $lookup: {
@@ -59,7 +129,51 @@ export class CourseController {
         { $project: { reviews: 0 } },
       ];
 
-      const result = await courseService.getAll(req.query, pipeline);
+      let result: any = await courseService.getAll(req.query, pipeline);
+
+      // Add personalized pricing for each course
+      if (Array.isArray(result)) {
+        result = result.map((course: any) => {
+          let yourPrice = course.amount;
+          let discountAmount = 0;
+
+          // Calculate discount for paid courses
+          if (!course.isFree && benefits.trainingFeeDiscount > 0) {
+            discountAmount = (course.amount * benefits.trainingFeeDiscount) / 100;
+            yourPrice = course.amount - discountAmount;
+          }
+
+          return {
+            ...course,
+            originalPrice: course.amount,
+            yourPrice,
+            discountPercentage: benefits.trainingFeeDiscount,
+            discountAmount,
+            userPlanType: benefits.planType,
+          };
+        });
+      } else if (result && result.result) {
+        result.result = result.result.map((course: any) => {
+          let yourPrice = course.amount;
+          let discountAmount = 0;
+
+          // Calculate discount for paid courses
+          if (!course.isFree && benefits.trainingFeeDiscount > 0) {
+            discountAmount = (course.amount * benefits.trainingFeeDiscount) / 100;
+            yourPrice = course.amount - discountAmount;
+          }
+
+          return {
+            ...course,
+            originalPrice: course.amount,
+            yourPrice,
+            discountPercentage: benefits.trainingFeeDiscount,
+            discountAmount,
+            userPlanType: benefits.planType,
+          };
+        });
+      }
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -71,12 +185,36 @@ export class CourseController {
   static async getCourseById(req: Request, res: Response, next: NextFunction) {
     try {
       const { role } = (req as any).user;
+      const userId = (req as any).user?.id || null;
       let result = await courseService.getById(req.params.id, role !== "admin");
       if (!result)
         return res.status(404).json(new ApiError(404, "course not found"));
+      
       const reviewsData = await getReviewStats(req.params.id.toString());
       result = JSON.parse(JSON.stringify(result));
-      const data = { ...result, ...reviewsData };
+
+      // Get user's subscription benefits for personalized pricing
+      const benefits = await getCourseAccessBenefits(userId);
+
+      // Calculate personalized price
+      let yourPrice = result.amount;
+      let discountAmount = 0;
+
+      if (!result.isFree && benefits.trainingFeeDiscount > 0) {
+        discountAmount = (result.amount * benefits.trainingFeeDiscount) / 100;
+        yourPrice = result.amount - discountAmount;
+      }
+
+      const data = {
+        ...result,
+        ...reviewsData,
+        originalPrice: result.amount,
+        yourPrice,
+        discountPercentage: benefits.trainingFeeDiscount,
+        discountAmount,
+        userPlanType: benefits.planType,
+      };
+
       return res
         .status(200)
         .json(new ApiResponse(200, data, "Data fetched successfully"));
@@ -153,6 +291,27 @@ export class CourseController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getTrainingBenefits(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = (req as any).user?.id || null;
+      const benefits = await getCourseAccessBenefits(userId);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          benefits,
+          "Training and Certification benefits fetched successfully"
+        )
+      );
     } catch (err) {
       next(err);
     }

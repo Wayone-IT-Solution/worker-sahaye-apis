@@ -3,6 +3,43 @@ import LoanSupport, { LoanStatus, LoanPurpose } from "../../modals/loansupport.m
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { buildMatchStage, buildSortObject, buildPaginationResponse, SEARCH_FIELD_MAP } from "../../utils/queryBuilder";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
+
+// Helper function to check loan application eligibility based on subscription plan
+const getLoanEligibility = async (userId: string) => {
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // If no active plan, user is on FREE plan - not eligible for loan application
+  if (!enrolledPlan) {
+    return {
+      eligible: false,
+      planType: PlanType.FREE,
+      message: "Loan applications are available for BASIC and PREMIUM plan members. Please upgrade your subscription to apply for a loan.",
+    };
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // BASIC and PREMIUM plans are eligible, FREE plan is not
+  if (planType === PlanType.FREE) {
+    return {
+      eligible: false,
+      planType: PlanType.FREE,
+      message: "Loan applications are available for BASIC and PREMIUM plan members. Please upgrade your subscription to apply for a loan.",
+    };
+  }
+
+  return {
+    eligible: true,
+    planType: planType,
+    message: "You are eligible to apply for a loan.",
+  };
+};
 
 export class LoanSupportController {
   static async createLoanRequest(req: Request, res: Response) {
@@ -11,6 +48,14 @@ export class LoanSupportController {
 
       if (!userId || !fullName || !email || !phone || !loanAmount || !currentSalary || !loanNeededDate || !loanCategory) {
         return res.status(400).json(new ApiError(400, "All required fields must be provided"));
+      }
+
+      // Check loan application eligibility based on subscription plan
+      const loanEligibility = await getLoanEligibility(userId);
+      if (!loanEligibility.eligible) {
+        return res.status(403).json(
+          new ApiError(403, loanEligibility.message)
+        );
       }
 
       if (loanAmount < 1000 || loanAmount > 5000000) {
@@ -240,6 +285,24 @@ export class LoanSupportController {
     } catch (error) {
       console.error("Statistics Error:", error);
       return res.status(500).json(new ApiError(500, "Error fetching loan statistics"));
+    }
+  }
+
+  static async checkLoanEligibility(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(400).json(new ApiError(400, "User ID is required"));
+      }
+
+      const eligibility = await getLoanEligibility(userId);
+      return res.status(200).json(
+        new ApiResponse(200, eligibility, "Loan eligibility checked successfully")
+      );
+    } catch (error) {
+      console.error("Eligibility Check Error:", error);
+      return res.status(500).json(new ApiError(500, "Error checking loan eligibility"));
     }
   }
 }

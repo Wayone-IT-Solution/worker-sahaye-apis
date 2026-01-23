@@ -38,6 +38,7 @@ export interface IUser extends Document {
   isMobileVerified: boolean;
   privacyPolicyAccepted: boolean;
   category: Schema.Types.ObjectId;
+  workerCategory?: Schema.Types.ObjectId;
   preferredJobCategories?: string[];
   referredBy?: Schema.Types.ObjectId;
   trade?: Schema.Types.ObjectId;
@@ -179,6 +180,10 @@ const userSchema = new Schema<IUser>(
     category: {
       type: Schema.Types.ObjectId,
       ref: "JobCategory",
+    },
+    workerCategory: {
+      type: Schema.Types.ObjectId,
+      ref: "WorkerCategory",
     },
     preferredJobCategories: [
       {

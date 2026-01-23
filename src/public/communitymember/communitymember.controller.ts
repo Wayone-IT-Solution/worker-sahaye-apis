@@ -14,6 +14,8 @@ import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model
 import { ForumPost } from "../../modals/forumpost.model";
 import { ForumComment } from "../../modals/forumcomment.model";
 import { Community, CommunityPrivacy } from "../../modals/community.model";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const CommunityMemberService = new CommonService(CommunityMember);
 
@@ -74,6 +76,41 @@ export const resetStats = async (communityId: string) => {
   return updatedCommunity;
 };
 
+// Helper function to check community participation eligibility based on subscription plan
+const getCommunityParticipationEligibility = async (userId: string) => {
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // If no active plan, user is on FREE plan - can view but not participate
+  if (!enrolledPlan) {
+    return {
+      canParticipate: false,
+      planType: PlanType.FREE,
+      message: "Community participation is available for BASIC and PREMIUM plan members. Please upgrade your subscription to participate in communities.",
+    };
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // BASIC and PREMIUM plans can participate, FREE plan cannot
+  if (planType === PlanType.FREE) {
+    return {
+      canParticipate: false,
+      planType: PlanType.FREE,
+      message: "Community participation is available for BASIC and PREMIUM plan members. Please upgrade your subscription to participate in communities.",
+    };
+  }
+
+  return {
+    canParticipate: true,
+    planType: planType,
+    message: "You can participate in communities.",
+  };
+};
+
 export class CommunityMemberController {
   static async createCommunityMember(
     req: Request,
@@ -89,6 +126,14 @@ export class CommunityMemberController {
         return res.status(404).json(new ApiError(404, "User not found"));
       if (userExist.status !== "active")
         return res.status(403).json(new ApiError(403, "User is not active"));
+
+      // Check community participation eligibility based on subscription plan
+      const participationEligibility = await getCommunityParticipationEligibility(user);
+      if (!participationEligibility.canParticipate) {
+        return res.status(403).json(
+          new ApiError(403, participationEligibility.message)
+        );
+      }
 
       // Enforce subscription plan: only GROWTH or ENTERPRISE can join communities
       const enrolledPlan = await EnrolledPlan.findOne({ user, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
@@ -355,6 +400,23 @@ export class CommunityMemberController {
       const members = await CommunityMemberService.getAll({ ...req.query, status: req.query.status ?? "joined", community: communityId }, pipeline);
       return res.status(200).json(
         new ApiResponse(200, members, "Community members fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async checkCommunityParticipationEligibility(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(400).json(new ApiError(400, "User ID is required"));
+      }
+
+      const eligibility = await getCommunityParticipationEligibility(userId);
+      return res.status(200).json(
+        new ApiResponse(200, eligibility, "Community participation eligibility checked successfully")
       );
     } catch (err) {
       next(err);

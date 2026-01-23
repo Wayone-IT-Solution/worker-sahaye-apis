@@ -10,30 +10,62 @@ import {
   buildPaginationResponse,
 } from "../../utils/queryBuilder";
 
-// Helper function to get canCall and hasActivePlan for a user and service
-const getCallStatusForService = async (userId: string | null, serviceId: string) => {
+// Helper function to get subscription-based access flags for a user and service
+const getServiceAccessFlags = async (
+  userId: string | null,
+  serviceFor: string
+): Promise<{ canChat: boolean; canCall: boolean; canDiscountedPersonalAssistance: boolean }> => {
+  // Default access for non-authenticated users (FREE plan equivalent)
+  const defaultAccess = {
+    canChat: serviceFor !== "LOAN",
+    canCall: false,
+    canDiscountedPersonalAssistance: false,
+  };
+
   if (!userId) {
-    return { canCall: false, hasActivePlan: false };
+    return defaultAccess;
   }
 
-  // Find booking for this user and service
-  const booking = await Booking.findOne({
-    user: userId,
-    supportService: serviceId,
-    status: { $ne: "cancelled" },
-  });
-
-  // Check if user has active basic or premium subscription
+  // Get user's active subscription plan
   const enrolledPlan = await EnrolledPlan.findOne({
     user: userId,
     status: "active",
   }).populate("plan");
 
-  const activePlanTypes = [PlanType.BASIC, PlanType.PREMIUM];
-  const hasActivePlan = enrolledPlan && activePlanTypes.includes((enrolledPlan.plan as any).planType);
-  const canCall = booking?.canCall || false;
+  // If no active plan, return FREE plan access
+  if (!enrolledPlan) {
+    return defaultAccess;
+  }
 
-  return { canCall, hasActivePlan };
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // Define access levels based on plan type and service type
+  const accessMap: Record<string, Record<string, { canChat: boolean; canCall: boolean; canDiscountedPersonalAssistance: boolean }>> = {
+    [PlanType.FREE]: {
+      EPFO: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+      ESIC: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+      LWF: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+      LOAN: { canChat: false, canCall: false, canDiscountedPersonalAssistance: false },
+      AWARENESS: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+    },
+    [PlanType.BASIC]: {
+      EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+      ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+      LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+      LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+      AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+    },
+    [PlanType.PREMIUM]: {
+      EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+      ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+      LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+      LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+      AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+    },
+  };
+
+  // Return access flags based on plan type and service
+  return accessMap[planType]?.[serviceFor] ?? defaultAccess;
 };
 
 // Search field mapping for support service
@@ -197,14 +229,13 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     const total = result[0]?.metadata?.[0]?.total || 0;
     const services = result[0]?.data || [];
 
-    // Add canCall and hasActivePlan for each service
-    const servicesWithCallStatus = await Promise.all(
+    // Add access flags for each service based on user's subscription plan
+    const servicesWithAccessFlags = await Promise.all(
       services.map(async (service: any) => {
-        const callStatus = await getCallStatusForService(userId, service._id.toString());
+        const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
         return {
           ...service,
-          canCall: callStatus.canCall,
-          hasActivePlan: callStatus.hasActivePlan,
+          ...accessFlags,
         };
       })
     );
@@ -212,7 +243,7 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Support services fetched successfully",
-      data: buildPaginationResponse(servicesWithCallStatus, total, page, limit),
+      data: buildPaginationResponse(servicesWithAccessFlags, total, page, limit),
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -272,14 +303,13 @@ export const getServicesByType = async (req: Request, res: Response) => {
 
     const services = await SupportService.aggregate(pipeline);
 
-    // Add canCall and hasActivePlan for each service
-    const servicesWithCallStatus = await Promise.all(
+    // Add access flags for each service based on user's subscription plan
+    const servicesWithAccessFlags = await Promise.all(
       services.map(async (service: any) => {
-        const callStatus = await getCallStatusForService(userId, service._id.toString());
+        const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
         return {
           ...service,
-          canCall: callStatus.canCall,
-          hasActivePlan: callStatus.hasActivePlan,
+          ...accessFlags,
         };
       })
     );
@@ -287,8 +317,8 @@ export const getServicesByType = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: `Services for ${serviceFor} fetched successfully`,
-      data: servicesWithCallStatus,
-      count: servicesWithCallStatus.length,
+      data: servicesWithAccessFlags,
+      count: servicesWithAccessFlags.length,
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -313,12 +343,11 @@ export const getSupportServiceById = async (req: Request, res: Response) => {
       });
     }
 
-    // Add canCall and hasActivePlan
-    const callStatus = await getCallStatusForService(userId, id);
+    // Add access flags based on user's subscription plan
+    const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
     const serviceData = {
       ...service.toObject(),
-      canCall: callStatus.canCall,
-      hasActivePlan: callStatus.hasActivePlan,
+      ...accessFlags,
     };
 
     return res.status(200).json({
@@ -505,14 +534,13 @@ export const searchSupportServices = async (req: Request, res: Response) => {
       },
     ]);
 
-    // Add canCall and hasActivePlan for each service
-    const servicesWithCallStatus = await Promise.all(
+    // Add access flags for each service based on user's subscription plan
+    const servicesWithAccessFlags = await Promise.all(
       services.map(async (service: any) => {
-        const callStatus = await getCallStatusForService(userId, service._id.toString());
+        const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
         return {
           ...service,
-          canCall: callStatus.canCall,
-          hasActivePlan: callStatus.hasActivePlan,
+          ...accessFlags,
         };
       })
     );
@@ -520,8 +548,8 @@ export const searchSupportServices = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Support services search results",
-      data: servicesWithCallStatus,
-      count: servicesWithCallStatus.length,
+      data: servicesWithAccessFlags,
+      count: servicesWithAccessFlags.length,
     });
   } catch (error: any) {
     return res.status(500).json({

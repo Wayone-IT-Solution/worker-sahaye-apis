@@ -14,6 +14,7 @@ const {
   getCourseById,
   updateCourseById,
   deleteCourseById,
+  getTrainingBenefits,
 } = CourseController;
 
 const {
@@ -28,6 +29,9 @@ const {
 } = LessonController;
 
 const router = express.Router();
+
+// Get training and certification benefits based on subscription plan (Info only)
+router.get("/benefits/my", authenticateToken, asyncHandler(getTrainingBenefits));
 
 router
   .post(

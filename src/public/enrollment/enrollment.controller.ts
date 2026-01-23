@@ -9,8 +9,75 @@ import {
 } from "../../modals/enrollment.model";
 import { Course } from "../../modals/courses.model";
 import { CommonService } from "../../services/common.services";
+import { EnrolledPlan } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const enrollmentService = new CommonService(Enrollment);
+
+// Helper function to get course access and pricing benefits based on subscription plan
+const getCourseAccessBenefits = async (userId: string | null) => {
+  // Default benefits for FREE plan (no subscription)
+  const defaultBenefits = {
+    planType: PlanType.FREE,
+    canViewTrainingPrograms: true,
+    trainingFeeDiscount: 0,
+    canGetSkillCertification: false,
+    canGetSkillBadge: false,
+  };
+
+  if (!userId) {
+    return defaultBenefits;
+  }
+
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // If no active plan, return FREE plan benefits
+  if (!enrolledPlan) {
+    return defaultBenefits;
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  // Define course benefits based on plan type
+  const benefitsMap: Record<
+    string,
+    {
+      planType: string;
+      canViewTrainingPrograms: boolean;
+      trainingFeeDiscount: number;
+      canGetSkillCertification: boolean;
+      canGetSkillBadge: boolean;
+    }
+  > = {
+    [PlanType.FREE]: {
+      planType: PlanType.FREE,
+      canViewTrainingPrograms: true,
+      trainingFeeDiscount: 0,
+      canGetSkillCertification: false,
+      canGetSkillBadge: false,
+    },
+    [PlanType.BASIC]: {
+      planType: PlanType.BASIC,
+      canViewTrainingPrograms: true,
+      trainingFeeDiscount: 10,
+      canGetSkillCertification: true,
+      canGetSkillBadge: false,
+    },
+    [PlanType.PREMIUM]: {
+      planType: PlanType.PREMIUM,
+      canViewTrainingPrograms: true,
+      trainingFeeDiscount: 30,
+      canGetSkillCertification: true,
+      canGetSkillBadge: true,
+    },
+  };
+
+  return benefitsMap[planType] ?? defaultBenefits;
+};
 
 export class EnrollmentController {
   static async createEnrollment(req: any, res: Response, next: NextFunction) {
@@ -73,12 +140,36 @@ export class EnrollmentController {
           .json(new ApiError(404, "Course doesn't exist or was not found"));
 
       const isFree = courseDetails.isFree;
+      
+      // Get user's subscription benefits
+      const benefits = await getCourseAccessBenefits(user);
+
+      // Check certification eligibility if applicable
+      if (courseDetails.certificate && !benefits.canGetSkillCertification) {
+        return res.status(403).json(
+          new ApiError(
+            403,
+            "You are not eligible for skill certification with your current plan. Upgrade to BASIC or PREMIUM."
+          )
+        );
+      }
+
+      // Calculate amount with subscription-based discount
+      let baseAmount = courseDetails.amount * numberOfPeople;
+      let discountAmount = 0;
+      let finalAmount = baseAmount;
+
+      if (!isFree && benefits.trainingFeeDiscount > 0) {
+        discountAmount = (baseAmount * benefits.trainingFeeDiscount) / 100;
+        finalAmount = baseAmount - discountAmount;
+      }
+
       const data: any = {
         user,
         course,
         numberOfPeople,
-        totalAmount: courseDetails.amount * numberOfPeople,
-        finalAmount: courseDetails.amount * numberOfPeople,
+        totalAmount: baseAmount,
+        finalAmount,
         status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
       };
 

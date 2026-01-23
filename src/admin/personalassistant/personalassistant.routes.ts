@@ -13,9 +13,17 @@ const {
   getPersonalAssistantById,
   updatePersonalAssistantById,
   deletePersonalAssistantById,
+  getPersonalAssistanceBenefits,
+  bookPersonalAssistance,
 } = PersonalAssistantController;
 
 const router = express.Router();
+
+// Get personal assistance benefits based on user's subscription plan (public, authenticated)
+router.get("/benefits/my", authenticateToken, asyncHandler(getPersonalAssistanceBenefits));
+
+// Book personal assistance with subscription-based pricing
+router.post("/book/service", authenticateToken, asyncHandler(bookPersonalAssistance));
 
 router
   .post(

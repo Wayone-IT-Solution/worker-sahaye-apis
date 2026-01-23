@@ -17,7 +17,7 @@ export class PreInterviewedController {
   static async createPreInterviewed(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { interviewedAt, remarks } = req.body;
@@ -52,8 +52,8 @@ export class PreInterviewedController {
           .json(
             new ApiError(
               500,
-              "Something went wrong while creating Pre Interviewed."
-            )
+              "Something went wrong while creating Pre Interviewed.",
+            ),
           );
       }
       return res
@@ -62,8 +62,8 @@ export class PreInterviewedController {
           new ApiResponse(
             201,
             result,
-            "Pre Interviewed submitted successfully."
-          )
+            "Pre Interviewed submitted successfully.",
+          ),
         );
     } catch (err) {
       next(err);
@@ -73,10 +73,15 @@ export class PreInterviewedController {
   static async getAllPreIntervieweds(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
-      const pipeline = [
+      const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
+      const engagementType = (
+        req.query.engagementType as string
+      )?.toLowerCase();
+
+      const pipeline: any[] = [
         {
           $lookup: {
             from: "users",
@@ -113,24 +118,144 @@ export class PreInterviewedController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // Check if invite engagement exists
         {
-          $project: {
-            _id: 1,
-            status: 1,
-            remarks: 1,
-            document: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            verifiedAt: 1,
-            interviewedAt: 1,
-            userEmail: "$userDetails.email",
-            userMobile: "$userDetails.mobile",
-            userName: "$userDetails.fullName",
-            userProfile: "$userDetails.profile",
-            profilePicUrl: "$profilePicFile.url",
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "invite"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "inviteEngagement",
+          },
+        },
+        // Check if viewProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "viewProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "viewProfileEngagement",
+          },
+        },
+        // Check if contactUnlock engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "contactUnlock"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "contactUnlockEngagement",
+          },
+        },
+        // Check if saveItem exists for this user with referenceType "user"
+        {
+          $lookup: {
+            from: "saveitems",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$user", currentUserId] },
+                      { $eq: ["$referenceId", "$$userId"] },
+                      { $eq: ["$referenceType", "user"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "savedItem",
           },
         },
       ];
+
+      // Add filter stage based on engagementType query parameter
+      if (engagementType) {
+        const matchStage: any = { $match: {} };
+
+        switch (engagementType) {
+          case "invite":
+            matchStage.$match = { inviteEngagement: { $ne: [] } };
+            break;
+          case "viewprofile":
+            matchStage.$match = { viewProfileEngagement: { $ne: [] } };
+            break;
+          case "contactunlock":
+            matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
+            break;
+          case "saved":
+            matchStage.$match = { savedItem: { $ne: [] } };
+            break;
+        }
+
+        pipeline.push(matchStage);
+      }
+
+      pipeline.push({
+        $project: {
+          _id: 1,
+          status: 1,
+          remarks: 1,
+          document: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          verifiedAt: 1,
+          interviewedAt: 1,
+          userEmail: "$userDetails.email",
+          userMobile: "$userDetails.mobile",
+          userName: "$userDetails.fullName",
+          userProfile: "$userDetails.profile",
+          profilePicUrl: "$profilePicFile.url",
+          hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+          hasViewProfileSent: {
+            $gt: [{ $size: "$viewProfileEngagement" }, 0],
+          },
+          hasContactUnlockSent: {
+            $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+          },
+          hasSaved: { $gt: [{ $size: "$savedItem" }, 0] },
+        },
+      });
+
       const result = await PreInterviewedService.getAll(req.query, pipeline);
       return res
         .status(200)
@@ -143,7 +268,7 @@ export class PreInterviewedController {
   static async getPreInterviewedById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await PreInterviewedService.getById(req.params.id);
@@ -162,7 +287,7 @@ export class PreInterviewedController {
   static async getPreInterviewedDetails(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id: user } = (req as any).user;
@@ -182,7 +307,7 @@ export class PreInterviewedController {
   static async updatePreInterviewedById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id, role } = (req as any).user;
@@ -215,7 +340,7 @@ export class PreInterviewedController {
           "pending",
         document: await extractImageUrl(
           document,
-          existingVerificationRecord.document
+          existingVerificationRecord.document,
         ),
         verifiedAt: status === VerificationStatus.APPROVED ? new Date() : null,
       };
@@ -228,7 +353,7 @@ export class PreInterviewedController {
       }
       const result = await PreInterviewedService.updateById(
         verificationId,
-        normalizedData
+        normalizedData,
       );
       if (!result)
         return res
@@ -245,7 +370,7 @@ export class PreInterviewedController {
   static async deletePreInterviewedById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const verificationId = req.params.id;
@@ -267,8 +392,8 @@ export class PreInterviewedController {
           .json(
             new ApiError(
               400,
-              "Pre Interviewed is already approved and cannot be deleted or modified."
-            )
+              "Pre Interviewed is already approved and cannot be deleted or modified.",
+            ),
           );
       }
       const result = await PreInterviewedService.deleteById(req.params.id);

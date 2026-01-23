@@ -9,23 +9,28 @@ import {
 } from "./../../modals/preinterviewedcontractor.model";
 import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
 
-const PreInterviewedContractorService = new CommonService(PreInterviewedContractor);
+const PreInterviewedContractorService = new CommonService(
+  PreInterviewedContractor,
+);
 
 export class PreInterviewedContractorController {
   static async createPreInterviewedContractor(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id: user } = (req as any).user;
-      const existingVerificationRecord: any = await PreInterviewedContractor.findOne({
-        user,
-      });
+      const existingVerificationRecord: any =
+        await PreInterviewedContractor.findOne({
+          user,
+        });
       if (existingVerificationRecord) {
         return res
           .status(404)
-          .json(new ApiError(404, "Pre Interviewed Contractor Doc already exists"));
+          .json(
+            new ApiError(404, "Pre Interviewed Contractor Doc already exists"),
+          );
       }
       const result = await PreInterviewedContractorService.create({
         user,
@@ -37,8 +42,8 @@ export class PreInterviewedContractorController {
           .json(
             new ApiError(
               500,
-              "Something went wrong while creating Pre Interviewed Contractor."
-            )
+              "Something went wrong while creating Pre Interviewed Contractor.",
+            ),
           );
       }
       return res
@@ -47,8 +52,8 @@ export class PreInterviewedContractorController {
           new ApiResponse(
             201,
             result,
-            "Pre Interviewed Contractor submitted successfully."
-          )
+            "Pre Interviewed Contractor submitted successfully.",
+          ),
         );
     } catch (err) {
       next(err);
@@ -58,9 +63,11 @@ export class PreInterviewedContractorController {
   static async getAllPreInterviewedContractors(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
+      const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
+
       const pipeline = [
         {
           $lookup: {
@@ -98,6 +105,94 @@ export class PreInterviewedContractorController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // Check if invite engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "invite"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "inviteEngagement",
+          },
+        },
+        // Check if viewProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "viewProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "viewProfileEngagement",
+          },
+        },
+        // Check if contactUnlock engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "contactUnlock"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "contactUnlockEngagement",
+          },
+        },
+        // Check if saveItem exists for this user with referenceType "user"
+        {
+          $lookup: {
+            from: "saveitems",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$user", currentUserId] },
+                      { $eq: ["$referenceId", "$$userId"] },
+                      { $eq: ["$referenceType", "user"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "savedItem",
+          },
+        },
         {
           $project: {
             _id: 1,
@@ -110,10 +205,21 @@ export class PreInterviewedContractorController {
             userName: "$userDetails.fullName",
             userProfile: "$userDetails.profile",
             profilePicUrl: "$profilePicFile.url",
+            hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+            hasViewProfileSent: {
+              $gt: [{ $size: "$viewProfileEngagement" }, 0],
+            },
+            hasContactUnlockSent: {
+              $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+            },
+            hasSaved: { $gt: [{ $size: "$savedItem" }, 0] },
           },
         },
       ];
-      const result = await PreInterviewedContractorService.getAll(req.query, pipeline);
+      const result = await PreInterviewedContractorService.getAll(
+        req.query,
+        pipeline,
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -125,9 +231,11 @@ export class PreInterviewedContractorController {
   static async getAllPreInterviewedContractorsForUser(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
+      const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
+
       const pipeline = [
         {
           $lookup: {
@@ -165,6 +273,94 @@ export class PreInterviewedContractorController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // Check if invite engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "invite"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "inviteEngagement",
+          },
+        },
+        // Check if viewProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "viewProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "viewProfileEngagement",
+          },
+        },
+        // Check if contactUnlock engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "contactUnlock"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "contactUnlockEngagement",
+          },
+        },
+        // Check if saveItem exists for this user with referenceType "user"
+        {
+          $lookup: {
+            from: "saveitems",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$user", currentUserId] },
+                      { $eq: ["$referenceId", "$$userId"] },
+                      { $eq: ["$referenceType", "user"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "savedItem",
+          },
+        },
         {
           $project: {
             _id: 1,
@@ -177,10 +373,21 @@ export class PreInterviewedContractorController {
             userName: "$userDetails.fullName",
             userProfile: "$userDetails.profile",
             profilePicUrl: "$profilePicFile.url",
+            hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+            hasViewProfileSent: {
+              $gt: [{ $size: "$viewProfileEngagement" }, 0],
+            },
+            hasContactUnlockSent: {
+              $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+            },
+            hasSaved: { $gt: [{ $size: "$savedItem" }, 0] },
           },
         },
       ];
-      const result = await PreInterviewedContractorService.getAll({ ...req.query, status: "approved" }, pipeline);
+      const result = await PreInterviewedContractorService.getAll(
+        { ...req.query, status: "approved" },
+        pipeline,
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -192,10 +399,12 @@ export class PreInterviewedContractorController {
   static async getPreInterviewedContractorById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
-      const result = await PreInterviewedContractorService.getById(req.params.id);
+      const result = await PreInterviewedContractorService.getById(
+        req.params.id,
+      );
       if (!result)
         return res
           .status(404)
@@ -211,7 +420,7 @@ export class PreInterviewedContractorController {
   static async getPreInterviewedContractorDetails(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id: user } = (req as any).user;
@@ -231,7 +440,7 @@ export class PreInterviewedContractorController {
   static async updatePreInterviewedContractorById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id, role } = (req as any).user;
@@ -251,7 +460,9 @@ export class PreInterviewedContractorController {
       if (existingVerificationRecord?.status === VerificationStatus.APPROVED)
         return res
           .status(404)
-          .json(new ApiError(404, "Pre Interviewed Contractor already approved"));
+          .json(
+            new ApiError(404, "Pre Interviewed Contractor already approved"),
+          );
 
       const { status, slug } = req.body;
       const normalizedData = {
@@ -270,12 +481,14 @@ export class PreInterviewedContractorController {
       }
       const result = await PreInterviewedContractorService.updateById(
         verificationId,
-        normalizedData
+        normalizedData,
       );
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to update Pre Interviewed Contractor"));
+          .json(
+            new ApiError(404, "Failed to update Pre Interviewed Contractor"),
+          );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Updated successfully"));
@@ -287,7 +500,7 @@ export class PreInterviewedContractorController {
   static async deletePreInterviewedContractorById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const verificationId = req.params.id;
@@ -309,15 +522,19 @@ export class PreInterviewedContractorController {
           .json(
             new ApiError(
               400,
-              "Pre Interviewed Contractor is already approved and cannot be deleted or modified."
-            )
+              "Pre Interviewed Contractor is already approved and cannot be deleted or modified.",
+            ),
           );
       }
-      const result = await PreInterviewedContractorService.deleteById(req.params.id);
+      const result = await PreInterviewedContractorService.deleteById(
+        req.params.id,
+      );
       if (!result)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to delete Pre Interviewed Contractor"));
+          .json(
+            new ApiError(404, "Failed to delete Pre Interviewed Contractor"),
+          );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));

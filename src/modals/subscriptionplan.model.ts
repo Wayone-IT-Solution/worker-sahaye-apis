@@ -26,7 +26,7 @@ export enum BillingCycle {
 
 export const calculateExpiryDate = (
   startDate: Date,
-  cycle: BillingCycle
+  cycle: BillingCycle,
 ): Date => {
   const date = new Date(startDate);
   switch (cycle) {
@@ -81,6 +81,33 @@ export interface ISubscriptionPlan extends Document {
   isRecommended: boolean;
   billingCycle: BillingCycle;
   monthlyJobListingLimit?: number;
+  // Save limits (for profile, job, draft saving)
+  totalSavesLimit?: number; // Overall monthly save limit
+  saveProfilesLimit?: number; // Monthly limit for saving profiles
+  saveJobsLimit?: number; // Monthly limit for saving jobs
+  saveDraftsLimit?: number; // Monthly limit for saving drafts
+  // Engagement limits - per recipient type
+  inviteSendLimit?:
+    | {
+        worker?: number;
+        employer?: number;
+        contractor?: number;
+      }
+    | number; // Can be single number (legacy) or per-role object
+  viewProfileLimit?:
+    | {
+        worker?: number;
+        employer?: number;
+        contractor?: number;
+      }
+    | number;
+  contactUnlockLimit?:
+    | {
+        worker?: number;
+        employer?: number;
+        contractor?: number;
+      }
+    | number;
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -142,6 +169,50 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       default: null,
       // Represents the allowed number of job listings per month for employer/contractor plans.
     },
+    // Save limits for profiles, jobs, and drafts
+    totalSavesLimit: {
+      type: Number,
+      min: 0,
+      default: null,
+      // null = unlimited, number = monthly cap
+      // Applies to employer and contractor plans
+    },
+    saveProfilesLimit: {
+      type: Number,
+      min: 0,
+      default: null,
+      // Monthly limit for saving profiles
+    },
+    saveJobsLimit: {
+      type: Number,
+      min: 0,
+      default: null,
+      // Monthly limit for saving job listings
+    },
+    saveDraftsLimit: {
+      type: Number,
+      min: 0,
+      default: null,
+      // Monthly limit for saving drafts
+    },
+    inviteSendLimit: {
+      type: Schema.Types.Mixed,
+      default: 0,
+      // Can be number (0 by default) or { worker: number, employer: number, contractor: number }
+      // 0 = no limit allowed, null = unlimited
+    },
+    viewProfileLimit: {
+      type: Schema.Types.Mixed,
+      default: 0,
+      // Can be number (0 by default) or { worker: number, employer: number, contractor: number }
+      // 0 = no limit allowed, null = unlimited
+    },
+    contactUnlockLimit: {
+      type: Schema.Types.Mixed,
+      default: 0,
+      // Can be number (0 by default) or { worker: number, employer: number, contractor: number }
+      // 0 = no limit allowed, null = unlimited
+    },
     status: {
       type: String,
       enum: Object.values(PlanStatus),
@@ -163,7 +234,7 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Filter by user type (worker, employer, contractor)
@@ -180,5 +251,5 @@ SubscriptionPlanSchema.index({ billingCycle: 1 });
 
 export const SubscriptionPlan = mongoose.model<ISubscriptionPlan>(
   "SubscriptionPlan",
-  SubscriptionPlanSchema
+  SubscriptionPlanSchema,
 );

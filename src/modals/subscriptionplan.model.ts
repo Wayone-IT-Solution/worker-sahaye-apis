@@ -10,6 +10,7 @@ export enum PlanType {
   FREE = "free",
   BASIC = "basic",
   PREMIUM = "premium",
+  GROWTH = "growth",
   ENTERPRISE = "enterprise",
   PROFESSIONAL = "professional",
 }

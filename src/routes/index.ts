@@ -96,6 +96,8 @@ import pdfFileRoutes from "../public/pdffile/pdffile.routes";
 import loanSupportRoutes from "../public/loansupport/loansupport.routes";
 import notificationRoutes from "../public/notification/notification.routes";
 import paymentRoutes from "../public/payment/payment.routes";
+import subscriptionRoutes from "../public/subscription/subscription.routes"
+
 // Create main router
 const router = Router();
 
@@ -190,5 +192,6 @@ router.use("/pdffile", pdfFileRoutes);
 router.use("/loansupport", loanSupportRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/payment", paymentRoutes);
+router.use("/subscription", subscriptionRoutes);
 
 export default router;

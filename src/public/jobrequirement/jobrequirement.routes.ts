@@ -13,11 +13,13 @@ const {
   getJobRequirementById,
   updateJobRequirementById,
   deleteJobRequirementById,
+  checkOnDemandWorkerAllocationServiceEligibilityEndpoint,
 } = JobRequirementController;
 
 const router = express.Router();
 
 router
+  .get("/eligibility/check", authenticateToken, asyncHandler(checkOnDemandWorkerAllocationServiceEligibilityEndpoint))
   .post("/",
     authenticateToken,
     dynamicUpload([{ name: "jobDescriptionUrl", maxCount: 1 }]),

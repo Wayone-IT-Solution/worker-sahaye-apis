@@ -67,6 +67,72 @@ const getJobApplicationEligibility = async (userId: string) => {
   };
 };
 
+// Helper function to get contractor job application eligibility
+const getContractorJobApplicationEligibility = async (userId: string) => {
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // Default eligibility for FREE plan - no applications allowed
+  let planType = PlanType.FREE;
+  let monthlyLimit = 0;
+  let priorityApply = false;
+  let applyVisibility = "standard"; // default mode
+
+  if (enrolledPlan) {
+    const plan = (enrolledPlan.plan as any);
+    planType = plan.planType;
+    
+    // Set monthly limits and features based on plan type for contractors
+    if (planType === PlanType.BASIC) {
+      monthlyLimit = 10;
+      priorityApply = false;
+      applyVisibility = "standard";
+    } else if (planType === PlanType.GROWTH) {
+      monthlyLimit = 50;
+      priorityApply = false;
+      applyVisibility = "highlighted";
+    } else if (planType === PlanType.ENTERPRISE) {
+      monthlyLimit = Infinity; // Unlimited
+      priorityApply = true;
+      applyVisibility = "featured";
+    }
+  }
+
+  // Count applications in current month (from 1st of current month to today)
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const applicationsThisMonth = await JobApplication.countDocuments({
+    applicant: userId,
+    createdAt: {
+      $gte: firstDayOfMonth,
+      $lte: lastDayOfMonth,
+    },
+  });
+
+  const applicationsRemaining = monthlyLimit === Infinity ? Infinity : Math.max(0, monthlyLimit - applicationsThisMonth);
+
+  return {
+    planType: planType,
+    monthlyLimit: monthlyLimit,
+    applicationsThisMonth: applicationsThisMonth,
+    applicationsRemaining: applicationsRemaining,
+    priorityApply: priorityApply,
+    applyVisibility: applyVisibility,
+    eligible: applicationsRemaining > 0,
+    message:
+      monthlyLimit === 0
+        ? "Your current plan does not allow applying to employer jobs. Please upgrade to BASIC or above."
+        : applicationsRemaining === 0
+        ? `You have reached your monthly job application limit (${monthlyLimit}). Please upgrade your subscription or try again next month.`
+        : `You have ${applicationsRemaining === Infinity ? "unlimited" : applicationsRemaining} applications remaining this month.`,
+  };
+};
+
 /**
  * Resets job metrics by jobId.
  */
@@ -134,6 +200,16 @@ export const applyToJob = async (
       if (!jobAppEligibility.eligible) {
         return res.status(403).json(
           new ApiError(403, jobAppEligibility.message)
+        );
+      }
+    }
+
+    // Check monthly job application limit for contractors
+    if (userDoc && userDoc.userType === "contractor") {
+      const contractorEligibility = await getContractorJobApplicationEligibility(applicantId);
+      if (!contractorEligibility.eligible) {
+        return res.status(403).json(
+          new ApiError(403, contractorEligibility.message)
         );
       }
     }
@@ -1136,6 +1212,27 @@ export const checkJobApplicationEligibility = async (
     const eligibility = await getJobApplicationEligibility(userId);
     return res.status(200).json(
       new ApiResponse(200, eligibility, "Job application eligibility checked successfully")
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const checkContractorJobApplicationEligibility = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(400).json(new ApiError(400, "User ID is required"));
+    }
+
+    const eligibility = await getContractorJobApplicationEligibility(userId);
+    return res.status(200).json(
+      new ApiResponse(200, eligibility, "Contractor job application eligibility checked successfully")
     );
   } catch (err) {
     next(err);

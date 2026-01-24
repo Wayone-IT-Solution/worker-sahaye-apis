@@ -8,8 +8,40 @@ import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { BulkHiringRequest, BulkHiringStatus } from "../../modals/bulkhiring.model";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const bulkHiringService = new CommonService(BulkHiringRequest);
+
+// Helper function to check if user can request bulk hiring service
+const checkBulkHiringServiceEligibility = async (userId: string) => {
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: PlanEnrollmentStatus.ACTIVE,
+  }).populate("plan");
+
+  if (!enrolledPlan) {
+    return {
+      eligible: false,
+      message: "Your subscription plan does not allow requesting bulk hiring services. Please upgrade to BASIC or above.",
+    };
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  if (planType === PlanType.FREE) {
+    return {
+      eligible: false,
+      message: "Your subscription plan does not allow requesting bulk hiring services. Please upgrade to BASIC or above.",
+    };
+  }
+
+  return {
+    eligible: true,
+    planType,
+    message: "You are eligible to request bulk hiring services.",
+  };
+};
 
 export class BulkHiringController {
   static async createBulkHiring(
@@ -25,6 +57,12 @@ export class BulkHiringController {
           .json(
             new ApiError(403, "Only employers or contractors can create bulk hiring requests.")
           );
+      }
+      const eligibility = await checkBulkHiringServiceEligibility(userId);
+      if (!eligibility.eligible) {
+        return res.status(403).json(
+          new ApiError(403, eligibility.message)
+        );
       }
       const existing = await BulkHiringRequest.findOne({
         userId,
@@ -405,6 +443,27 @@ export class BulkHiringController {
         });
       }
       return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async checkBulkHiringServiceEligibilityEndpoint(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(400).json(new ApiError(400, "User ID is required"));
+      }
+
+      const eligibility = await checkBulkHiringServiceEligibility(userId);
+      return res.status(200).json(
+        new ApiResponse(200, eligibility, "Bulk hiring service eligibility checked successfully")
+      );
     } catch (err) {
       next(err);
     }

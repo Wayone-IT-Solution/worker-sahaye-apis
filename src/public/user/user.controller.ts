@@ -973,13 +973,54 @@ export class UserController {
 
       // Get subscription plan type for flags
       let subscriptionPlanType = PlanType.FREE;
-      let isBasicPlan = false;
-      let isPremiumPlan = false;
+      let subscriptionInfo: any = {
+        planType: subscriptionPlanType,
+      };
 
       if (hasActivePlan && enrollSubscriptionPlans[0]) {
         subscriptionPlanType = (enrollSubscriptionPlans[0].plan as any).planType;
-        isBasicPlan = subscriptionPlanType === PlanType.BASIC;
-        isPremiumPlan = subscriptionPlanType === PlanType.PREMIUM;
+        subscriptionInfo.planType = subscriptionPlanType;
+
+        const userType = result?.userType;
+
+        // Build subscription flags based on user type and plan type
+        if (userType === "worker") {
+          // Worker plan flags: FREE, BASIC, PREMIUM
+          subscriptionInfo.isBasicPlan = subscriptionPlanType === PlanType.BASIC;
+          subscriptionInfo.isPremiumPlan = subscriptionPlanType === PlanType.PREMIUM;
+          subscriptionInfo.hasBasicOrPremium = subscriptionPlanType === PlanType.BASIC || subscriptionPlanType === PlanType.PREMIUM;
+        } else if (userType === "employer" || userType === "contractor") {
+          // Employer/Contractor plan flags: FREE, BASIC, GROWTH, ENTERPRISE
+          subscriptionInfo.isBasicPlan = subscriptionPlanType === PlanType.BASIC;
+          subscriptionInfo.isGrowthPlan = subscriptionPlanType === PlanType.GROWTH;
+          subscriptionInfo.isEnterprisePlan = subscriptionPlanType === PlanType.ENTERPRISE;
+          
+          // Convenience flags for checking tier thresholds
+          subscriptionInfo.hasBasicOrAbove = 
+            subscriptionPlanType === PlanType.BASIC || 
+            subscriptionPlanType === PlanType.GROWTH || 
+            subscriptionPlanType === PlanType.ENTERPRISE;
+          
+          subscriptionInfo.hasGrowthOrAbove = 
+            subscriptionPlanType === PlanType.GROWTH || 
+            subscriptionPlanType === PlanType.ENTERPRISE;
+          
+          subscriptionInfo.hasEnterprise = subscriptionPlanType === PlanType.ENTERPRISE;
+        }
+      } else {
+        // Free plan flags for all user types
+        if (result?.userType === "worker") {
+          subscriptionInfo.isBasicPlan = false;
+          subscriptionInfo.isPremiumPlan = false;
+          subscriptionInfo.hasBasicOrPremium = false;
+        } else if (result?.userType === "employer" || result?.userType === "contractor") {
+          subscriptionInfo.isBasicPlan = false;
+          subscriptionInfo.isGrowthPlan = false;
+          subscriptionInfo.isEnterprisePlan = false;
+          subscriptionInfo.hasBasicOrAbove = false;
+          subscriptionInfo.hasGrowthOrAbove = false;
+          subscriptionInfo.hasEnterprise = false;
+        }
       }
 
       // Fetch documents from FileUpload model
@@ -1011,12 +1052,7 @@ export class UserController {
               enrollSubscriptionPlans,
               documents,
               hasActivePlan,
-              subscriptionInfo: {
-                planType: subscriptionPlanType,
-                isBasicPlan,
-                isPremiumPlan,
-                hasBasicOrPremium: isBasicPlan || isPremiumPlan,
-              },
+              subscriptionInfo,
             },
             `User fetched successfully`
           )

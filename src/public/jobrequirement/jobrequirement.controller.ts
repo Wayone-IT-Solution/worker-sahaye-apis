@@ -10,8 +10,40 @@ import { CommonService } from "../../services/common.services";
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { JobRequirement, JobRequirementStatus } from "../../modals/jobrequirement.model";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const jobRequirementService = new CommonService(JobRequirement);
+
+// Helper function to check if user can request on-demand worker allocation
+const checkOnDemandWorkerAllocationServiceEligibility = async (userId: string) => {
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: PlanEnrollmentStatus.ACTIVE,
+  }).populate("plan");
+
+  if (!enrolledPlan) {
+    return {
+      eligible: false,
+      message: "Your subscription plan does not allow requesting on-demand worker allocation services. Please upgrade to BASIC or above.",
+    };
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  if (planType === PlanType.FREE) {
+    return {
+      eligible: false,
+      message: "Your subscription plan does not allow requesting on-demand worker allocation services. Please upgrade to BASIC or above.",
+    };
+  }
+
+  return {
+    eligible: true,
+    planType,
+    message: "You are eligible to request on-demand worker allocation services.",
+  };
+};
 
 export class JobRequirementController {
   static async createJobRequirement(
@@ -35,6 +67,18 @@ export class JobRequirementController {
               "Only employers or contractors can create Job Requirement (On Demand)s."
             )
           );
+      }
+
+      // Check subscription eligibility
+      const eligibility = await checkOnDemandWorkerAllocationServiceEligibility(userId);
+      if (!eligibility.eligible) {
+        if (jobDescriptionUrl) {
+          const s3Key = jobDescriptionUrl.split(".com/")[1];
+          await deleteFromS3(s3Key);
+        }
+        return res.status(403).json(
+          new ApiError(403, eligibility.message)
+        );
       }
 
       // ✅ Prevent duplicate active Job Requirement (On Demand)s
@@ -454,6 +498,27 @@ export class JobRequirementController {
         });
       }
       return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async checkOnDemandWorkerAllocationServiceEligibilityEndpoint(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(400).json(new ApiError(400, "User ID is required"));
+      }
+
+      const eligibility = await checkOnDemandWorkerAllocationServiceEligibility(userId);
+      return res.status(200).json(
+        new ApiResponse(200, eligibility, "On-demand worker allocation service eligibility checked successfully")
+      );
     } catch (err) {
       next(err);
     }

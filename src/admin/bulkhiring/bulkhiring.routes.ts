@@ -12,11 +12,13 @@ const {
   assignSalesPerson,
   updateBulkHiringById,
   deleteBulkHiringById,
+  checkBulkHiringServiceEligibilityEndpoint,
 } = BulkHiringController;
 
 const router = express.Router();
 
 router
+  .get("/eligibility/check", authenticateToken, asyncHandler(checkBulkHiringServiceEligibilityEndpoint))
   .post("/", authenticateToken, asyncHandler(createBulkHiring))
   .get("/", authenticateToken, asyncHandler(getAllBulkHirings))
   .get("/:id", authenticateToken, asyncHandler(getBulkHiringById))

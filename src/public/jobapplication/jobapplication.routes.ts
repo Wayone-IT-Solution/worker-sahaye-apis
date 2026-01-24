@@ -3,6 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import {
   isWorker,
   isEmployer,
+  isContractor,
   authenticateToken,
 } from "../../middlewares/authMiddleware";
 import {
@@ -16,12 +17,16 @@ import {
   getAllUserApplications,
   getReceivedApplications,
   checkJobApplicationEligibility,
+  checkContractorJobApplicationEligibility,
 } from "./jobapplication.controller";
 
 const router = express.Router();
 
-// Check job application eligibility
+// Check job application eligibility for workers
 router.get("/eligibility/check", authenticateToken, isWorker, asyncHandler(checkJobApplicationEligibility));
+
+// Check job application eligibility for contractors
+router.get("/contractor/eligibility/check", authenticateToken, isContractor, asyncHandler(checkContractorJobApplicationEligibility));
 
 router.post("/", authenticateToken, isWorker, asyncHandler(applyToJob));
 router.get("/", authenticateToken, isWorker, asyncHandler(getUserApplications));

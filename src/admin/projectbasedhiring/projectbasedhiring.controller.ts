@@ -8,8 +8,40 @@ import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { ProjectBasedHiring, ProjectHiringStatus } from "../../modals/projectbasedhiring.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 
 const projectBasedHiringService = new CommonService(ProjectBasedHiring);
+
+// Helper function to check if user can request project-based hiring service
+const checkProjectBasedHiringServiceEligibility = async (userId: string) => {
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: PlanEnrollmentStatus.ACTIVE,
+  }).populate("plan");
+
+  if (!enrolledPlan) {
+    return {
+      eligible: false,
+      message: "Your subscription plan does not allow requesting project-based hiring services. Please upgrade to BASIC or above.",
+    };
+  }
+
+  const planType = (enrolledPlan.plan as any).planType;
+
+  if (planType === PlanType.FREE) {
+    return {
+      eligible: false,
+      message: "Your subscription plan does not allow requesting project-based hiring services. Please upgrade to BASIC or above.",
+    };
+  }
+
+  return {
+    eligible: true,
+    planType,
+    message: "You are eligible to request project-based hiring services.",
+  };
+};
 
 export class ProjectHiringController {
   static async createProjectHiring(
@@ -31,7 +63,13 @@ export class ProjectHiringController {
             )
           );
       }
-
+      // Check subscription eligibility
+      const eligibility = await checkProjectBasedHiringServiceEligibility(userId);
+      if (!eligibility.eligible) {
+        return res.status(403).json(
+          new ApiError(403, eligibility.message)
+        );
+      }
       // ✅ Check for existing active project-based hiring request
       const existing = await ProjectBasedHiring.findOne({
         userId,
@@ -427,6 +465,27 @@ export class ProjectHiringController {
         });
       }
       return res.status(200).json(new ApiResponse(200, request, "Status updated successfully."));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async checkProjectBasedHiringServiceEligibilityEndpoint(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(400).json(new ApiError(400, "User ID is required"));
+      }
+
+      const eligibility = await checkProjectBasedHiringServiceEligibility(userId);
+      return res.status(200).json(
+        new ApiResponse(200, eligibility, "Project-based hiring service eligibility checked successfully")
+      );
     } catch (err) {
       next(err);
     }

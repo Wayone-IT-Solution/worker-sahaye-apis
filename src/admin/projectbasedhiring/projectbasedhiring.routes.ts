@@ -12,11 +12,13 @@ const {
   getProjectHiringById,
   updateProjectHiringById,
   deleteProjectHiringById,
+  checkProjectBasedHiringServiceEligibilityEndpoint,
 } = ProjectHiringController;
 
 const router = express.Router();
 
 router
+  .get("/eligibility/check", authenticateToken, asyncHandler(checkProjectBasedHiringServiceEligibilityEndpoint))
   .post("/", authenticateToken, asyncHandler(createProjectHiring))
   .get("/", authenticateToken, asyncHandler(getAllProjectHirings))
   .get("/:id", authenticateToken, asyncHandler(getProjectHiringById))

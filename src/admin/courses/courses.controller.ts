@@ -139,7 +139,7 @@ export class CourseController {
 
           // Calculate discount for paid courses
           if (!course.isFree && benefits.trainingFeeDiscount > 0) {
-            discountAmount = (course.amount * benefits.trainingFeeDiscount) / 100;
+            discountAmount = Math.round((course.amount * benefits.trainingFeeDiscount) / 100);
             yourPrice = course.amount - discountAmount;
           }
 
@@ -159,7 +159,7 @@ export class CourseController {
 
           // Calculate discount for paid courses
           if (!course.isFree && benefits.trainingFeeDiscount > 0) {
-            discountAmount = (course.amount * benefits.trainingFeeDiscount) / 100;
+            discountAmount = Math.round((course.amount * benefits.trainingFeeDiscount) / 100);
             yourPrice = course.amount - discountAmount;
           }
 
@@ -201,7 +201,7 @@ export class CourseController {
       let discountAmount = 0;
 
       if (!result.isFree && benefits.trainingFeeDiscount > 0) {
-        discountAmount = (result.amount * benefits.trainingFeeDiscount) / 100;
+        discountAmount = Math.round((result.amount * benefits.trainingFeeDiscount) / 100);
         yourPrice = result.amount - discountAmount;
       }
 

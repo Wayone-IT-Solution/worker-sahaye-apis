@@ -5,17 +5,17 @@ import { Subscription } from "../../modals/subscription.model";
 const subscriptionService = new CommonService(Subscription);
 
 export class SubscriptionController {
-//   static async create(req: Request, res: Response, next: NextFunction) {
-//     try {
-//       const subscription = await subscriptionService.create(req.body);
-//       res.status(201).json({
-//         success: true,
-//         data: subscription,
-//       });
-//     } catch (error: any) {
-//       next(error);
-//     }
-//   }
+  //   static async create(req: Request, res: Response, next: NextFunction) {
+  //     try {
+  //       const subscription = await subscriptionService.create(req.body);
+  //       res.status(201).json({
+  //         success: true,
+  //         data: subscription,
+  //       });
+  //     } catch (error: any) {
+  //       next(error);
+  //     }
+  //   }
 
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
@@ -35,9 +35,23 @@ export class SubscriptionController {
     try {
       const data = await subscriptionService.getAll(req.query);
 
+      // Populate user and bundle
+      const dataObj = data as any;
+      const populatedResult = await Subscription.find({ _id: { $in: dataObj.result.map((r: any) => r._id) } })
+        .populate('user', 'fullName mobile email usertype status')
+        .populate({
+          path: 'bundle',
+          populate: {
+            path: 'badges'
+          }
+        })
+        .limit(parseInt(req.query.limit as string) || 10)
+        .skip((Math.max(parseInt(req.query.page as string) || 1, 1) - 1) * (parseInt(req.query.limit as string) || 10));
+
       res.status(200).json({
         success: true,
-        ...data,
+        result: populatedResult,
+        pagination: dataObj.pagination,
       });
     } catch (error: any) {
       next(error);
@@ -60,9 +74,23 @@ export class SubscriptionController {
         user: userId,
       });
 
+      // Populate user and bundle
+      const dataObj = data as any;
+      const populatedResult = await Subscription.find({ _id: { $in: dataObj.result.map((r: any) => r._id) } })
+        .populate('user', 'fullName mobile email usertype status')
+        .populate({
+          path: 'bundle',
+          populate: {
+            path: 'badges'
+          }
+        })
+        .limit(parseInt(req.query.limit as string) || 10)
+        .skip((Math.max(parseInt(req.query.page as string) || 1, 1) - 1) * (parseInt(req.query.limit as string) || 10));
+
       res.status(200).json({
         success: true,
-        ...data,
+        result: populatedResult,
+        pagination: dataObj.pagination,
       });
     } catch (error: any) {
       next(error);

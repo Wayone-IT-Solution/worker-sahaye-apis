@@ -69,7 +69,7 @@ export class PaymentController {
       }
 
       const order = await razorpay.orders.create({
-        amount: bundle.fee,
+        amount: bundle.fee * 100,
         currency: "INR",
         receipt: `b_${bundleId.slice(-6)}_u_${userId.slice(-6)}`,
         // receipt: `bundle_${bundleId}_user_${userId}`,

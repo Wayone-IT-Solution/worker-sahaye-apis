@@ -244,6 +244,42 @@ export class JobController {
         { $unwind: "$userDetails" },
         {
           $lookup: {
+            from: "enrolledplans",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$user", "$$userId"] },
+                      { $eq: ["$status", "active"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $lookup: {
+                  from: "subscriptionplans",
+                  localField: "plan",
+                  foreignField: "_id",
+                  as: "planDetails",
+                },
+              },
+              { $unwind: { path: "$planDetails", preserveNullAndEmptyArrays: true } },
+              { $project: { planType: "$planDetails.planType" } },
+              { $limit: 1 },
+            ],
+            as: "userPlanDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userPlanDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
             from: "fileuploads",
             let: { userId: "$userDetails._id" },
             pipeline: [
@@ -382,6 +418,7 @@ export class JobController {
             profilePicUrl: "$profilePicFile.url",
             creatorMobile: "$userDetails.mobile",
             creatorUserType: "$userDetails.userType",
+            creatorPlanType: "$userPlanDetails.planType",
             creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
             creatorHasPremium: "$userDetails.hasPremiumPlan",
             nature: {
@@ -423,16 +460,58 @@ export class JobController {
       ];
 
       // Add priority ranking and sorting:
-      // 1 = PRIORITY, 2 = STANDARD, 3 = others
+      // Rank by: Priority Level → Subscription Tier (Enterprise > Growth > Others) → Early Access Badge → Newest
       pipeline.push({
         $addFields: {
           priorityRank: {
             $switch: {
               branches: [
-                { case: { $eq: ["$priority", "priority"] }, then: 1 },
-                { case: { $eq: ["$priority", "standard"] }, then: 2 },
+                // Rank 1: PRIORITY jobs from ENTERPRISE users
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "priority"] },
+                      { $eq: ["$creatorPlanType", "enterprise"] },
+                    ],
+                  },
+                  then: 1,
+                },
+                // Rank 2: PRIORITY jobs from GROWTH users
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "priority"] },
+                      { $eq: ["$creatorPlanType", "growth"] },
+                    ],
+                  },
+                  then: 2,
+                },
+                // Rank 3: PRIORITY jobs from other plans
+                { case: { $eq: ["$priority", "priority"] }, then: 3 },
+                // Rank 4: STANDARD jobs from ENTERPRISE users
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "standard"] },
+                      { $eq: ["$creatorPlanType", "enterprise"] },
+                    ],
+                  },
+                  then: 4,
+                },
+                // Rank 5: STANDARD jobs from GROWTH users
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "standard"] },
+                      { $eq: ["$creatorPlanType", "growth"] },
+                    ],
+                  },
+                  then: 5,
+                },
+                // Rank 6: STANDARD jobs from other plans
+                { case: { $eq: ["$priority", "standard"] }, then: 6 },
               ],
-              default: 3,
+              default: 7,
             },
           },
         },

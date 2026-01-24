@@ -8,6 +8,7 @@ import { CommonService } from "../../services/common.services";
 import { ConnectionModel, ConnectionStatus } from "../../modals/connection.model";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
+import { User } from "../../modals/user.model";
 
 const endorsementService = new CommonService(Endorsement);
 
@@ -54,6 +55,16 @@ export class EndorsementController {
 
       if (!endorsedBy) {
         return res.status(400).json(new ApiError(400, "Missing endorsedBy field"));
+      }
+
+      // Check if user is a WORKER
+      const userDoc = await User.findById(userId).select("userType").lean();
+      if (!userDoc) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      if (userDoc.userType !== "worker") {
+        return res.status(403).json(new ApiError(403, "Only workers can create endorsements"));
       }
 
       // Check endorsement eligibility based on subscription plan
@@ -576,6 +587,24 @@ export class EndorsementController {
         return res
           .status(403)
           .json(new ApiError(403, "You are not authorized to update this endorsement"));
+
+      // Check if user is a contractor or employer
+      const userDoc = await User.findById(userId).select("userType").lean();
+      if (!userDoc) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      if (userDoc.userType !== "contractor" && userDoc.userType !== "employer") {
+        return res.status(403).json(new ApiError(403, "Only contractors and employers can approve endorsements"));
+      }
+
+      // Check if user has ENTERPRISE plan
+      const enrolled = await EnrolledPlan.findOne({ user: userId, status: "active" }).populate("plan");
+      const planType = (enrolled?.plan as any)?.planType;
+
+      if (!enrolled || planType !== PlanType.ENTERPRISE) {
+        return res.status(403).json(new ApiError(403, "Only users with ENTERPRISE plan can approve endorsements. Please upgrade your subscription."));
+      }
 
       const connection = await ConnectionModel.findOne({
         $or: [

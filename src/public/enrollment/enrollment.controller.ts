@@ -160,8 +160,8 @@ export class EnrollmentController {
       let finalAmount = baseAmount;
 
       if (!isFree && benefits.trainingFeeDiscount > 0) {
-        discountAmount = (baseAmount * benefits.trainingFeeDiscount) / 100;
-        finalAmount = baseAmount - discountAmount;
+        discountAmount = Math.round((baseAmount * benefits.trainingFeeDiscount) / 100);
+        finalAmount = Math.round(baseAmount - discountAmount);
       }
 
       const data: any = {

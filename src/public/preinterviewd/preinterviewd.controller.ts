@@ -77,9 +77,8 @@ export class PreInterviewedController {
   ) {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
-      const engagementType = (
-        req.query.engagementType as string
-      )?.toLowerCase();
+      const { engagementType: rawEngagementType, ...restQuery } = req.query;
+      const engagementType = (rawEngagementType as string)?.toLowerCase();
 
       const pipeline: any[] = [
         {
@@ -223,6 +222,7 @@ export class PreInterviewedController {
             matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
             break;
           case "saveprofile":
+          case "saved":
             matchStage.$match = { saveProfileEngagement: { $ne: [] } };
             break;
         }
@@ -259,7 +259,7 @@ export class PreInterviewedController {
         },
       });
 
-      const result = await PreInterviewedService.getAll(req.query, pipeline);
+      const result = await PreInterviewedService.getAll(restQuery, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

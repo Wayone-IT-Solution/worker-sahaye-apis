@@ -203,9 +203,11 @@ export const checkEngagementLimit = async (
     }
 
     // Fetch recipient to get their type
+    // console.log("recipientId", recipientId);
     const recipientUser = await User.findById(recipientId)
       .select("userType")
       .lean();
+    // console.log("recipientUser", recipientUser);
     if (!recipientUser) {
       return res
         .status(404)

@@ -233,6 +233,7 @@ export class PreInterviewedController {
       pipeline.push({
         $project: {
           _id: 1,
+          user: 1,
           status: 1,
           remarks: 1,
           document: 1,

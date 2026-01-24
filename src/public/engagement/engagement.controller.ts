@@ -97,15 +97,11 @@ export const EngagementController = {
             engagement,
             usage: limitContext
               ? {
-                  initiator: {
-                    used: limitContext.initiator.used + 1,
-                    limit: limitContext.initiator.limit,
-                    remaining: limitContext.initiator.isUnlimited
-                      ? null
-                      : (limitContext.initiator.remaining as number) - 1,
-                    planName: limitContext.initiator.plan.displayName,
-                  },
-                }
+                used: limitContext.used + 1,
+                limit: limitContext.limit,
+                remaining: limitContext.remaining === null ? null : Math.max(0, limitContext.remaining - 1),
+                planName: limitContext.planName,
+              }
               : undefined,
           },
           "Engagement created successfully",

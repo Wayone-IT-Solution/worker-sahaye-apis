@@ -1,21 +1,12 @@
 import { Schema, model, Document, Types } from "mongoose";
 
 /**
- * SaveType: What is being saved
+ * SaveItemType: What is being saved (Job, Profile, or Draft)
  */
-export enum SaveType {
+export enum SaveItemType {
+  JOB = "job",
   PROFILE = "profile",
-  JOB = "job",
   DRAFT = "draft",
-}
-
-/**
- * ReferenceType: What type of entity is being saved
- */
-export enum ReferenceType {
-  USER = "user",
-  JOB = "job",
-  JOBDRAFT = "jobdraft",
 }
 
 /**
@@ -33,9 +24,8 @@ export enum SavedByType {
 export interface ISaveItem extends Document {
   user: Types.ObjectId;
   savedBy: SavedByType;
-  saveType: SaveType;
+  type: SaveItemType;
   referenceId: Types.ObjectId;
-  referenceType: ReferenceType;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,20 +47,14 @@ const SaveItemSchema = new Schema<ISaveItem>(
       required: true,
       index: true,
     },
-    saveType: {
+    type: {
       type: String,
-      enum: Object.values(SaveType),
+      enum: Object.values(SaveItemType),
       required: true,
       index: true,
     },
     referenceId: {
       type: Schema.Types.ObjectId,
-      required: true,
-      index: true,
-    },
-    referenceType: {
-      type: String,
-      enum: Object.values(ReferenceType),
       required: true,
       index: true,
     },
@@ -82,13 +66,12 @@ const SaveItemSchema = new Schema<ISaveItem>(
  * Indexes
  */
 SaveItemSchema.index({ user: 1, createdAt: -1 });
-SaveItemSchema.index({ user: 1, referenceType: 1 });
+SaveItemSchema.index({ user: 1, type: 1 });
 SaveItemSchema.index(
-  { user: 1, referenceId: 1, referenceType: 1 },
+  { user: 1, referenceId: 1, type: 1 },
   { unique: true, sparse: true },
 );
-SaveItemSchema.index({ referenceId: 1, referenceType: 1 });
-SaveItemSchema.index({ user: 1, saveType: 1 });
+SaveItemSchema.index({ referenceId: 1, type: 1 });
 
 /**
  * Check if user already saved an item
@@ -96,12 +79,12 @@ SaveItemSchema.index({ user: 1, saveType: 1 });
 SaveItemSchema.statics.isSaved = async function (
   userId: string,
   referenceId: string,
-  referenceType: ReferenceType,
+  type: SaveItemType,
 ) {
   const saveItem = await this.findOne({
     user: new (this as any).db.Types.ObjectId(userId),
     referenceId: new (this as any).db.Types.ObjectId(referenceId),
-    referenceType,
+    type,
   });
   return !!saveItem;
 };
@@ -111,11 +94,11 @@ SaveItemSchema.statics.isSaved = async function (
  */
 SaveItemSchema.statics.countSavesByType = async function (
   userId: string,
-  saveType: SaveType,
+  type: SaveItemType,
 ) {
   return this.countDocuments({
     user: new (this as any).db.Types.ObjectId(userId),
-    saveType,
+    type,
   });
 };
 

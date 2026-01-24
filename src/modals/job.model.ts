@@ -99,18 +99,18 @@ export interface ISkillRequirement {
 
 export interface IBenefit {
   type:
-    | "pto"
-    | "gym"
-    | "bonus"
-    | "other"
-    | "health"
-    | "dental"
-    | "equity"
-    | "vision"
-    | "flexible"
-    | "learning"
-    | "transport"
-    | "retirement";
+  | "pto"
+  | "gym"
+  | "bonus"
+  | "other"
+  | "health"
+  | "dental"
+  | "equity"
+  | "vision"
+  | "flexible"
+  | "learning"
+  | "transport"
+  | "retirement";
 }
 
 export interface IWorkSchedule {
@@ -127,15 +127,15 @@ export interface IApplicationProcess {
   steps: Array<{
     step: number;
     type:
-      | "screening"
-      | "application"
-      | "technical_test"
-      | "phone_interview"
-      | "video_interview"
-      | "reference_check"
-      | "onsite_interview"
-      | "background_check"
-      | "offer";
+    | "screening"
+    | "application"
+    | "technical_test"
+    | "phone_interview"
+    | "video_interview"
+    | "reference_check"
+    | "onsite_interview"
+    | "background_check"
+    | "offer";
     description: string;
     estimatedDuration?: string;
   }>;
@@ -208,12 +208,12 @@ export interface IJob extends Document {
   qualifications: {
     education?: Array<{
       level:
-        | "high_school"
-        | "associates"
-        | "bachelors"
-        | "masters"
-        | "phd"
-        | "professional";
+      | "high_school"
+      | "associates"
+      | "bachelors"
+      | "masters"
+      | "phd"
+      | "professional";
       field?: string;
       required: boolean;
     }>;

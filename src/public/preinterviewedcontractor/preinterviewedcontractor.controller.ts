@@ -67,8 +67,11 @@ export class PreInterviewedContractorController {
   ) {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
+      const engagementType = (
+        req.query.engagementType as string
+      )?.toLowerCase();
 
-      const pipeline = [
+      const pipeline: any[] = [
         {
           $lookup: {
             from: "users",
@@ -171,51 +174,78 @@ export class PreInterviewedContractorController {
             as: "contactUnlockEngagement",
           },
         },
-        // Check if saveItem exists for this user with referenceType "user"
+        // Check if saveProfile engagement exists
         {
           $lookup: {
-            from: "saveitems",
-            let: { userId: "$userDetails._id" },
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
             pipeline: [
               {
                 $match: {
                   $expr: {
                     $and: [
-                      { $eq: ["$user", currentUserId] },
-                      { $eq: ["$referenceId", "$$userId"] },
-                      { $eq: ["$referenceType", "user"] },
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "saveProfile"] },
                     ],
                   },
                 },
               },
               { $limit: 1 },
             ],
-            as: "savedItem",
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            status: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            verifiedAt: 1,
-            userEmail: "$userDetails.email",
-            userMobile: "$userDetails.mobile",
-            userName: "$userDetails.fullName",
-            userProfile: "$userDetails.profile",
-            profilePicUrl: "$profilePicFile.url",
-            hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
-            hasViewProfileSent: {
-              $gt: [{ $size: "$viewProfileEngagement" }, 0],
-            },
-            hasContactUnlockSent: {
-              $gt: [{ $size: "$contactUnlockEngagement" }, 0],
-            },
-            hasSaved: { $gt: [{ $size: "$savedItem" }, 0] },
+            as: "saveProfileEngagement",
           },
         },
       ];
+
+      // Add filter stage based on engagementType query parameter
+      if (engagementType) {
+        const matchStage: any = { $match: {} };
+
+        switch (engagementType) {
+          case "invite":
+            matchStage.$match = { inviteEngagement: { $ne: [] } };
+            break;
+          case "viewprofile":
+            matchStage.$match = { viewProfileEngagement: { $ne: [] } };
+            break;
+          case "contactunlock":
+            matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
+            break;
+          case "saveprofile":
+            matchStage.$match = { saveProfileEngagement: { $ne: [] } };
+            break;
+        }
+
+        pipeline.push(matchStage);
+      }
+
+      pipeline.push({
+        $project: {
+          _id: 1,
+          user: 1,
+          status: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          verifiedAt: 1,
+          userEmail: "$userDetails.email",
+          userMobile: "$userDetails.mobile",
+          userName: "$userDetails.fullName",
+          userProfile: "$userDetails.profile",
+          profilePicUrl: "$profilePicFile.url",
+          hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+          hasViewProfileSent: {
+            $gt: [{ $size: "$viewProfileEngagement" }, 0],
+          },
+          hasContactUnlockSent: {
+            $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+          },
+          hasSaveProfileSent: {
+            $gt: [{ $size: "$saveProfileEngagement" }, 0],
+          },
+        },
+      });
+
       const result = await PreInterviewedContractorService.getAll(
         req.query,
         pipeline,
@@ -235,8 +265,11 @@ export class PreInterviewedContractorController {
   ) {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
+      const engagementType = (
+        req.query.engagementType as string
+      )?.toLowerCase();
 
-      const pipeline = [
+      const pipeline: any[] = [
         {
           $lookup: {
             from: "users",
@@ -339,51 +372,77 @@ export class PreInterviewedContractorController {
             as: "contactUnlockEngagement",
           },
         },
-        // Check if saveItem exists for this user with referenceType "user"
+        // Check if saveProfile engagement exists
         {
           $lookup: {
-            from: "saveitems",
-            let: { userId: "$userDetails._id" },
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
             pipeline: [
               {
                 $match: {
                   $expr: {
                     $and: [
-                      { $eq: ["$user", currentUserId] },
-                      { $eq: ["$referenceId", "$$userId"] },
-                      { $eq: ["$referenceType", "user"] },
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "saveProfile"] },
                     ],
                   },
                 },
               },
               { $limit: 1 },
             ],
-            as: "savedItem",
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            status: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            verifiedAt: 1,
-            userEmail: "$userDetails.email",
-            userMobile: "$userDetails.mobile",
-            userName: "$userDetails.fullName",
-            userProfile: "$userDetails.profile",
-            profilePicUrl: "$profilePicFile.url",
-            hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
-            hasViewProfileSent: {
-              $gt: [{ $size: "$viewProfileEngagement" }, 0],
-            },
-            hasContactUnlockSent: {
-              $gt: [{ $size: "$contactUnlockEngagement" }, 0],
-            },
-            hasSaved: { $gt: [{ $size: "$savedItem" }, 0] },
+            as: "saveProfileEngagement",
           },
         },
       ];
+
+      // Add filter stage based on engagementType query parameter
+      if (engagementType) {
+        const matchStage: any = { $match: {} };
+
+        switch (engagementType) {
+          case "invite":
+            matchStage.$match = { inviteEngagement: { $ne: [] } };
+            break;
+          case "viewprofile":
+            matchStage.$match = { viewProfileEngagement: { $ne: [] } };
+            break;
+          case "contactunlock":
+            matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
+            break;
+          case "saveprofile":
+            matchStage.$match = { saveProfileEngagement: { $ne: [] } };
+            break;
+        }
+
+        pipeline.push(matchStage);
+      }
+
+      pipeline.push({
+        $project: {
+          _id: 1,
+          status: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          verifiedAt: 1,
+          userEmail: "$userDetails.email",
+          userMobile: "$userDetails.mobile",
+          userName: "$userDetails.fullName",
+          userProfile: "$userDetails.profile",
+          profilePicUrl: "$profilePicFile.url",
+          hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+          hasViewProfileSent: {
+            $gt: [{ $size: "$viewProfileEngagement" }, 0],
+          },
+          hasContactUnlockSent: {
+            $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+          },
+          hasSaveProfileSent: {
+            $gt: [{ $size: "$saveProfileEngagement" }, 0],
+          },
+        },
+      });
+
       const result = await PreInterviewedContractorService.getAll(
         { ...req.query, status: "approved" },
         pipeline,

@@ -477,7 +477,16 @@ export interface ISubscriptionPlan extends Document {
   description: string;
   isRecommended: boolean;
   billingCycle: BillingCycle;
-  monthlyJobListingLimit?: number;
+  monthlyJobListingLimit?: number | null;
+  // Job Post Limits
+  agencyJobPostLimits?: {
+    customer?: number | null;
+    agency?: number | null;
+  };
+  employerJobPostLimits?: {
+    agency?: number | null;
+    candidate?: number | null;
+  };
   // Save limits (for profile, job, draft saving)
   totalSavesLimit?: number; // Overall monthly save limit
   saveProfilesLimit?: number; // Monthly limit for saving profiles
@@ -499,6 +508,13 @@ export interface ISubscriptionPlan extends Document {
   }
   | number;
   contactUnlockLimit?:
+  | {
+    worker?: number;
+    employer?: number;
+    contractor?: number;
+  }
+  | number;
+  saveProfileLimit?:
   | {
     worker?: number;
     employer?: number;
@@ -568,8 +584,15 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
     monthlyJobListingLimit: {
       type: Number,
       min: 0,
-      default: null,
       // Represents the allowed number of job listings per month for employer/contractor plans.
+    },
+    agencyJobPostLimits: {
+      customer: { type: Number, default: 0 },
+      agency: { type: Number, default: 0 },
+    },
+    employerJobPostLimits: {
+      agency: { type: Number, default: 0 },
+      candidate: { type: Number, default: 0 },
     },
     // Save limits for profiles, jobs, and drafts
     totalSavesLimit: {
@@ -610,6 +633,12 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       // 0 = no limit allowed, null = unlimited
     },
     contactUnlockLimit: {
+      type: Schema.Types.Mixed,
+      default: 0,
+      // Can be number (0 by default) or { worker: number, employer: number, contractor: number }
+      // 0 = no limit allowed, null = unlimited
+    },
+    saveProfileLimit: {
       type: Schema.Types.Mixed,
       default: 0,
       // Can be number (0 by default) or { worker: number, employer: number, contractor: number }

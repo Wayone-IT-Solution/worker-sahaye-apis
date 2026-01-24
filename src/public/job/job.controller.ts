@@ -74,32 +74,8 @@ export class JobController {
       /* ----------------------------------------------------
        * POSTED JOB LIMIT CHECK (NON-DRAFT)
        * ---------------------------------------------------- */
-      let postedJobsCount = 0;
-
-      if (jobStatus !== JobStatus.DRAFT) {
-        const postJobFeature = features.postJob;
-
-        if (!postJobFeature?.enabled) {
-          throw new ApiError(403, "Your plan does not allow posting jobs");
-        }
-
-        if (!postJobFeature.unlimited && postJobFeature.limit !== null) {
-          postedJobsCount = await Job.countDocuments({
-            postedBy: userId,
-            status: { $ne: JobStatus.DRAFT },
-            createdAt: {
-              $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-            },
-          });
-
-          if (postedJobsCount >= postJobFeature.limit) {
-            throw new ApiError(
-              403,
-              `Job posting limit reached. Your plan allows ${postJobFeature.limit} jobs per month`
-            );
-          }
-        }
-      }
+      // This is now handled by the enforceJobListingLimit middleware
+      const jobListingLimit = (req as any).jobListingLimit;
 
       /* ----------------------------------------------------
        * CREATE JOB
@@ -123,17 +99,17 @@ export class JobController {
           ? result.toObject()
           : {
             ...result.toObject(),
-            jobListingUsage: {
-              limit: features.postJob.limit,
-              usedThisMonth: postedJobsCount + 1,
+            jobListingUsage: jobListingLimit ? {
+              limit: jobListingLimit.limit,
+              usedThisMonth: jobListingLimit.used + 1,
               remaining:
-                features.postJob.limit !== null
+                jobListingLimit.limit !== null
                   ? Math.max(
-                    features.postJob.limit - (postedJobsCount + 1),
+                    jobListingLimit.limit - (jobListingLimit.used + 1),
                     0
                   )
                   : null,
-            },
+            } : undefined,
           };
 
       return res

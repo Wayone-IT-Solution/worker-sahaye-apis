@@ -12,6 +12,8 @@ import { sendDualNotification } from "../../services/notification.service";
 import { getJobListingUsage as fetchJobListingUsage } from "../../middlewares/jobListingLimitMiddleware";
 import { SubscriptionPlan, ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { getMonthKey } from "../../utils/date";
+import { JobView } from "../../modals/jobView.model";
 
 const JobService = new CommonService(Job);
 
@@ -1019,11 +1021,63 @@ export class JobController {
         { ...req.query, _id: req.params.id },
         pipeline
       );
-      if (!result)
+      result = result?.result?.[0];
+
+      if (!result) {
         return res
           .status(404)
-          .json(new ApiError(404, "Worker category not found"));
-      result = result?.result[0];
+          .json(new ApiError(404, "Job not found"));
+      }
+
+      const currentUser = (req as any).user;
+
+      if (
+        currentUser &&
+        currentUser.role === "contractor" &&
+        result.creatorID.toString() !== currentUser.id.toString()
+      ) {
+        const monthKey = getMonthKey();
+
+        // Fetch active plan enrollment (contractor only)
+        const enrolled = await EnrolledPlan.findOne({
+          user: currentUser.id,
+          status: PlanEnrollmentStatus.ACTIVE,
+        }).populate<{ plan: ISubscriptionPlan }>("plan");
+
+        if (!enrolled || !enrolled.plan) {
+          throw new ApiError(403, "No active subscription plan found");
+        }
+
+        const limit: number | null = enrolled.plan.jobViewPerMonth ?? null;
+
+        const alreadyViewed = await JobView.exists({
+          user: currentUser.id,
+          job: req.params.id,
+          monthKey,
+        });
+
+        if (!alreadyViewed) {
+          if (limit !== null) {
+            const usedViews = await JobView.countDocuments({
+              user: currentUser.id,
+              monthKey,
+            });
+
+            if (usedViews >= limit) {
+              throw new ApiError(
+                403,
+                "Monthly job view limit reached. Upgrade your plan to continue."
+              );
+            }
+          }
+
+          await JobView.create({
+            user: currentUser.id,
+            job: req.params.id,
+            monthKey,
+          });
+        }
+      }
 
       // Check if user is authenticated and has applied for this job
       let isApplied = false;

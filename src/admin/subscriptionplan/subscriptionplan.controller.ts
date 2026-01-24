@@ -150,11 +150,11 @@ export class SubscriptionplanController {
   ) {
     try {
       const { userType } = req.params;
-      if (!Object.values(UserType).includes(userType as UserType)) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Invalid user type"));
-      }
+      // if (!Object.values(UserType).includes(userType as UserType)) {
+      //   return res
+      //     .status(400)
+      //     .json(new ApiError(400, "Invalid user type"));
+      // }
 
       const result = await subscriptionPlanService.getAll({
         userType,

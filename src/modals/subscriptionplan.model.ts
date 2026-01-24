@@ -24,6 +24,13 @@ export enum BillingCycle {
   PAY_AS_YOU_GO = "pay_as_you_go",
 }
 
+export const MODE_VALUES = {
+  blurred: 20,
+  limited: 100,
+  full: 500,
+} as const;
+// export type ModeType = keyof typeof MODE_VALUES;
+
 const LimitSchema = new Schema(
   {
     enabled: { type: Boolean, default: false },
@@ -36,13 +43,49 @@ const LimitSchema = new Schema(
 const ModeSchema = new Schema(
   {
     enabled: { type: Boolean, default: false },
+    // mode: {
+    //   type: String,
+    //   enum: ["blurred", "standard", "highlighted", "featured", "priority", "full"],
+    // },
     mode: {
       type: String,
-      enum: ["blurred", "standard", "highlighted", "featured", "priority", "full"],
+      enum: Object.keys(MODE_VALUES), // blurred | limited | full
+      required: function () {
+        return this.enabled === true;
+      },
+    },
+
+    value: {
+      type: Number,
+      default: 0,
+    },
+
+    unlimited: {
+      type: Boolean,
+      default: false,
     },
   },
   { _id: false }
 );
+
+// 🔒 Enforce mode → value & unlimited mapping
+ModeSchema.pre("validate", function (next) {
+  // If feature disabled, reset everything
+  if (!this.enabled || !this.mode) {
+    this.value = 0;
+    this.unlimited = false;
+    return next();
+  }
+
+  // Map mode to fixed values
+  this.value = MODE_VALUES[this.mode as keyof typeof MODE_VALUES];
+
+  // Only "full" is unlimited
+  this.unlimited = this.mode === "full";
+
+  next();
+});
+
 
 const ServiceOnlySchema = new Schema(
   {
@@ -62,7 +105,7 @@ const SearchAndContactSchema = new Schema(
   {
     // ===== SEARCH EMPLOYER JOBS =====
     // Mode: blurred (limited view), standard (full view), highlighted, featured, priority
-    searchEmployerJobs: ModeSchema,
+    // searchEmployerJobs: ModeSchema,
     // Monthly limit on viewing employer job listings (0 = disabled, null = unlimited)
     employerJobViewsPerMonth: LimitSchema,
     // Number of employer jobs that can be saved
@@ -308,9 +351,16 @@ interface ILimit {
   unlimited: boolean;
 }
 
+// interface IMode {
+//   enabled: boolean;
+//   mode?: "blurred" | "standard" | "highlighted" | "featured" | "priority";
+// }
+
 interface IMode {
   enabled: boolean;
-  mode?: "blurred" | "standard" | "highlighted" | "featured" | "priority";
+  mode?: "blurred" | "limited" | "full";
+  value: number;
+  unlimited: boolean;
 }
 
 interface IServiceOnly {
@@ -435,27 +485,31 @@ export interface ISubscriptionPlan extends Document {
   saveDraftsLimit?: number; // Monthly limit for saving drafts
   // Engagement limits - per recipient type
   inviteSendLimit?:
-    | {
-        worker?: number;
-        employer?: number;
-        contractor?: number;
-      }
-    | number; // Can be single number (legacy) or per-role object
+  | {
+    worker?: number;
+    employer?: number;
+    contractor?: number;
+  }
+  | number; // Can be single number (legacy) or per-role object
   viewProfileLimit?:
-    | {
-        worker?: number;
-        employer?: number;
-        contractor?: number;
-      }
-    | number;
+  | {
+    worker?: number;
+    employer?: number;
+    contractor?: number;
+  }
+  | number;
   contactUnlockLimit?:
-    | {
-        worker?: number;
-        employer?: number;
-        contractor?: number;
-      }
-    | number;
+  | {
+    worker?: number;
+    employer?: number;
+    contractor?: number;
+  }
+  | number;
   contractorFeatures?: IContractorFeatures;
+
+  jobViewPerMonth?: number | null;
+  // number = monthly limit
+  // null = unlimited
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -582,6 +636,11 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       index: true,
     },
     contractorFeatures: ContractorFeaturesSchema,
+    jobViewPerMonth: {
+      type: Number,
+      min: 0,
+      default: 20,
+    },
   },
   { timestamps: true },
 );

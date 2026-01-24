@@ -6,10 +6,11 @@ export const asyncHandler = (
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch((err) => {
       console.log("Async Error:", {
-        stack: err.stack,
+        stack: err?.stack,
         method: req.method,
-        message: err.message,
+        message: err?.message || err?.toString(),
         route: req.originalUrl,
+        error: err,
         timestamp: new Date().toISOString(),
       });
       next(err);

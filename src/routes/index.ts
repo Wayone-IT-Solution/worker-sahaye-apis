@@ -11,6 +11,7 @@ import { Router } from "express";
 import slotRoutes from "../admin/slot/slot.routes";
 import roleRoutes from "../admin/role/role.routes";
 import badgeRoutes from "../admin/badge/badge.routes";
+import badgeBundleRoutes from "../admin/badgeBundle/badgeBundle.routes";
 import adminRoutes from "../admin/admin/admin.routes";
 import tradeRoutes from "../admin/trade/trade.routes";
 import bannerRoutes from "../admin/banner/banner.routes";
@@ -94,7 +95,7 @@ import headerRoutes from "../public/header/header.routes";
 import pdfFileRoutes from "../public/pdffile/pdffile.routes";
 import loanSupportRoutes from "../public/loansupport/loansupport.routes";
 import notificationRoutes from "../public/notification/notification.routes";
-
+import paymentRoutes from "../public/payment/payment.routes";
 // Create main router
 const router = Router();
 
@@ -106,6 +107,7 @@ router.use("/role", roleRoutes);
 router.use("/slot", slotRoutes);
 router.use("/admin", adminRoutes);
 router.use("/badge", badgeRoutes);
+router.use("/badge-bundles", badgeBundleRoutes);
 router.use("/trade", tradeRoutes);
 router.use("/nature", natureRoutes);
 router.use("/banner", bannerRoutes);
@@ -187,5 +189,6 @@ router.use("/header", headerRoutes);
 router.use("/pdffile", pdfFileRoutes);
 router.use("/loansupport", loanSupportRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/payment", paymentRoutes);
 
 export default router;

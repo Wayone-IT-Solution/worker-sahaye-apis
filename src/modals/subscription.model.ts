@@ -13,26 +13,62 @@ export interface ISubscription extends Document {
   status: SubscriptionStatus;
   startDate: Date;
   nextBillingDate: Date;
-  razorpayOrderId: string;
+  razorpayOrderId?: string;
   razorpayPaymentId?: string;
 }
 
 const SubscriptionSchema = new Schema<ISubscription>(
   {
-    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    bundle: { type: Schema.Types.ObjectId, ref: "BadgeBundle", required: true },
-    amount: { type: Number, required: true },
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    bundle: {
+      type: Schema.Types.ObjectId,
+      ref: "BadgeBundle",
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+    },
     status: {
       type: String,
       enum: Object.values(SubscriptionStatus),
       default: SubscriptionStatus.ACTIVE,
     },
-    startDate: { type: Date, default: Date.now },
-    nextBillingDate: { type: Date, required: true },
-    razorpayOrderId: { type: String, required: true },
-    razorpayPaymentId: { type: String },
+    startDate: {
+      type: Date,
+      default: Date.now,
+    },
+    nextBillingDate: {
+      type: Date,
+      required: true,
+    },
+
+    // ✅ Required ONLY for paid plans
+    razorpayOrderId: {
+      type: String,
+      required: function (this: any) {
+        return this.amount > 0;
+      },
+    },
+
+    razorpayPaymentId: {
+      type: String,
+      required: function (this: any) {
+        return this.amount > 0;
+      },
+    },
   },
   { timestamps: true }
+);
+
+// ✅ Prevent duplicate active subscriptions
+SubscriptionSchema.index(
+  { user: 1, bundle: 1, status: 1 },
+  { unique: true, partialFilterExpression: { status: "active" } }
 );
 
 export const Subscription = mongoose.model<ISubscription>(

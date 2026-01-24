@@ -1034,11 +1034,12 @@ export class JobController {
       if (
         currentUser &&
         currentUser.role === "contractor" &&
+        currentUser.role === "employer" &&
         result.creatorID.toString() !== currentUser.id.toString()
       ) {
         const monthKey = getMonthKey();
 
-        // Fetch active plan enrollment (contractor only)
+        // Fetch active plan enrollment (contractor / employer only)
         const enrolled = await EnrolledPlan.findOne({
           user: currentUser.id,
           status: PlanEnrollmentStatus.ACTIVE,

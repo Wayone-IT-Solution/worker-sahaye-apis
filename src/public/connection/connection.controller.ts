@@ -11,6 +11,8 @@ import { User } from "../../modals/user.model";
 import FileUpload from "../../modals/fileupload.model";
 import { CommonService } from "../../services/common.services";
 import { sendDualNotification } from "../../services/notification.service";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
 
 const connectionService = new CommonService(ConnectionModel);
 
@@ -27,6 +29,28 @@ export const createConnection = async (
       return res
         .status(400)
         .json(new ApiError(400, "Both requester and recipient are required."));
+    }
+
+    // Fetch requester user document to get userType
+    const requesterUser = await User.findById(requester).select("userType").lean();
+    if (!requesterUser) {
+      return res.status(404).json(new ApiError(404, "User not found."));
+    }
+
+    // Check subscription plan based on userType
+    const enrolled = await EnrolledPlan.findOne({ user: requester, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+    const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+
+    if (requesterUser.userType === "worker") {
+      // Workers need BASIC or PREMIUM plan
+      if (!enrolled || !(planType === PlanType.BASIC || planType === PlanType.PREMIUM)) {
+        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating connections. Please upgrade to BASIC or PREMIUM plan."));
+      }
+    } else if (requesterUser.userType === "contractor" || requesterUser.userType === "employer") {
+      // Contractors and agencies need GROWTH or ENTERPRISE plan
+      if (!enrolled || !(planType === PlanType.GROWTH || planType === PlanType.ENTERPRISE)) {
+        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating connections. Please upgrade to GROWTH or ENTERPRISE plan."));
+      }
     }
 
     if (requester.toString() === recipient.toString()) {

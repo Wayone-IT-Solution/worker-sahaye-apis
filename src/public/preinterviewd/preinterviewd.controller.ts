@@ -184,26 +184,26 @@ export class PreInterviewedController {
             as: "contactUnlockEngagement",
           },
         },
-        // Check if saveItem exists for this user with referenceType "user"
+        // Check if saveProfile engagement exists
         {
           $lookup: {
-            from: "saveitems",
-            let: { userId: "$userDetails._id" },
+            from: "engagements",
+            let: { recipientId: "$userDetails._id" },
             pipeline: [
               {
                 $match: {
                   $expr: {
                     $and: [
-                      { $eq: ["$user", currentUserId] },
-                      { $eq: ["$referenceId", "$$userId"] },
-                      { $eq: ["$referenceType", "user"] },
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$recipientId"] },
+                      { $eq: ["$engagementType", "saveProfile"] },
                     ],
                   },
                 },
               },
               { $limit: 1 },
             ],
-            as: "savedItem",
+            as: "saveProfileEngagement",
           },
         },
       ];
@@ -222,8 +222,8 @@ export class PreInterviewedController {
           case "contactunlock":
             matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
             break;
-          case "saved":
-            matchStage.$match = { savedItem: { $ne: [] } };
+          case "saveprofile":
+            matchStage.$match = { saveProfileEngagement: { $ne: [] } };
             break;
         }
 
@@ -253,7 +253,9 @@ export class PreInterviewedController {
           hasContactUnlockSent: {
             $gt: [{ $size: "$contactUnlockEngagement" }, 0],
           },
-          hasSaved: { $gt: [{ $size: "$savedItem" }, 0] },
+          hasSaveProfileSent: {
+            $gt: [{ $size: "$saveProfileEngagement" }, 0],
+          },
         },
       });
 

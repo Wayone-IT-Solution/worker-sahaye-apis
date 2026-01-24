@@ -4,6 +4,7 @@ export enum EngagementType {
   INVITE = "invite",
   VIEW_PROFILE = "viewProfile",
   CONTACT_UNLOCK = "contactUnlock",
+  SAVE_PROFILE = "saveProfile",
 }
 
 export enum RecipientType {

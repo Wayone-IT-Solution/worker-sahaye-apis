@@ -223,4 +223,44 @@ export const NotificationMessages: Record<
       message: `${ctx?.senderName || "An employer/contractor"} is requesting your feedback. Please review and provide your valuable feedback.`,
     }),
   },
+  "engagement-invite": {
+    sender: (ctx) => ({
+      title: `Invitation Sent to ${ctx?.prospectName}`,
+      message: `You have successfully invited ${ctx?.prospectName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `You've Been Invited! ✨`,
+      message: `Hello ${ctx?.prospectName}, you’ve been invited by ${ctx?.userName}.`,
+    }),
+  },
+  "engagement-viewProfile": {
+    sender: (ctx) => ({
+      title: `Profile Viewed: ${ctx?.prospectName}`,
+      message: `You viewed the profile of ${ctx?.prospectName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `Profile Viewed! 👀`,
+      message: `${ctx?.userName} viewed your profile.`,
+    }),
+  },
+  "engagement-contactUnlock": {
+    sender: (ctx) => ({
+      title: `Contact Unlocked: ${ctx?.prospectName}`,
+      message: `You unlocked the contact details of ${ctx?.prospectName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `Contact Details Unlocked! 📱`,
+      message: `${ctx?.userName} unlocked your contact details.`,
+    }),
+  },
+  "engagement-saveProfile": {
+    sender: (ctx) => ({
+      title: `Profile Saved: ${ctx?.prospectName}`,
+      message: `You saved the profile of ${ctx?.prospectName}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `Profile Saved! ⭐`,
+      message: `${ctx?.userName} saved your profile.`,
+    }),
+  },
 };

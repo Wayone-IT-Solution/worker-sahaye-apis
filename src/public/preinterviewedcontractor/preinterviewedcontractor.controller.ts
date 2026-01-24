@@ -67,9 +67,8 @@ export class PreInterviewedContractorController {
   ) {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
-      const engagementType = (
-        req.query.engagementType as string
-      )?.toLowerCase();
+      const { engagementType: rawEngagementType, ...restQuery } = req.query;
+      const engagementType = (rawEngagementType as string)?.toLowerCase();
 
       const pipeline: any[] = [
         {
@@ -213,6 +212,7 @@ export class PreInterviewedContractorController {
             matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
             break;
           case "saveprofile":
+          case "saved":
             matchStage.$match = { saveProfileEngagement: { $ne: [] } };
             break;
         }
@@ -247,7 +247,7 @@ export class PreInterviewedContractorController {
       });
 
       const result = await PreInterviewedContractorService.getAll(
-        req.query,
+        restQuery,
         pipeline,
       );
       return res
@@ -265,9 +265,8 @@ export class PreInterviewedContractorController {
   ) {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user.id);
-      const engagementType = (
-        req.query.engagementType as string
-      )?.toLowerCase();
+      const { engagementType: rawEngagementType, ...restQuery } = req.query;
+      const engagementType = (rawEngagementType as string)?.toLowerCase();
 
       const pipeline: any[] = [
         {
@@ -411,6 +410,7 @@ export class PreInterviewedContractorController {
             matchStage.$match = { contactUnlockEngagement: { $ne: [] } };
             break;
           case "saveprofile":
+          case "saved":
             matchStage.$match = { saveProfileEngagement: { $ne: [] } };
             break;
         }
@@ -421,6 +421,7 @@ export class PreInterviewedContractorController {
       pipeline.push({
         $project: {
           _id: 1,
+          user: 1,
           status: 1,
           createdAt: 1,
           updatedAt: 1,
@@ -444,7 +445,7 @@ export class PreInterviewedContractorController {
       });
 
       const result = await PreInterviewedContractorService.getAll(
-        { ...req.query, status: "approved" },
+        { ...restQuery, status: "approved" },
         pipeline,
       );
       return res

@@ -966,10 +966,21 @@ export class UserController {
             $in: [PlanEnrollmentStatus.ACTIVE],
           },
         }
-      );
+      ).populate("plan");
 
       // Check if user has active plan
       const hasActivePlan = enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
+
+      // Get subscription plan type for flags
+      let subscriptionPlanType = PlanType.FREE;
+      let isBasicPlan = false;
+      let isPremiumPlan = false;
+
+      if (hasActivePlan && enrollSubscriptionPlans[0]) {
+        subscriptionPlanType = (enrollSubscriptionPlans[0].plan as any).planType;
+        isBasicPlan = subscriptionPlanType === PlanType.BASIC;
+        isPremiumPlan = subscriptionPlanType === PlanType.PREMIUM;
+      }
 
       // Fetch documents from FileUpload model
       const documents = await FileUpload.find(
@@ -994,7 +1005,19 @@ export class UserController {
         .json(
           new ApiResponse(
             200,
-            { user: userWithProfilePic, enrollmentCourses, enrollSubscriptionPlans, documents, hasActivePlan },
+            {
+              user: userWithProfilePic,
+              enrollmentCourses,
+              enrollSubscriptionPlans,
+              documents,
+              hasActivePlan,
+              subscriptionInfo: {
+                planType: subscriptionPlanType,
+                isBasicPlan,
+                isPremiumPlan,
+                hasBasicOrPremium: isBasicPlan || isPremiumPlan,
+              },
+            },
             `User fetched successfully`
           )
         );

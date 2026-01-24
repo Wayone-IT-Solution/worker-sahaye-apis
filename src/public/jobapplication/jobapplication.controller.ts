@@ -16,6 +16,57 @@ import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model
 
 const JobApplicationService = new CommonService(JobApplication);
 
+// Helper function to get job application eligibility and monthly application limit
+const getJobApplicationEligibility = async (userId: string) => {
+  // Get user's active subscription plan
+  const enrolledPlan = await EnrolledPlan.findOne({
+    user: userId,
+    status: "active",
+  }).populate("plan");
+
+  // Default eligibility for FREE plan
+  let planType = PlanType.FREE;
+  let monthlyLimit = 5;
+
+  if (enrolledPlan) {
+    planType = (enrolledPlan.plan as any).planType;
+    
+    // Set monthly limits based on plan type
+    if (planType === PlanType.BASIC) {
+      monthlyLimit = 20;
+    } else if (planType === PlanType.PREMIUM) {
+      monthlyLimit = Infinity; // Unlimited
+    }
+  }
+
+  // Count applications in current month (from 1st of current month to today)
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const applicationsThisMonth = await JobApplication.countDocuments({
+    applicant: userId,
+    createdAt: {
+      $gte: firstDayOfMonth,
+      $lte: lastDayOfMonth,
+    },
+  });
+
+  const applicationsRemaining = monthlyLimit === Infinity ? Infinity : Math.max(0, monthlyLimit - applicationsThisMonth);
+
+  return {
+    planType: planType,
+    monthlyLimit: monthlyLimit,
+    applicationsThisMonth: applicationsThisMonth,
+    applicationsRemaining: applicationsRemaining,
+    eligible: applicationsRemaining > 0,
+    message:
+      applicationsRemaining === 0
+        ? `You have reached your monthly job application limit (${monthlyLimit}). Please upgrade your subscription or try again next month.`
+        : `You have ${applicationsRemaining === Infinity ? "unlimited" : applicationsRemaining} applications remaining this month.`,
+  };
+};
+
 /**
  * Resets job metrics by jobId.
  */
@@ -74,8 +125,18 @@ export const applyToJob = async (
 
     const [jobDoc, userDoc]: any = await Promise.all([
       Job.findById(job).select("status title postedBy"),
-      User.findById(applicantId).select("fullName email mobile"),
+      User.findById(applicantId).select("fullName email mobile userType"),
     ]);
+
+    // Check monthly job application limit for workers only
+    if (userDoc && userDoc.userType === "worker") {
+      const jobAppEligibility = await getJobApplicationEligibility(applicantId);
+      if (!jobAppEligibility.eligible) {
+        return res.status(403).json(
+          new ApiError(403, jobAppEligibility.message)
+        );
+      }
+    }
 
     let receiver: any;
     if (jobDoc?.postedBy) {
@@ -1055,6 +1116,27 @@ export const handleInterviewMode = async (
           "Interview mode has been updated successfully."
         )
       );
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const checkJobApplicationEligibility = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(400).json(new ApiError(400, "User ID is required"));
+    }
+
+    const eligibility = await getJobApplicationEligibility(userId);
+    return res.status(200).json(
+      new ApiResponse(200, eligibility, "Job application eligibility checked successfully")
+    );
   } catch (err) {
     next(err);
   }

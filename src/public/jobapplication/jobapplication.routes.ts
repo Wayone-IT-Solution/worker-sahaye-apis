@@ -15,9 +15,13 @@ import {
   updateStatusByEmployer,
   getAllUserApplications,
   getReceivedApplications,
+  checkJobApplicationEligibility,
 } from "./jobapplication.controller";
 
 const router = express.Router();
+
+// Check job application eligibility
+router.get("/eligibility/check", authenticateToken, isWorker, asyncHandler(checkJobApplicationEligibility));
 
 router.post("/", authenticateToken, isWorker, asyncHandler(applyToJob));
 router.get("/", authenticateToken, isWorker, asyncHandler(getUserApplications));

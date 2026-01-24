@@ -613,6 +613,153 @@ export class JobController {
     }
   }
 
+  static async getMyJobs(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id: user } = (req as any).user;
+      const { userType } = req.query; // Filter by worker or contractor
+
+      const pipeline = [
+        {
+          $lookup: {
+            from: "users",
+            localField: "postedBy",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            tags: 1,
+            title: 1,
+            status: 1,
+            salary: 1,
+            metrics: 1,
+            jobType: 1,
+            priority: 1,
+            teamSize: 1,
+            location: 1,
+            benefits: 1,
+            workMode: 1,
+            industry: 1,
+            industryId: 1,
+            subIndustryId: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            expiresAt: 1,
+            autoRepost: 1,
+            categories: 1,
+            publishedAt: 1,
+            description: 1,
+            workSchedule: 1,
+            lastBoostedAt: 1,
+            qualifications: 1,
+            skillsRequired: 1,
+            experienceLevel: 1,
+            maxApplications: 1,
+            shortDescription: 1,
+            applicationProcess: 1,
+            applicationDeadline: 1,
+            userType: 1,
+            profilePicUrl: "$profilePicFile.url",
+            creatorName: "$userDetails.fullName",
+            industryDetails: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+            },
+            subIndustryDetails: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
+            },
+            category: {
+              _id: "$categoryDetails._id",
+              type: "$categoryDetails.type",
+              description: "$categoryDetails.description",
+            },
+          },
+        },
+      ];
+
+      // Build query object with optional userType filter
+      const queryObj: any = { ...req.query, postedBy: user };
+      if (userType) {
+        queryObj.userType = userType;
+      }
+      // Remove userType from query to avoid duplicate filtering
+      delete queryObj.userType;
+
+      const result = await JobService.getAll(
+        { ...queryObj, ...(userType && { userType }) },
+        pipeline
+      );
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Data fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getAllSuggestedJobsByUser(
     req: Request,
     res: Response,

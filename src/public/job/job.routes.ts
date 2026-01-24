@@ -27,9 +27,17 @@ const {
   getJobListingUsage,
   getAllSuggestedJobsByUser,
   getJobCities,
+  getMyJobs,
 } = JobController;
 
 const router = express.Router();
+
+// Get all jobs posted by current user
+router.get(
+  "/my",
+  authenticateToken,
+  asyncHandler(getMyJobs)
+);
 
 router
   .get(

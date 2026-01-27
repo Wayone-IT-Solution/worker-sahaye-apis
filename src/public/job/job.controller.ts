@@ -1013,7 +1013,7 @@ export class JobController {
         },
         {
           $lookup: {
-            from: "workercategories",
+            from: "jobcategories",
             localField: "category",
             foreignField: "_id",
             as: "categoryInfo",
@@ -1022,6 +1022,56 @@ export class JobController {
         {
           $unwind: {
             path: "$categoryInfo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$natureDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        {
+          $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
             preserveNullAndEmptyArrays: true,
           },
         },
@@ -1036,7 +1086,7 @@ export class JobController {
             metrics: 1,
             jobType: 1,
             priority: 1,
-            // category: 1,
+            userType: 1,
             teamSize: 1,
             location: 1,
             benefits: 1,
@@ -1062,10 +1112,49 @@ export class JobController {
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
             category: {
-              _id: "$categoryInfo._id",
-              type: "$categoryInfo.type",
-              description: "$categoryInfo.description",
-              isActive: "$categoryInfo.isActive",
+              _id: {
+                $ifNull: [
+                  "$categoryInfo._id",
+                  "$category"
+                ]
+              },
+              name: {
+                $ifNull: [
+                  "$categoryInfo.name",
+                  null
+                ]
+              }
+            },
+            nature: {
+              _id: "$natureDetails._id",
+              name: "$natureDetails.name",
+            },
+            trades: {
+              $cond: [
+                { $gt: [{ $size: "$tradesDetails" }, 0] },
+                {
+                  $map: {
+                    input: "$tradesDetails",
+                    as: "t",
+                    in: { _id: "$$t._id", name: "$$t.name" },
+                  }
+                },
+                {
+                  $map: {
+                    input: "$trades",
+                    as: "t",
+                    in: { _id: "$$t", name: null },
+                  }
+                }
+              ]
+            },
+            industryDetails: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+            },
+            subIndustryDetails: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
             },
           },
         },

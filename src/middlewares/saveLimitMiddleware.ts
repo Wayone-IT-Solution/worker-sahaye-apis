@@ -5,24 +5,6 @@ import { SaveItem, SaveItemType } from "../modals/saveitems.model";
 import { PlanType } from "../modals/subscriptionplan.model";
 import ApiError from "../utils/ApiError";
 
-// Simplified LIMITS mapping
-const LIMITS: Record<string, Record<string, Record<string, number | null>>> = {
-  worker: {
-    [SaveItemType.JOB]: { [PlanType.FREE]: 10, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 50, [PlanType.GROWTH]: 200, [PlanType.PROFESSIONAL]: 300, [PlanType.ENTERPRISE]: null },
-    [SaveItemType.PROFILE]: { [PlanType.FREE]: 10, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 50, [PlanType.GROWTH]: 200, [PlanType.PROFESSIONAL]: 300, [PlanType.ENTERPRISE]: null },
-    [SaveItemType.DRAFT]: { [PlanType.FREE]: 10, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 50, [PlanType.GROWTH]: 200, [PlanType.PROFESSIONAL]: 300, [PlanType.ENTERPRISE]: null },
-  },
-  employer: {
-    [SaveItemType.JOB]: { [PlanType.FREE]: 0, [PlanType.BASIC]: 100, [PlanType.PREMIUM]: 200, [PlanType.GROWTH]: 500, [PlanType.PROFESSIONAL]: 1000, [PlanType.ENTERPRISE]: null },
-    [SaveItemType.PROFILE]: { [PlanType.FREE]: 0, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 100, [PlanType.GROWTH]: 300, [PlanType.PROFESSIONAL]: 500, [PlanType.ENTERPRISE]: null },
-    [SaveItemType.DRAFT]: { [PlanType.FREE]: 0, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 100, [PlanType.GROWTH]: 300, [PlanType.PROFESSIONAL]: 500, [PlanType.ENTERPRISE]: null },
-  },
-  contractor: {
-    [SaveItemType.JOB]: { [PlanType.FREE]: 0, [PlanType.BASIC]: 100, [PlanType.PREMIUM]: 200, [PlanType.GROWTH]: 500, [PlanType.PROFESSIONAL]: 1000, [PlanType.ENTERPRISE]: null },
-    [SaveItemType.PROFILE]: { [PlanType.FREE]: 0, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 100, [PlanType.GROWTH]: 300, [PlanType.PROFESSIONAL]: 500, [PlanType.ENTERPRISE]: null },
-    [SaveItemType.DRAFT]: { [PlanType.FREE]: 0, [PlanType.BASIC]: 50, [PlanType.PREMIUM]: 100, [PlanType.GROWTH]: 300, [PlanType.PROFESSIONAL]: 500, [PlanType.ENTERPRISE]: null },
-  }
-};
 
 /**
  * Middleware to check and enforce save limits
@@ -42,16 +24,33 @@ export const checkSaveLimit = async (req: Request, res: Response, next: NextFunc
       .lean();
 
     const plan = enrolled?.plan as any;
-    const planType = (enrolled && enrolled.expiredAt && new Date(enrolled.expiredAt) > new Date())
-      ? (plan?.planType || PlanType.FREE)
-      : PlanType.FREE;
+    const isActive = !!(enrolled && enrolled.expiredAt && new Date(enrolled.expiredAt) > new Date());
 
-    // 2. Resolve Limit
-    const limit = LIMITS[role.toLowerCase()]?.[type]?.[planType];
-    if (limit === 0) return res.status(403).json(new ApiError(403, `Saving ${type} is not allowed on your current plan.`));
-    if (limit === undefined) return res.status(403).json(new ApiError(403, "Planing/Role configuration missing."));
+    // 2. Resolve Dynamic Limits from Plan
+    let limit: number | null = null;
+    let totalLimit: number | null = null;
 
-    // 3. Check Usage
+    if (plan && isActive) {
+      totalLimit = plan.totalSavesLimit ?? null;
+      if (type === SaveItemType.PROFILE) limit = plan.saveProfilesLimit ?? null;
+      else if (type === SaveItemType.JOB) limit = plan.saveJobsLimit ?? null;
+      else if (type === SaveItemType.DRAFT) limit = plan.saveDraftsLimit ?? null;
+    }
+
+    // Default to 0 (blocked) if no active plan or limit not defined
+    if (!isActive || limit === 0) {
+      return res.status(403).json(new ApiError(403, `Saving ${type} is not allowed on your current plan.`));
+    }
+
+    // 3. Check Overall Usage (if total cap exists)
+    if (totalLimit !== null) {
+      const totalUsed = await SaveItem.countDocuments({ user: userId });
+      if (totalUsed >= totalLimit) {
+        return res.status(429).json(new ApiError(429, `Total monthly save limit reached (${totalUsed}/${totalLimit}).`));
+      }
+    }
+
+    // 4. Check Specific Type Usage
     const used = await SaveItem.countDocuments({ user: userId, type });
 
     if (limit !== null && used >= limit) {

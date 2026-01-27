@@ -155,10 +155,25 @@ export class SubscriptionplanController {
       //     .json(new ApiError(400, "Invalid user type"));
       // }
 
-      const result = await subscriptionPlanService.getAll({
-        userType,
-        status: "active",
-      });
+      const pipeline = [
+        {
+          $lookup: {
+            from: "features", // Collection name for features
+            localField: "features",
+            foreignField: "_id",
+            as: "features",
+          },
+        },
+        { $sort: { priority: 1 } }, // Higher priority first (or adjust based on logic)
+      ];
+
+      const result = await subscriptionPlanService.getAll(
+        {
+          userType,
+          status: "active",
+        },
+        pipeline
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Plans fetched by user type"));

@@ -81,8 +81,7 @@ export interface ISubscriptionPlan extends Document {
   description: string;
   isRecommended: boolean;
   billingCycle: BillingCycle;
-  monthlyJobListingLimit?: number | null;
-  // Job Post Limits
+
   agencyJobPostLimits?: {
     customer?: number | null;
     agency?: number | null;
@@ -91,11 +90,13 @@ export interface ISubscriptionPlan extends Document {
     agency?: number | null;
     candidate?: number | null;
   };
-  // Save limits (for profile, job, draft saving)
+  // Save limits (for profile, job, draft saving) - Currently disabled, may use further
+  /*
   totalSavesLimit?: number; // Overall monthly save limit
   saveProfilesLimit?: number; // Monthly limit for saving profiles
   saveJobsLimit?: number; // Monthly limit for saving jobs
   saveDraftsLimit?: number; // Monthly limit for saving drafts
+  */
   // Engagement limits - per recipient type
   inviteSendLimit?:
   | {
@@ -184,11 +185,7 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       enum: Object.values(BillingCycle),
     },
     features: [{ type: Schema.Types.ObjectId, ref: "Feature" }],
-    monthlyJobListingLimit: {
-      type: Number,
-      min: 0,
-      // Represents the allowed number of job listings per month for employer/contractor plans.
-    },
+
     agencyJobPostLimits: {
       customer: { type: Number, default: 0 },
       agency: { type: Number, default: 0 },
@@ -197,7 +194,8 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       agency: { type: Number, default: 0 },
       candidate: { type: Number, default: 0 },
     },
-    // Save limits for profiles, jobs, and drafts
+    // Save limits for profiles, jobs, and drafts - Currently disabled, may use further
+    /*
     totalSavesLimit: {
       type: Number,
       min: 0,
@@ -223,6 +221,7 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       default: null,
       // Monthly limit for saving drafts
     },
+    */
     inviteSendLimit: {
       type: Schema.Types.Mixed,
       default: 0,

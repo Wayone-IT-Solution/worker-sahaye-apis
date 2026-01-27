@@ -45,6 +45,7 @@ export class JobController {
       /* ----------------------------------------------------
        * DRAFT JOB LIMIT CHECK
        * ---------------------------------------------------- */
+      /*
       if (jobStatus === JobStatus.DRAFT) {
         const draftLimit = plan.saveDraftsLimit;
 
@@ -68,6 +69,7 @@ export class JobController {
           }
         }
       }
+      */
 
       /* ----------------------------------------------------
        * POSTED JOB LIMIT CHECK (NON-DRAFT)

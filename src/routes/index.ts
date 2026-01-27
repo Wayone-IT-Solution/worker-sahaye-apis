@@ -44,6 +44,8 @@ import jobRoleRoutes from "../admin/jobrole/jobrole.routes";
 import supportServiceRoutes from "../admin/supportservice/supportservice.routes";
 import serviceLocationRoutes from "../admin/servicelocation/servicelocation.routes";
 import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
+import userEngagementRoutes from "../admin/userengagement/userengagement.routes";
+
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -139,6 +141,8 @@ router.use("/jobrole", jobRoleRoutes);
 router.use("/supportservice", supportServiceRoutes);
 router.use("/servicelocation", serviceLocationRoutes);
 router.use("/subindustry", subIndustryRoutes);
+router.use("/admin/userengagement", userEngagementRoutes);
+
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);

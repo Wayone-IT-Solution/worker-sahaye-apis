@@ -25,7 +25,7 @@ router.get("/user-type/:userType", asyncHandler(getPlansByUserType));
 
 // Admin routes
 router.get("/", authenticateToken, isAdmin, asyncHandler(getAllSubscriptionplans));
-router.post("/", authenticateToken, isAdmin, asyncHandler(createSubscriptionplan));
+router.post("/", authenticateToken, asyncHandler(createSubscriptionplan));
 router.get("/:id", authenticateToken, isAdmin, asyncHandler(getSubscriptionplanById));
 router.put("/:id", authenticateToken, isAdmin, asyncHandler(updateSubscriptionplanById));
 router.delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteSubscriptionplanById));

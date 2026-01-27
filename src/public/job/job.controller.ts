@@ -26,18 +26,15 @@ export class JobController {
       const enrollment = await EnrolledPlan.findOne({
         user: userId,
         status: PlanEnrollmentStatus.ACTIVE,
-      });
+      }).populate<{ plan: ISubscriptionPlan }>("plan");
       if (!enrollment) {
         throw new ApiError(403, "No active subscription plan found");
       }
 
-      // Fetch subscription plan
-      const plan = await SubscriptionPlan.findById(enrollment.plan);
-      if (!plan?.contractorFeatures?.jobPostingCandidates) {
+      const plan = enrollment.plan as ISubscriptionPlan;
+      if (!plan) {
         throw new ApiError(403, "No active subscription plan found");
       }
-
-      const features = plan.contractorFeatures.jobPostingCandidates;
 
       // Determine job status
       const jobStatus =
@@ -49,23 +46,24 @@ export class JobController {
        * DRAFT JOB LIMIT CHECK
        * ---------------------------------------------------- */
       if (jobStatus === JobStatus.DRAFT) {
-        const draftFeature = features.saveJobDrafts;
+        const draftLimit = plan.saveDraftsLimit;
 
-        if (!draftFeature?.enabled) {
+        // If draftLimit is null, it's unlimited; if 0 or undefined, drafts not allowed
+        if (draftLimit === 0 || draftLimit === undefined) {
           throw new ApiError(403, "Your plan does not allow saving job drafts");
         }
 
         // limit !== null → enforce limit
-        if (draftFeature.limit !== null) {
+        if (draftLimit !== null) {
           const draftCount = await Job.countDocuments({
             postedBy: userId,
             status: JobStatus.DRAFT,
           });
 
-          if (draftCount >= draftFeature.limit) {
+          if (draftCount >= draftLimit) {
             throw new ApiError(
               403,
-              `Draft job limit reached. Your plan allows only ${draftFeature.limit} draft jobs`
+              `Draft job limit reached. Your plan allows only ${draftLimit} draft jobs`
             );
           }
         }

@@ -4,7 +4,7 @@
 
 import { Document, Schema } from "mongoose";
 import { SubscriptionPlan } from "../modals/subscriptionplan.model";
-import { SubscriptionPlanFeatureService } from "./subscriptionPlanFeature.service";
+// import { SubscriptionPlanFeatureService } from "./subscriptionPlanFeature.service";
 import { calculateExpiryDate } from "../modals/subscriptionplan.model";
 
 export class UserSubscriptionService {

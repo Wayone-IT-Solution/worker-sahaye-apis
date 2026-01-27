@@ -16,6 +16,7 @@ export interface IPageBanner extends Document {
   userType: UserType;
   description: string;
   image?: IAttachment[];
+  cta?: string;
 }
 
 export enum ScreenEnum {
@@ -39,7 +40,7 @@ export enum ScreenEnum {
 
   // Additional new
   PFSupport = "pf_support",
-  ESICSport = "esic_sport",
+  ESICSupport = "esic_support",
   BULKHIRING = "bulk_hiring",
   LWFSupport = "lwf_support",
   LoanSupport = "loan_support",
@@ -49,12 +50,19 @@ export enum ScreenEnum {
   Preferences = "preferences",
   CV = "CV",
   ComplianceCalender = "compliance_calender",
-  
+
   // Dashboard & Help screens
   FAQ = "faq",
   WorkerDashboard = "worker_dashboard",
   ContractorDashboard = "contractor_dashboard",
   EmployerDashboard = "employer_dashboard",
+
+  EditProfile = "edit_profile",
+  CreateCV = "create_cv",
+  EPFOSupport = "epfo_support",
+  SkillTrainingAndCertification = "skill_training_and_certification",
+  SchaduledVisits = "scheduled_visits",
+  Notifications = "notifications",
 }
 
 const pageBannerSchema = new Schema<IPageBanner>(
@@ -76,6 +84,7 @@ const pageBannerSchema = new Schema<IPageBanner>(
       description: { type: String, required: true },
       required: true,
     },
+    cta: { type: String },
   },
   { timestamps: true }
 );

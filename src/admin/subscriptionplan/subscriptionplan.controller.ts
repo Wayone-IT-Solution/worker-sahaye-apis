@@ -64,6 +64,10 @@ export class SubscriptionplanController {
       if (req.query.isPopular) query.isPopular = req.query.isPopular === "true";
       if (req.query.isRecommended) query.isRecommended = req.query.isRecommended === "true";
 
+      // Extract pagination parameters
+      query.page = req.query.page || 1;
+      query.limit = req.query.limit || 10;
+
       const result = await subscriptionPlanService.getAll(query);
       
       // Sort plans by planType in ascending order: FREE → BASIC → PREMIUM → GROWTH → ENTERPRISE → PROFESSIONAL

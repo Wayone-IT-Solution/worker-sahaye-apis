@@ -63,6 +63,13 @@ export enum ScreenEnum {
   SkillTrainingAndCertification = "skill_training_and_certification",
   SchaduledVisits = "scheduled_visits",
   Notifications = "notifications",
+
+  // new for agency
+  SearchEmployersAndCandidates = "search_employers_and_candidates",
+  JobManagement = "job_management",
+
+  //new for employer
+  SearchCandidateOrSearchAgency= "search_candidate_or_search_agency"
 }
 
 const pageBannerSchema = new Schema<IPageBanner>(

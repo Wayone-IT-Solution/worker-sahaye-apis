@@ -7,6 +7,7 @@ export enum WorkerCategoryType {
   SEMISKILLED = "Semiskilled",
   SUPERVISORY = "Supervisory",
   MANAGERIAL = "Managerial and above",
+  FRESHERS = "Freshers"
 }
 
 export interface IWorkerCategory extends Document {

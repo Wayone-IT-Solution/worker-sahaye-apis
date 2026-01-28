@@ -28,6 +28,7 @@ const {
   getAllSuggestedJobsByUser,
   getJobCities,
   getMyJobs,
+  getAllContractorJobs,
 } = JobController;
 
 const router = express.Router();
@@ -47,6 +48,7 @@ router
     asyncHandler(getJobListingUsage)
   )
   .get("/cities", asyncHandler(getJobCities))
+  .get("/contractor/list", authenticateToken, asyncHandler(getAllContractorJobs))
   .get("/", authenticateToken, asyncHandler(getAllJobs))
   .get(
     "/:id",

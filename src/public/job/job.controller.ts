@@ -193,8 +193,8 @@ export class JobController {
     try {
       const imageUrlArray = req?.body?.imageUrl;
       // Extract the URL from the first element if it's an array
-      const imageUrl = Array.isArray(imageUrlArray) && imageUrlArray.length > 0 
-        ? imageUrlArray[0].url 
+      const imageUrl = Array.isArray(imageUrlArray) && imageUrlArray.length > 0
+        ? imageUrlArray[0].url
         : imageUrlArray;
       return res
         .status(201)
@@ -1634,6 +1634,336 @@ export class JobController {
             "Cities fetched successfully"
           )
         );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllContractorJobs(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const currentUserId = (req as any).user?.id;
+      const { city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
+
+      // Build match stage for contractor jobs
+      const matchStage: any = {
+        status: "open",
+        userType: "contractor",
+        ...(currentUserId && { postedBy: { $ne: new mongoose.Types.ObjectId(currentUserId) } })
+      };
+
+      // Filter by city
+      if (city) {
+        matchStage["location.city"] = { $regex: city as string, $options: "i" };
+      }
+
+      // Filter by industry
+      if (industryId) {
+        matchStage.industryId = new mongoose.Types.ObjectId(industryId as string);
+      }
+
+      // Filter by sub-industry
+      if (subIndustryId) {
+        matchStage.subIndustryId = new mongoose.Types.ObjectId(subIndustryId as string);
+      }
+
+      // Filter by workMode
+      if (workMode) {
+        matchStage.workMode = workMode;
+      }
+
+      // Filter by jobType
+      if (jobType) {
+        matchStage.jobType = jobType;
+      }
+
+      // Filter by salary range
+      if (minSalary || maxSalary) {
+        matchStage["salary.min"] = {};
+        if (minSalary) {
+          matchStage["salary.min"]["$gte"] = parseInt(minSalary as string);
+        }
+        if (maxSalary) {
+          matchStage["salary.max"] = matchStage["salary.max"] || {};
+          matchStage["salary.max"]["$lte"] = parseInt(maxSalary as string);
+        }
+      }
+
+      // Filter by experience level
+      if (experience) {
+        matchStage.experienceLevel = experience;
+      }
+
+      const pipeline = [
+        {
+          $match: matchStage
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "postedBy",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "enrolledplans",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$user", "$$userId"] },
+                      { $eq: ["$status", "active"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $lookup: {
+                  from: "subscriptionplans",
+                  localField: "plan",
+                  foreignField: "_id",
+                  as: "planDetails",
+                },
+              },
+              { $unwind: { path: "$planDetails", preserveNullAndEmptyArrays: true } },
+              { $project: { planType: "$planDetails.planType" } },
+              { $limit: 1 },
+            ],
+            as: "userPlanDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userPlanDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: { path: "$natureDetails", preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        // Full-text search on title and description if search param provided
+        ...(search ? [
+          {
+            $match: {
+              $or: [
+                { title: { $regex: search as string, $options: "i" } },
+                { description: { $regex: search as string, $options: "i" } },
+                { shortDescription: { $regex: search as string, $options: "i" } }
+              ]
+            }
+          }
+        ] : []),
+        {
+          $project: {
+            _id: 1,
+            tags: 1,
+            title: 1,
+            status: 1,
+            salary: 1,
+            metrics: 1,
+            jobType: 1,
+            priority: 1,
+            teamSize: 1,
+            location: 1,
+            benefits: 1,
+            workMode: 1,
+            industry: 1,
+            industryId: 1,
+            subIndustryId: 1,
+            userType: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            expiresAt: 1,
+            autoRepost: 1,
+            categories: 1,
+            publishedAt: 1,
+            description: 1,
+            workSchedule: 1,
+            lastBoostedAt: 1,
+            qualifications: 1,
+            skillsRequired: 1,
+            experienceLevel: 1,
+            maxApplications: 1,
+            shortDescription: 1,
+            applicationProcess: 1,
+            applicationDeadline: 1,
+            creatorEmail: "$userDetails.email",
+            creatorName: "$userDetails.fullName",
+            profilePicUrl: "$profilePicFile.url",
+            creatorMobile: "$userDetails.mobile",
+            creatorUserType: "$userDetails.userType",
+            creatorPlanType: "$userPlanDetails.planType",
+            creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
+            creatorHasPremium: "$userDetails.hasPremiumPlan",
+            nature: {
+              name: "$natureDetails.name",
+              description: "$natureDetails.description",
+            },
+            industryInfo: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+              icon: "$industryDetails.icon",
+              description: "$industryDetails.description",
+            },
+            subIndustryInfo: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
+              icon: "$subIndustryDetails.icon",
+              description: "$subIndustryDetails.description",
+            },
+            trades: {
+              $map: {
+                input: "$tradesDetails",
+                as: "t",
+                in: { name: "$$t.name", description: "$$t.description" },
+              },
+            },
+          },
+        },
+      ];
+
+      // Add priority ranking and sorting
+      pipeline.push({
+        $addFields: {
+          priorityRank: {
+            $switch: {
+              branches: [
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "priority"] },
+                      { $eq: ["$creatorPlanType", "enterprise"] },
+                    ],
+                  },
+                  then: 1,
+                },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "priority"] },
+                      { $eq: ["$creatorPlanType", "growth"] },
+                    ],
+                  },
+                  then: 2,
+                },
+                { case: { $eq: ["$priority", "priority"] }, then: 3 },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "standard"] },
+                      { $eq: ["$creatorPlanType", "enterprise"] },
+                    ],
+                  },
+                  then: 4,
+                },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "standard"] },
+                      { $eq: ["$creatorPlanType", "growth"] },
+                    ],
+                  },
+                  then: 5,
+                },
+                { case: { $eq: ["$priority", "standard"] }, then: 6 },
+              ],
+              default: 7,
+            },
+          },
+        },
+      } as any);
+
+      pipeline.push({
+        $sort: {
+          priorityRank: 1,
+          creatorHasEarlyAccessBadge: -1,
+          createdAt: -1,
+        },
+      } as any);
+
+      const result = await JobService.getAll(req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Contractor jobs fetched successfully"));
     } catch (err) {
       next(err);
     }

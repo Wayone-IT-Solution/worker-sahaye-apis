@@ -977,7 +977,7 @@ export class UserController {
         planType: subscriptionPlanType,
       };
 
-      if (hasActivePlan && enrollSubscriptionPlans[0]) {
+      if (hasActivePlan && enrollSubscriptionPlans[0] && enrollSubscriptionPlans[0].plan) {
         subscriptionPlanType = (enrollSubscriptionPlans[0].plan as any).planType;
         subscriptionInfo.planType = subscriptionPlanType;
 

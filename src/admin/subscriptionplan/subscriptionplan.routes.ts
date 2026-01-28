@@ -18,13 +18,13 @@ const {
 
 const router = express.Router();
 
-// Public routes
-router.get("/recommended", asyncHandler(getRecommendedPlans));
-router.get("/popular", asyncHandler(getPopularPlans));
-router.get("/user-type/:userType", asyncHandler(getPlansByUserType));
+// Public routes - accessible to all authenticated users
+router.get("/", authenticateToken, asyncHandler(getAllSubscriptionplans)); // Allow all authenticated users to view plans
+router.get("/recommended", authenticateToken, asyncHandler(getRecommendedPlans));
+router.get("/popular", authenticateToken, asyncHandler(getPopularPlans));
+router.get("/user-type/:userType", authenticateToken, asyncHandler(getPlansByUserType));
 
-// Admin routes
-router.get("/", authenticateToken, isAdmin, asyncHandler(getAllSubscriptionplans));
+// Admin-only routes
 router.post("/", authenticateToken, isAdmin, asyncHandler(createSubscriptionplan));
 router.get("/:id", authenticateToken, isAdmin, asyncHandler(getSubscriptionplanById));
 router.put("/:id", authenticateToken, isAdmin, asyncHandler(updateSubscriptionplanById));

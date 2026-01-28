@@ -65,6 +65,32 @@ export class SubscriptionplanController {
       if (req.query.isRecommended) query.isRecommended = req.query.isRecommended === "true";
 
       const result = await subscriptionPlanService.getAll(query);
+      
+      // Sort plans by planType in ascending order: FREE → BASIC → PREMIUM → GROWTH → ENTERPRISE → PROFESSIONAL
+      const planTypeOrder = {
+        [PlanType.FREE]: 1,
+        [PlanType.BASIC]: 2,
+        [PlanType.PREMIUM]: 3,
+        [PlanType.GROWTH]: 4,
+        [PlanType.ENTERPRISE]: 5,
+        [PlanType.PROFESSIONAL]: 6,
+      };
+
+      // Handle both array and object responses
+      if (Array.isArray(result)) {
+        result.sort((a: any, b: any) => {
+          const orderA = planTypeOrder[a.planType as PlanType] || 999;
+          const orderB = planTypeOrder[b.planType as PlanType] || 999;
+          return orderA - orderB;
+        });
+      } else if (result && typeof result === 'object' && 'result' in result && Array.isArray(result.result)) {
+        result.result.sort((a: any, b: any) => {
+          const orderA = planTypeOrder[a.planType as PlanType] || 999;
+          const orderB = planTypeOrder[b.planType as PlanType] || 999;
+          return orderA - orderB;
+        });
+      }
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Subscription plans fetched successfully"));
@@ -174,6 +200,32 @@ export class SubscriptionplanController {
         },
         pipeline
       );
+
+      // Sort plans by planType in ascending order: FREE → BASIC → PREMIUM → GROWTH → ENTERPRISE → PROFESSIONAL
+      const planTypeOrder = {
+        [PlanType.FREE]: 1,
+        [PlanType.BASIC]: 2,
+        [PlanType.PREMIUM]: 3,
+        [PlanType.GROWTH]: 4,
+        [PlanType.ENTERPRISE]: 5,
+        [PlanType.PROFESSIONAL]: 6,
+      };
+
+      // Handle both array and object responses
+      if (Array.isArray(result)) {
+        result.sort((a: any, b: any) => {
+          const orderA = planTypeOrder[a.planType as PlanType] || 999;
+          const orderB = planTypeOrder[b.planType as PlanType] || 999;
+          return orderA - orderB;
+        });
+      } else if (result && typeof result === 'object' && 'result' in result && Array.isArray(result.result)) {
+        result.result.sort((a: any, b: any) => {
+          const orderA = planTypeOrder[a.planType as PlanType] || 999;
+          const orderB = planTypeOrder[b.planType as PlanType] || 999;
+          return orderA - orderB;
+        });
+      }
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Plans fetched by user type"));

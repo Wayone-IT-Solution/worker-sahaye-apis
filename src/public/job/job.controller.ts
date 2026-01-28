@@ -84,6 +84,71 @@ export class JobController {
         status: jobStatus,
       };
 
+      // Handle benefits that come as JSON strings from FormData
+      if (data.benefits && Array.isArray(data.benefits)) {
+        data.benefits = data.benefits.map((benefit: any) => {
+          if (typeof benefit === "string") {
+            try {
+              return JSON.parse(benefit);
+            } catch {
+              return benefit;
+            }
+          }
+          return benefit;
+        });
+      }
+
+      // Handle skillsRequired - convert strings to objects with name field
+      if (data.skillsRequired && Array.isArray(data.skillsRequired)) {
+        data.skillsRequired = data.skillsRequired
+          .filter((skill: any) => {
+            // Filter out empty strings and null/undefined values
+            if (typeof skill === "string") return skill.trim() !== "";
+            if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+            return false;
+          })
+          .map((skill: any) => {
+            // Convert strings to objects, keep existing objects
+            if (typeof skill === "string") {
+              return {
+                name: skill.trim(),
+                level: "intermediate",
+                required: false
+              };
+            }
+            return skill;
+          });
+      }
+
+      // Extract imageUrl from S3 middleware array if it's an array
+      if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
+        data.imageUrl = data.imageUrl[0].url;
+      }
+
+      // Reconstruct location object from flat location fields
+      const location: any = {};
+      if (data.locationAddress) location.address = data.locationAddress;
+      if (data.locationCity) location.city = data.locationCity;
+      if (data.locationState) location.state = data.locationState;
+      if (data.locationCountry) location.country = data.locationCountry;
+      if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
+      if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
+      if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+
+      // Only update location if we have any location data
+      if (Object.keys(location).length > 0) {
+        data.location = location;
+      }
+
+      // Remove flat location fields from data
+      delete data.locationAddress;
+      delete data.locationCity;
+      delete data.locationState;
+      delete data.locationCountry;
+      delete data.locationPostalCode;
+      delete data.locationRemoteFriendly;
+      delete data.locationAllowsRelocation;
+
       const result = await JobService.create(data);
       if (!result) {
         throw new ApiError(400, "Failed to create job");
@@ -126,7 +191,11 @@ export class JobController {
     next: NextFunction
   ) {
     try {
-      const imageUrl = req?.body?.imageUrl;
+      const imageUrlArray = req?.body?.imageUrl;
+      // Extract the URL from the first element if it's an array
+      const imageUrl = Array.isArray(imageUrlArray) && imageUrlArray.length > 0 
+        ? imageUrlArray[0].url 
+        : imageUrlArray;
       return res
         .status(201)
         .json(new ApiResponse(201, imageUrl, "Created successfully"));
@@ -1092,6 +1161,7 @@ export class JobController {
             benefits: 1,
             workMode: 1,
             industry: 1,
+            imageUrl: 1,
             createdAt: 1,
             updatedAt: 1,
             expiresAt: 1,
@@ -1249,7 +1319,6 @@ export class JobController {
     try {
       const id = req.params.id;
       const { role } = (req as any).user;
-      // const imageUrl = req?.body?.imageUrl?.[0]?.url;
 
       const record = await JobService.getById(id);
       if (!record) {
@@ -1259,9 +1328,84 @@ export class JobController {
       const data = req.body;
       if (role !== "admin") delete data.status;
 
-      // let image;
-      // if (req?.body?.imageUrl && record.imageUrl)
-      //   image = await extractImageUrl(req?.body?.image, record.imageUrl as string);
+      // Handle imageUrl if it was uploaded
+      if (data.imageUrl) {
+        if (Array.isArray(data.imageUrl) && data.imageUrl.length > 0 && data.imageUrl[0]?.url) {
+          // URL array from S3 middleware
+          data.imageUrl = data.imageUrl[0].url;
+        } else if (typeof data.imageUrl === "object" && data.imageUrl?.url) {
+          // Single object with url property
+          data.imageUrl = data.imageUrl.url;
+        } else if (typeof data.imageUrl === "string" && data.imageUrl && !data.imageUrl.startsWith("http") && !data.imageUrl.startsWith("/")) {
+          // If it's a non-URL string (like "img"), don't update it - keep the existing one
+          delete data.imageUrl;
+        } else if (typeof data.imageUrl === "string" && (data.imageUrl.startsWith("http") || data.imageUrl.startsWith("/"))) {
+          // Valid URL string, keep it
+        } else {
+          // Any other case, remove imageUrl from update
+          delete data.imageUrl;
+        }
+      }
+
+      // Handle benefits that come as JSON strings from FormData
+      if (data.benefits && Array.isArray(data.benefits)) {
+        data.benefits = data.benefits.map((benefit: any) => {
+          if (typeof benefit === "string") {
+            try {
+              return JSON.parse(benefit);
+            } catch {
+              return benefit;
+            }
+          }
+          return benefit;
+        });
+      }
+
+      // Handle skillsRequired - convert strings to objects with name field
+      if (data.skillsRequired && Array.isArray(data.skillsRequired)) {
+        data.skillsRequired = data.skillsRequired
+          .filter((skill: any) => {
+            // Filter out empty strings and null/undefined values
+            if (typeof skill === "string") return skill.trim() !== "";
+            if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+            return false;
+          })
+          .map((skill: any) => {
+            // Convert strings to objects, keep existing objects
+            if (typeof skill === "string") {
+              return {
+                name: skill.trim(),
+                level: "intermediate",
+                required: false
+              };
+            }
+            return skill;
+          });
+      }
+
+      // Reconstruct location object from flat location fields
+      const location: any = {};
+      if (data.locationAddress) location.address = data.locationAddress;
+      if (data.locationCity) location.city = data.locationCity;
+      if (data.locationState) location.state = data.locationState;
+      if (data.locationCountry) location.country = data.locationCountry;
+      if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
+      if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
+      if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+
+      // Only update location if we have any location data
+      if (Object.keys(location).length > 0) {
+        data.location = location;
+      }
+
+      // Remove flat location fields from data
+      delete data.locationAddress;
+      delete data.locationCity;
+      delete data.locationState;
+      delete data.locationCountry;
+      delete data.locationPostalCode;
+      delete data.locationRemoteFriendly;
+      delete data.locationAllowsRelocation;
 
       const result = await JobService.updateById(req.params.id, data);
       if (!result)

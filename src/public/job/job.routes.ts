@@ -60,7 +60,13 @@ router
     },
     asyncHandler(getJobById)
   )
-  .put("/:id", authenticateToken, asyncHandler(updateJobById))
+  .put(
+    "/:id",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(updateJobById)
+  )
   .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
   .get("/user-wise/list", authenticateToken, asyncHandler(getAllUserWiseJobs))
   .get("/user-wise/list/:id", authenticateToken, asyncHandler(getJobById))
@@ -74,10 +80,18 @@ router
   .post(
     "/user-wise/list",
     authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
     asyncHandler(enforceJobListingLimit),
     asyncHandler(createJob)
   )
-  .put("/user-wise/list/:id", authenticateToken, asyncHandler(updateJobById))
+  .put(
+    "/user-wise/list/:id",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(updateJobById)
+  )
   .delete("/user-wise/list/:id", authenticateToken, asyncHandler(deleteJobById))
   .put(
     "/add-comment/:id",

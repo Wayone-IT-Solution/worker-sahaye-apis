@@ -6,6 +6,8 @@ export interface IPdf extends Document {
   fileName: string;
   header: Types.ObjectId | IHeader;
   order: number;
+  startDate?: Date;
+  description?: string;
 }
 
 const PdfSchema = new Schema<IPdf>(
@@ -26,6 +28,14 @@ const PdfSchema = new Schema<IPdf>(
     order: {
       type: Number,
       default: 1,
+    },
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    description: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }

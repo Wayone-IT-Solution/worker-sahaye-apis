@@ -3,6 +3,7 @@ import { IHeader } from "./header.model";
 
 export interface IPdf extends Document {
   url: string;
+  fileName: string;
   header: Types.ObjectId | IHeader;
   order: number;
 }
@@ -10,6 +11,10 @@ export interface IPdf extends Document {
 const PdfSchema = new Schema<IPdf>(
   {
     url: {
+      type: String,
+      required: true,
+    },
+    fileName: {
       type: String,
       required: true,
     },

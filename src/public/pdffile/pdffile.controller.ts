@@ -15,10 +15,11 @@ export class PdfController {
       if (!url)
         return res.status(403).json(new ApiError(403, "PDF file is required."));
 
-      const { header, order } = req.body;
+      const { header, order, fileName } = req.body;
       if (!header) return res.status(400).json(new ApiError(400, "Header ID is required."));
+      if (!fileName) return res.status(400).json(new ApiError(400, "File name is required."));
 
-      const result = await PdfService.create({ url, header, order });
+      const result = await PdfService.create({ url, fileName, header, order });
       return res.status(201).json(new ApiResponse(201, result, "PDF created successfully"));
     } catch (err) {
       next(err);
@@ -28,10 +29,76 @@ export class PdfController {
 
   static async getAllPdfs(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await PdfService.getAll(req.query);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+      const headerId = req.query.headerId as string;
+
+      const pipeline: any[] = [];
+
+      // Add filter by headerId if provided
+      if (headerId && mongoose.Types.ObjectId.isValid(headerId)) {
+        pipeline.push({
+          $match: {
+            header: new mongoose.Types.ObjectId(headerId),
+          },
+        });
+      }
+
+      pipeline.push(
+        {
+          $lookup: {
+            from: "headers",
+            localField: "header",
+            foreignField: "_id",
+            as: "headerDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$headerDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            url: 1,
+            header: "$headerDetails",
+            order: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            __v: 1,
+          },
+        },
+        { $skip: skip },
+        { $limit: limit }
+      );
+
+      const data = await Pdf.aggregate(pipeline);
+      
+      // Get total count with the same filter
+      let totalCount = await Pdf.countDocuments();
+      if (headerId && mongoose.Types.ObjectId.isValid(headerId)) {
+        totalCount = await Pdf.countDocuments({
+          header: new mongoose.Types.ObjectId(headerId),
+        });
+      }
 
       return res.status(200).json(
-        new ApiResponse(200, data, "PDFs fetched successfully")
+        new ApiResponse(
+          200,
+          {
+            result: data,
+            pagination: {
+              totalItems: totalCount,
+              currentPage: page,
+              itemsPerPage: limit,
+              totalPages: Math.ceil(totalCount / limit),
+            },
+          },
+          "PDFs fetched successfully"
+        )
       );
     } catch (err) {
       next(err);
@@ -41,9 +108,45 @@ export class PdfController {
   // Get PDF by ID
   static async getPdfById(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await PdfService.getById(req.params.id);
+      const pipeline: any[] = [
+        { $match: { _id: new mongoose.Types.ObjectId(req.params.id) } },
+        {
+          $lookup: {
+            from: "headers",
+            localField: "header",
+            foreignField: "_id",
+            as: "headerDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$headerDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            url: 1,
+            fileName: 1,
+            header: "$headerDetails",
+            order: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            __v: 1,
+          },
+        },
+      ];
+
+      const result = await Pdf.aggregate(pipeline);
+      if (!result || result.length === 0) {
+        return res.status(404).json(
+          new ApiError(404, "PDF not found")
+        );
+      }
+      
       return res.status(200).json(
-        new ApiResponse(200, result, "PDF fetched successfully")
+        new ApiResponse(200, result[0], "PDF fetched successfully")
       );
     } catch (err: any) {
       if (err.message === "Record not found") {

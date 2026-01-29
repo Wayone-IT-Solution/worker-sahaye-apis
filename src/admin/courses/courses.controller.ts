@@ -7,6 +7,7 @@ import { CommonService } from "../../services/common.services";
 import { getReviewStats } from "../../public/coursereview/coursereview.controller";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
+import { User } from "../../modals/user.model";
 
 const courseService = new CommonService(Course);
 
@@ -32,7 +33,7 @@ const getCourseAccessBenefits = async (userId: string | null) => {
   }).populate("plan");
 
   // If no active plan, return FREE plan benefits
-  if (!enrolledPlan) {
+  if (!enrolledPlan || !enrolledPlan.plan) {
     return defaultBenefits;
   }
 
@@ -104,6 +105,16 @@ export class CourseController {
     try {
       const userId = (req as any).user?.id || null;
       const benefits = await getCourseAccessBenefits(userId);
+      const categoryWise = String(req.query.categoryWise) === "true";
+      console.log(req.query.categoryWise);
+      console.log("categoryWise:", categoryWise);
+      
+      // Fetch user's worker category if authenticated
+      let userWorkerCategoryId = null;
+      if (userId && categoryWise) {
+        const user = await User.findById(userId).select("workerCategory");
+        userWorkerCategoryId = user?.workerCategory;
+      }
 
       const pipeline: any[] = [
         {
@@ -129,7 +140,20 @@ export class CourseController {
         { $project: { reviews: 0 } },
       ];
 
-      let result: any = await courseService.getAll(req.query, pipeline);
+      // Add category filter only if categoryWise=true and user has a worker category
+      if (userWorkerCategoryId) {
+        pipeline.push({
+          $match: {
+            category: userWorkerCategoryId,
+          },
+        });
+      }
+
+      // Remove categoryWise from query to avoid interference with service logic
+      const queryParams = { ...req.query };
+      delete queryParams.categoryWise;
+
+      let result: any = await courseService.getAll(queryParams, pipeline);
 
       // Add personalized pricing for each course
       if (Array.isArray(result)) {

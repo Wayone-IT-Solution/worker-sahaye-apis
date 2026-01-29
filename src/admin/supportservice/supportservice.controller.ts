@@ -111,7 +111,7 @@ export const createSupportService = async (req: Request, res: Response) => {
       description,
       serviceFor,
       order: order || 0,
-      createdBy: (req as any).user?._id,
+      createdBy: (req as any).user?.id,
     });
 
     return res.status(201).json({
@@ -136,7 +136,7 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     const skip = (page - 1) * limit;
 
     const matchStage: any = {};
-    
+
     // Add direct filters
     if (req.query.serviceFor) {
       matchStage.serviceFor = req.query.serviceFor as string;
@@ -291,6 +291,7 @@ export const getServicesByType = async (req: Request, res: Response) => {
           description: 1,
           serviceFor: 1,
           status: 1,
+          order: 1,
           createdAt: 1,
           createdBy: {
             _id: "$createdByUser._id",
@@ -369,14 +370,14 @@ export const updateSupportService = async (req: Request, res: Response) => {
     const { id } = req.params;
     let { title, subtitle, description, serviceFor, status, order } = req.body;
 
-    console.log("Update Request Received:", { 
-      id, 
-      title, 
-      subtitle, 
-      description, 
-      serviceFor, 
-      status, 
-      order 
+    console.log("Update Request Received:", {
+      id,
+      title,
+      subtitle,
+      description,
+      serviceFor,
+      status,
+      order
     });
 
     // Normalize status to lowercase

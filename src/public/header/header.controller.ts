@@ -10,11 +10,13 @@ export class HeaderController {
   // Create header with icon
   static async createHeader(req: Request, res: Response, next: NextFunction) {
     try {
-      //   const iconUrl = req?.body?.icon?.[0]?.url;
-      //   if (!iconUrl)
-      //     return res.status(403).json(new ApiError(403, "Header icon is required."));
+      const iconUrl = req?.body?.icon?.[0]?.url;
+      // Icon is optional, so we don't require it
 
-      const result = await HeaderService.create({ ...req.body });
+      const result = await HeaderService.create({ 
+        ...req.body,
+        icon: iconUrl || undefined,
+      });
       if (!result)
         return res.status(400).json(new ApiError(400, "Failed to create header"));
 
@@ -27,7 +29,13 @@ export class HeaderController {
   // Get all headers
   static async getAllHeaders(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await HeaderService.getAll(req.query);
+      const pipeline: any[] = [
+        {
+          $sort: { order: 1 },
+        },
+      ];
+      
+      const data = await HeaderService.getAll(req.query, pipeline);
       return res.status(200).json(
         new ApiResponse(
           200,
@@ -56,18 +64,16 @@ export class HeaderController {
   static async updateHeaderById(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id;
-      //   if (!mongoose.Types.ObjectId.isValid(id))
-      //     return res.status(400).json(new ApiError(400, "Invalid Header ID"));
 
       const record = await HeaderService.getById(id);
       if (!record)
         return res.status(404).json(new ApiError(404, "Header not found"));
 
-      //   const iconUrl = req?.body?.icon?.[0]?.url || record.icon;
+      const iconUrl = req?.body?.icon?.[0]?.url || record.icon;
 
       const result = await HeaderService.updateById(id, {
         ...req.body,
-        // icon: iconUrl,
+        icon: iconUrl,
       });
 
       if (!result) return res.status(400).json(new ApiError(400, "Failed to update header"));

@@ -14,6 +14,7 @@ export interface IHeader extends Document {
   icon?: string;
   description?: string;
   basic_info?: string;
+  order?: number;
 }
 
 // Schema definition
@@ -36,6 +37,10 @@ const HeaderSchema = new Schema<IHeader>(
     },
     basic_info: {
       type: String,
+    },
+    order: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true }

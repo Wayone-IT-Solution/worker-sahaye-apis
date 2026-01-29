@@ -13,7 +13,7 @@ export class HeaderController {
       const iconUrl = req?.body?.icon?.[0]?.url;
       // Icon is optional, so we don't require it
 
-      const result = await HeaderService.create({ 
+      const result = await HeaderService.create({
         ...req.body,
         icon: iconUrl || undefined,
       });
@@ -26,6 +26,51 @@ export class HeaderController {
     }
   }
 
+  static async getServicesByType(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { serviceFor } = req.params;
+
+      const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
+      if (!validServiceTypes.includes(serviceFor)) {
+        return res.status(400).json({
+          success: false,
+          message: `Service type must be one of: ${validServiceTypes.join(", ")}`,
+        });
+      }
+
+      // Bypass query-based sorting by removing sortKey and sortDir from query
+      const cleanQuery = { ...req.query };
+      delete cleanQuery.sortKey;
+      delete cleanQuery.sortDir;
+
+      const pipeline: any[] = [
+        {
+          $match: { parent: serviceFor }
+        },
+        {
+          $sort: { order: 1 }
+        }
+      ];
+
+      const data = await HeaderService.getAll(cleanQuery, pipeline);
+
+      // Ensure results are sorted by order (additional safeguard)
+      if (data && typeof data === 'object' && 'result' in data && Array.isArray(data.result)) {
+        data.result.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+      }
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          data,
+          `Headers for ${serviceFor} fetched successfully`
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
+  };
+
   // Get all headers
   static async getAllHeaders(req: Request, res: Response, next: NextFunction) {
     try {
@@ -34,7 +79,7 @@ export class HeaderController {
           $sort: { order: 1 },
         },
       ];
-      
+
       const data = await HeaderService.getAll(req.query, pipeline);
       return res.status(200).json(
         new ApiResponse(

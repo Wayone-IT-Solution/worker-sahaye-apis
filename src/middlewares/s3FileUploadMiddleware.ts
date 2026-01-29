@@ -4,14 +4,14 @@ import { Request, Response, NextFunction } from "express";
 
 const memoryStorage = multer.memoryStorage();
 
-// Dynamically configure multer field-based upload with 5MB file size limit
+// Dynamically configure multer field-based upload with 50MB file size limit
 export const dynamicUpload = (
   fields: { name: string; maxCount?: number }[]
 ) => {
   return multer({ 
     storage: memoryStorage,
     limits: {
-      fileSize: 5 * 1024 * 1024 // 5MB limit
+      fileSize: 50 * 1024 * 1024 // 50MB limit
     }
   }).fields(fields);
 };

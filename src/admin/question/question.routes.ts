@@ -16,7 +16,7 @@ const {
 const router = express.Router();
 
 router
-  .post("/", authenticateToken, isAdmin, asyncHandler(createQuestion))
+  .post("/", asyncHandler(createQuestion))
   .get("/", authenticateToken, isAdmin, asyncHandler(getAllQuestions))
   .get("/flows", authenticateToken, asyncHandler(getFlows))
   .get("/public", authenticateToken, asyncHandler(getQuestionByFlowAndStep))

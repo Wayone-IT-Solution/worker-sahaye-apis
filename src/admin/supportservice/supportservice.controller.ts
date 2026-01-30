@@ -22,50 +22,100 @@ const getServiceAccessFlags = async (
     canDiscountedPersonalAssistance: false,
   };
 
+  console.log("=== getServiceAccessFlags called ===");
+  console.log("userId:", userId);
+  console.log("serviceFor:", serviceFor);
+
   if (!userId) {
+    console.log("No userId, returning defaultAccess");
     return defaultAccess;
   }
 
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  try {
+    // Get user's active subscription plans - find first valid non-null plan enrollment
+    const enrolledPlans = await EnrolledPlan.find({
+      user: userId,
+      status: "active",
+    })
+      .populate("plan")
+      .sort({ enrolledAt: -1 });
 
-  // If no active plan, return FREE plan access
-  if (!enrolledPlan) {
+    console.log("Found enrolled plans count:", enrolledPlans.length);
+    if (enrolledPlans.length === 0) {
+      console.log("No enrolled plans found");
+      return defaultAccess;
+    }
+
+    // Find the first valid plan that hasn't expired and has plan data
+    let planType = null;
+    for (let i = 0; i < enrolledPlans.length; i++) {
+      const enrolled = enrolledPlans[i];
+      const enrolledObj = enrolled.toObject ? enrolled.toObject() : enrolled;
+      
+      console.log(`Checking enrollment ${i}:`, {
+        hasEnrolled: !!enrolledObj,
+        hasPlan: !!enrolledObj?.plan,
+        hasExpiredAt: !!enrolledObj?.expiredAt,
+        expiredAt: enrolledObj?.expiredAt,
+        planData: enrolledObj?.plan ? { name: (enrolledObj.plan as any).name, planType: (enrolledObj.plan as any).planType } : null,
+      });
+      
+      if (
+        enrolledObj &&
+        enrolledObj.plan &&
+        enrolledObj.expiredAt &&
+        new Date(enrolledObj.expiredAt) > new Date()
+      ) {
+        planType = (enrolledObj.plan as any).planType;
+        console.log(`✓ Found valid planType: ${planType} at index ${i}`);
+        break;
+      }
+    }
+
+    // If no active plan found, return FREE plan access
+    if (!planType) {
+      console.log("No valid plan found after checking all enrollments, returning default access");
+      return defaultAccess;
+    }
+
+    // Define access levels based on plan type and service type
+    const accessMap: Record<string, Record<string, { canChat: boolean; canCall: boolean; canDiscountedPersonalAssistance: boolean }>> = {
+      [PlanType.FREE]: {
+        EPFO: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+        ESIC: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+        LWF: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+        LOAN: { canChat: false, canCall: false, canDiscountedPersonalAssistance: false },
+        AWARENESS: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+      },
+      [PlanType.BASIC]: {
+        EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+        ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+        LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+        LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+        AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+      },
+      [PlanType.PREMIUM]: {
+        EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+        ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+        LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+        LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+        AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+      },
+    };
+
+    console.log("Looking up access for planType:", planType, "serviceFor:", serviceFor);
+    const access = accessMap[planType]?.[serviceFor];
+    console.log("Access found:", access);
+    
+    // Return access flags based on plan type and service
+    const result = access ?? defaultAccess;
+    console.log("Returning access:", result);
+    console.log("=== getServiceAccessFlags end ===\n");
+    return result;
+  } catch (error) {
+    console.error("Error in getServiceAccessFlags:", error);
     return defaultAccess;
   }
-
-  const planType = (enrolledPlan.plan as any).planType;
-
-  // Define access levels based on plan type and service type
-  const accessMap: Record<string, Record<string, { canChat: boolean; canCall: boolean; canDiscountedPersonalAssistance: boolean }>> = {
-    [PlanType.FREE]: {
-      EPFO: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-      ESIC: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-      LWF: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-      LOAN: { canChat: false, canCall: false, canDiscountedPersonalAssistance: false },
-      AWARENESS: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-    },
-    [PlanType.BASIC]: {
-      EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-      ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-      LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-      LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-      AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-    },
-    [PlanType.PREMIUM]: {
-      EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-      ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-      LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-      LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-      AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-    },
-  };
-
-  // Return access flags based on plan type and service
-  return accessMap[planType]?.[serviceFor] ?? defaultAccess;
 };
 
 // Search field mapping for support service
@@ -257,7 +307,12 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
 export const getServicesByType = async (req: Request, res: Response) => {
   try {
     const { serviceFor } = req.params;
-    const userId = (req as any).user?.id || null;
+    // Try both .id and ._id for userId extraction
+    const userId = (req as any).user?.id || (req as any).user?._id || null;
+    
+    console.log("getServicesByType called:");
+    console.log("Request user object:", (req as any).user);
+    console.log("Extracted userId:", userId);
 
     const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
     if (!validServiceTypes.includes(serviceFor)) {

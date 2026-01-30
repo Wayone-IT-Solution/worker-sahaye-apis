@@ -8,18 +8,20 @@ import {
   deleteSupportService,
   searchSupportServices,
 } from "./supportservice.controller";
-import { isAdmin, authenticateToken } from "../../middlewares/authMiddleware";
+import { isAdmin, authenticateToken, authenticateTokenOptional } from "../../middlewares/authMiddleware";
 
 const router = express.Router();
 
-// Public routes
-router.get("/type/:serviceFor", getServicesByType);
+// Route with optional authentication - allows both authenticated and unauthenticated users
+router.get("/type/:serviceFor", authenticateTokenOptional, getServicesByType);
+
+// Routes that work with or without authentication (optional auth for user context)
+router.get("/", authenticateTokenOptional, getAllSupportServices);
+router.get("/search/query", authenticateTokenOptional, searchSupportServices);
+router.get("/:id", authenticateTokenOptional, getSupportServiceById);
 
 // Admin routes (protected)
 router.post("/", authenticateToken, isAdmin, createSupportService);
-router.get("/", getAllSupportServices);
-router.get("/search/query", searchSupportServices);
-router.get("/:id", getSupportServiceById);
 router.put("/:id", authenticateToken, isAdmin, updateSupportService);
 router.delete("/:id", authenticateToken, isAdmin, deleteSupportService);
 

@@ -329,6 +329,10 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
+      const currentUserId = new mongoose.Types.ObjectId((req as any).user?.id);
+      const { engagementType: rawEngagementType, ...restQuery } = req.query;
+      const engagementType = (rawEngagementType as string)?.toLowerCase();
+
       const pipeline: any[] = [
         {
           $lookup: {
@@ -357,6 +361,94 @@ export class UserController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // Check if invite engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "invite"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "inviteEngagement",
+          },
+        },
+        // Check if viewProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "viewProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "viewProfileEngagement",
+          },
+        },
+        // Check if contactUnlock engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "contactUnlock"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "contactUnlockEngagement",
+          },
+        },
+        // Check if saveProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "saveProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "saveProfileEngagement",
+          },
+        },
         {
           $replaceRoot: {
             newRoot: {
@@ -364,11 +456,39 @@ export class UserController {
                 "$$ROOT",
                 {
                   profilePic: "$profilePic.url",
+                  hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+                  hasViewProfileSent: {
+                    $gt: [{ $size: "$viewProfileEngagement" }, 0],
+                  },
+                  hasContactUnlockSent: {
+                    $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+                  },
+                  hasSaveProfileSent: {
+                    $gt: [{ $size: "$saveProfileEngagement" }, 0],
+                  },
                 },
               ],
             },
           },
         },
+        // Add filter stage based on engagementType query parameter
+        ...(engagementType
+          ? [
+              {
+                $match:
+                  engagementType === "invite"
+                    ? { inviteEngagement: { $ne: [] } }
+                    : engagementType === "viewprofile"
+                      ? { viewProfileEngagement: { $ne: [] } }
+                      : engagementType === "contactunlock"
+                        ? { contactUnlockEngagement: { $ne: [] } }
+                        : engagementType === "saveprofile" ||
+                            engagementType === "saved"
+                          ? { saveProfileEngagement: { $ne: [] } }
+                          : {},
+              },
+            ]
+          : []),
         // Sort: Early Access Badge first, then Premium users, then by profile completion
         {
           $sort: {
@@ -380,7 +500,7 @@ export class UserController {
         }
       ];
 
-      const result = await userService.getAll(req.query, pipeline);
+      const result = await userService.getAll(restQuery, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Users fetched successfully"));
@@ -977,8 +1097,24 @@ export class UserController {
         planType: subscriptionPlanType,
       };
 
-      if (hasActivePlan && enrollSubscriptionPlans[0] && enrollSubscriptionPlans[0].plan) {
-        subscriptionPlanType = (enrollSubscriptionPlans[0].plan as any).planType;
+      // Find the first valid plan with non-null plan data that hasn't expired
+      let validPlan = null;
+      if (hasActivePlan) {
+        for (const enrollment of enrollSubscriptionPlans) {
+          if (
+            enrollment &&
+            enrollment.plan &&
+            enrollment.expiredAt &&
+            new Date(enrollment.expiredAt) > new Date()
+          ) {
+            validPlan = enrollment.plan;
+            break;
+          }
+        }
+      }
+
+      if (validPlan) {
+        subscriptionPlanType = (validPlan as any).planType;
         subscriptionInfo.planType = subscriptionPlanType;
 
         const userType = result?.userType;

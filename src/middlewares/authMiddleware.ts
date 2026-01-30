@@ -59,6 +59,43 @@ export const authenticateToken = (
 };
 
 /**
+ * Optional authentication middleware - allows requests with or without a token
+ * If a valid token is provided, it attaches the user to the request
+ * If no token or invalid token, it continues without user info
+ */
+export const authenticateTokenOptional = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): any => {
+  const token = req.header("Authorization")?.replace("Bearer ", "");
+
+  if (!token) {
+    // No token provided, continue without user
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, secret) as {
+      _id: string;
+      role: Role;
+      email: string;
+    };
+
+    (req as AuthenticatedRequest).user = {
+      id: decoded._id,
+      email: decoded.email,
+      role: decoded.role,
+    };
+
+    next();
+  } catch (error) {
+    // Invalid token, continue without user (don't throw error)
+    return next();
+  }
+};
+
+/**
  * Allow all roles except the ones listed
  */
 export const allowAllExcept =

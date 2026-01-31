@@ -90,7 +90,6 @@ const JobRoleSchema = new Schema<JobRoleDocument>(
 
 // Indexes
 JobRoleSchema.index({ name: 1 }, { unique: true });
-JobRoleSchema.index({ slug: 1 }, { unique: true });
 JobRoleSchema.index({ status: 1 });
 JobRoleSchema.index({ name: "text", description: "text", tags: "text" });
 

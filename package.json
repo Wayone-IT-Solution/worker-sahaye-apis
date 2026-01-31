@@ -7,7 +7,8 @@
     "start": "nodemon src/server.ts",
     "generate": "node src/generateModule.js",
     "dev": "nodemon --watch .env --watch src --ext ts --exec ts-node src/server.ts",
-    "seed:headers": "ts-node src/public/header/seedHeaders.ts"
+    "seed:headers": "ts-node src/public/header/seedHeaders.ts",
+    "seed:hrmaster": "ts-node src/seeds/hrmaster.seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +17,7 @@
   "dependencies": {
     "@types/multer": "^1.4.12",
     "@types/nodemailer": "^6.4.17",
-    "aws-sdk": "^2.1692.0",
+    "@aws-sdk/client-s3": "^3.668.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",

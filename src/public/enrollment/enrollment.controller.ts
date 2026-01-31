@@ -11,6 +11,7 @@ import { Course } from "../../modals/courses.model";
 import { CommonService } from "../../services/common.services";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
+import { redeemUserPoints, refundUserPoints, normalizePoints } from "../../utils/points";
 
 const enrollmentService = new CommonService(Enrollment);
 
@@ -79,10 +80,67 @@ const getCourseAccessBenefits = async (userId: string | null) => {
   return benefitsMap[planType] ?? defaultBenefits;
 };
 
+const buildEnrollmentAmounts = async (
+  userId: string,
+  courseDetails: any,
+  numberOfPeople: number,
+  pointsToRedeem?: number
+) => {
+  const isFree = courseDetails.isFree;
+  const benefits = await getCourseAccessBenefits(userId);
+
+  if (courseDetails.certificate && !benefits.canGetSkillCertification) {
+    throw new ApiError(
+      403,
+      "You are not eligible for skill certification with your current plan. Upgrade to BASIC or PREMIUM."
+    );
+  }
+
+  const baseAmount = Math.round(courseDetails.amount * numberOfPeople);
+  let discountAmount = 0;
+  let finalAmount = baseAmount;
+
+  if (!isFree && benefits.trainingFeeDiscount > 0) {
+    discountAmount = Math.round(
+      (baseAmount * benefits.trainingFeeDiscount) / 100
+    );
+    finalAmount = Math.max(0, Math.round(baseAmount - discountAmount));
+  }
+
+  let pointsRedeemed = 0;
+  let pointsValue = 0;
+
+  if (!isFree && finalAmount > 0) {
+    const redemption = await redeemUserPoints(
+      userId,
+      finalAmount,
+      normalizePoints(pointsToRedeem)
+    );
+    pointsRedeemed = redemption.pointsRedeemed;
+    pointsValue = redemption.pointsValue;
+    finalAmount = redemption.finalAmount;
+  }
+
+  return {
+    isFree,
+    baseAmount,
+    finalAmount,
+    pointsRedeemed,
+    pointsValue,
+  };
+};
+
+const refundEnrollmentPointsIfNeeded = async (enrollment: any) => {
+  if (enrollment?.pointsRedeemed > 0 && !enrollment?.pointsRefunded) {
+    await refundUserPoints(String(enrollment.user), enrollment.pointsRedeemed);
+    enrollment.pointsRefunded = true;
+  }
+};
+
 export class EnrollmentController {
   static async createEnrollment(req: any, res: Response, next: NextFunction) {
     try {
-      const { course, numberOfPeople = 1 } = req.body;
+      const { course, numberOfPeople = 1, pointsToRedeem } = req.body;
       const { id: user } = req.user;
 
       const exists = await Enrollment.findOne({ user, course });
@@ -114,7 +172,49 @@ export class EnrollmentController {
           case EnrollmentStatus.FAILED:
           case EnrollmentStatus.REFUNDED:
           case EnrollmentStatus.CANCELLED:
-            exists.status = EnrollmentStatus.PENDING;
+            const courseDetails = await Course.findById(course);
+            if (!courseDetails)
+              return res
+                .status(404)
+                .json(new ApiError(404, "Course doesn't exist or was not found"));
+
+            await refundEnrollmentPointsIfNeeded(exists);
+
+            const {
+              isFree,
+              baseAmount,
+              finalAmount,
+              pointsRedeemed,
+              pointsValue,
+            } = await buildEnrollmentAmounts(
+              user,
+              courseDetails,
+              numberOfPeople,
+              pointsToRedeem
+            );
+
+            exists.numberOfPeople = numberOfPeople;
+            exists.totalAmount = baseAmount;
+            exists.finalAmount = finalAmount;
+            exists.pointsRedeemed = pointsRedeemed;
+            exists.pointsValue = pointsValue;
+            exists.pointsRefunded = false;
+            exists.status = isFree
+              ? EnrollmentStatus.ACTIVE
+              : EnrollmentStatus.PENDING;
+
+            if (isFree) {
+              exists.paymentDetails = {
+                amount: 0,
+                currency: "INR",
+                paidAt: new Date(),
+                status: PaymentStatus.SUCCESS,
+                gateway: PaymentGateway.FREE,
+              };
+            } else {
+              exists.paymentDetails = undefined;
+            }
+
             await exists.save();
             return res
               .status(200)
@@ -139,30 +239,18 @@ export class EnrollmentController {
           .status(404)
           .json(new ApiError(404, "Course doesn't exist or was not found"));
 
-      const isFree = courseDetails.isFree;
-      
-      // Get user's subscription benefits
-      const benefits = await getCourseAccessBenefits(user);
-
-      // Check certification eligibility if applicable
-      if (courseDetails.certificate && !benefits.canGetSkillCertification) {
-        return res.status(403).json(
-          new ApiError(
-            403,
-            "You are not eligible for skill certification with your current plan. Upgrade to BASIC or PREMIUM."
-          )
-        );
-      }
-
-      // Calculate amount with subscription-based discount
-      let baseAmount = courseDetails.amount * numberOfPeople;
-      let discountAmount = 0;
-      let finalAmount = baseAmount;
-
-      if (!isFree && benefits.trainingFeeDiscount > 0) {
-        discountAmount = Math.round((baseAmount * benefits.trainingFeeDiscount) / 100);
-        finalAmount = Math.round(baseAmount - discountAmount);
-      }
+      const {
+        isFree,
+        baseAmount,
+        finalAmount,
+        pointsRedeemed,
+        pointsValue,
+      } = await buildEnrollmentAmounts(
+        user,
+        courseDetails,
+        numberOfPeople,
+        pointsToRedeem
+      );
 
       const data: any = {
         user,
@@ -170,6 +258,9 @@ export class EnrollmentController {
         numberOfPeople,
         totalAmount: baseAmount,
         finalAmount,
+        pointsRedeemed,
+        pointsValue,
+        pointsRefunded: false,
         status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
       };
 
@@ -185,10 +276,14 @@ export class EnrollmentController {
       }
 
       const result = await enrollmentService.create(data);
-      if (!result)
+      if (!result) {
+        if (pointsRedeemed > 0) {
+          await refundUserPoints(user, pointsRedeemed);
+        }
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create enrollment"));
+      }
 
       return res
         .status(201)
@@ -308,6 +403,8 @@ export class EnrollmentController {
       enrollment.refundReason = reason;
       enrollment.refundedAt = new Date();
 
+      await refundEnrollmentPointsIfNeeded(enrollment);
+
       await enrollment.save();
 
       return res
@@ -380,9 +477,11 @@ export class EnrollmentController {
         case PaymentStatus.REFUNDED:
           enrollment.status = EnrollmentStatus.REFUNDED;
           enrollment.refundedAt = new Date();
+          await refundEnrollmentPointsIfNeeded(enrollment);
           break;
         case PaymentStatus.FAILED:
           enrollment.status = EnrollmentStatus.FAILED;
+          await refundEnrollmentPointsIfNeeded(enrollment);
           break;
       }
 

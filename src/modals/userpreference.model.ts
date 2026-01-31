@@ -115,9 +115,7 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
 // 🔍 Filter & join optimization
 UserPreferenceSchema.index({ jobRole: 1 }); // useful for filtering or joining with JobCategory
 
-// 🏭 Industry-based filtering
-UserPreferenceSchema.index({ industryId: 1 }); // useful for filtering by industry
-UserPreferenceSchema.index({ subIndustryId: 1 }); // useful for filtering by sub-industry
+// 🏭 Industry-based filtering (already indexed on fields)
 
 // 📍 Location-based filtering
 UserPreferenceSchema.index({ preferredLocations: 1 }); // useful for searching by preferred cities

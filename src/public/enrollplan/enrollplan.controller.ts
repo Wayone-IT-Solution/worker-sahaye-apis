@@ -14,13 +14,52 @@ import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import { User } from "../../modals/user.model";
+import { redeemUserPoints, refundUserPoints, normalizePoints } from "../../utils/points";
 
 const enrollPlanService = new CommonService(EnrolledPlan);
+
+const buildPlanAmounts = async (
+  userId: string,
+  planDetails: any,
+  pointsToRedeem?: number
+) => {
+  const isFree = planDetails.planType === PlanType.FREE;
+  const baseAmount = Math.round(planDetails.basePrice);
+  let finalAmount = baseAmount;
+  let pointsRedeemed = 0;
+  let pointsValue = 0;
+
+  if (!isFree && finalAmount > 0) {
+    const redemption = await redeemUserPoints(
+      userId,
+      finalAmount,
+      normalizePoints(pointsToRedeem)
+    );
+    pointsRedeemed = redemption.pointsRedeemed;
+    pointsValue = redemption.pointsValue;
+    finalAmount = redemption.finalAmount;
+  }
+
+  return {
+    isFree,
+    baseAmount,
+    finalAmount,
+    pointsRedeemed,
+    pointsValue,
+  };
+};
+
+const refundPlanPointsIfNeeded = async (enrollment: any) => {
+  if (enrollment?.pointsRedeemed > 0 && !enrollment?.pointsRefunded) {
+    await refundUserPoints(String(enrollment.user), enrollment.pointsRedeemed);
+    enrollment.pointsRefunded = true;
+  }
+};
 
 export class EnrollPlanController {
   static async createEnrollPlan(req: any, res: Response, next: NextFunction) {
     try {
-      const { plan } = req.body;
+      const { plan, pointsToRedeem } = req.body;
       const { id: user, role } = req.user;
 
       const exists = await EnrolledPlan.findOne({ user, plan });
@@ -32,31 +71,83 @@ export class EnrollPlanController {
               .json(new ApiError(409, "Already enrolled in this plan", exists));
 
           case PlanEnrollmentStatus.FAILED:
-            // update or retry logic here
-            exists.status = PlanEnrollmentStatus.PENDING;
-            await exists.save();
-            return res
-              .status(200)
-              .json(
-                new ApiResponse(
-                  200,
-                  exists,
-                  "Enrollment re-initiated after failure"
-                )
-              );
-
           case PlanEnrollmentStatus.EXPIRED:
-            exists.status = PlanEnrollmentStatus.PENDING;
+          case PlanEnrollmentStatus.REFUNDED:
+          case PlanEnrollmentStatus.CANCELLED: {
+            const planDetails = await SubscriptionPlan.findById(plan);
+            if (!planDetails)
+              return res
+                .status(404)
+                .json(new ApiError(404, "Plan not found or unavailable"));
+
+            if (planDetails?.userType !== role) {
+              return res
+                .status(403)
+                .json(
+                  new ApiError(
+                    403,
+                    `This plan is not available for ${role} users.`
+                  )
+                );
+            }
+
+            await refundPlanPointsIfNeeded(exists);
+
+            const {
+              isFree,
+              baseAmount,
+              finalAmount,
+              pointsRedeemed,
+              pointsValue,
+            } = await buildPlanAmounts(user, planDetails, pointsToRedeem);
+
+            exists.enrolledAt = new Date();
+            exists.totalAmount = baseAmount;
+            exists.finalAmount = finalAmount;
+            exists.pointsRedeemed = pointsRedeemed;
+            exists.pointsValue = pointsValue;
+            exists.pointsRefunded = false;
+            exists.status = isFree
+              ? PlanEnrollmentStatus.ACTIVE
+              : PlanEnrollmentStatus.PENDING;
+
+            if (planDetails.billingCycle) {
+              exists.expiredAt = calculateExpiryDate(
+                exists.enrolledAt,
+                planDetails.billingCycle
+              );
+            }
+
+            if (isFree) {
+              exists.paymentDetails = {
+                amount: 0,
+                currency: "INR",
+                paidAt: new Date(),
+                status: PlanPaymentStatus.SUCCESS,
+                gateway: PlanPaymentGateway.FREE,
+              };
+            } else {
+              exists.paymentDetails = undefined;
+            }
+
             await exists.save();
+
+            if (!isFree) {
+              await User.findByIdAndUpdate(user, {
+                hasPremiumPlan: true,
+              });
+            }
+
             return res
               .status(200)
               .json(
                 new ApiResponse(
                   200,
                   exists,
-                  "Re-enrollment initiated for expired plan"
+                  "Re-enrollment initiated after previous failure/refund/cancellation"
                 )
               );
+          }
 
           case PlanEnrollmentStatus.PENDING:
             return res
@@ -66,32 +157,6 @@ export class EnrollPlanController {
                   202,
                   exists,
                   "Enrollment is already in progress"
-                )
-              );
-
-          case PlanEnrollmentStatus.REFUNDED:
-            exists.status = PlanEnrollmentStatus.PENDING;
-            await exists.save();
-            return res
-              .status(200)
-              .json(
-                new ApiResponse(
-                  200,
-                  exists,
-                  "Re-enrollment initiated after refund"
-                )
-              );
-
-          case PlanEnrollmentStatus.CANCELLED:
-            exists.status = PlanEnrollmentStatus.PENDING;
-            await exists.save();
-            return res
-              .status(200)
-              .json(
-                new ApiResponse(
-                  200,
-                  exists,
-                  "Re-enrollment initiated after cancellation"
                 )
               );
 
@@ -116,12 +181,22 @@ export class EnrollPlanController {
           );
       }
 
-      const isFree = planDetails.planType === PlanType.FREE;
+      const {
+        isFree,
+        baseAmount,
+        finalAmount,
+        pointsRedeemed,
+        pointsValue,
+      } = await buildPlanAmounts(user, planDetails, pointsToRedeem);
+
       const data: any = {
         user,
         plan,
-        totalAmount: planDetails.basePrice,
-        finalAmount: planDetails.basePrice,
+        totalAmount: baseAmount,
+        finalAmount,
+        pointsRedeemed,
+        pointsValue,
+        pointsRefunded: false,
         status: isFree
           ? PlanEnrollmentStatus.ACTIVE
           : PlanEnrollmentStatus.PENDING,
@@ -151,10 +226,14 @@ export class EnrollPlanController {
           });
         }
       }
-      if (!result)
+      if (!result) {
+        if (pointsRedeemed > 0) {
+          await refundUserPoints(user, pointsRedeemed);
+        }
         return res
           .status(400)
           .json(new ApiError(400, "Enrollment creation failed"));
+      }
 
       return res
         .status(201)
@@ -274,6 +353,8 @@ export class EnrollPlanController {
       enrollment.refundReason = reason;
       enrollment.refundedAt = new Date();
 
+      await refundPlanPointsIfNeeded(enrollment);
+
       await enrollment.save();
 
       return res
@@ -338,9 +419,11 @@ export class EnrollPlanController {
           await User.findByIdAndUpdate(user, {
             hasPremiumPlan: false,
           });
+          await refundPlanPointsIfNeeded(enrollment);
           break;
         case PlanPaymentStatus.FAILED:
           enrollment.status = PlanEnrollmentStatus.FAILED;
+          await refundPlanPointsIfNeeded(enrollment);
           break;
         default:
           enrollment.status = PlanEnrollmentStatus.PENDING;

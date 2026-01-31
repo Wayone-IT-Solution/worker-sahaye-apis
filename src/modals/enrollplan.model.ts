@@ -30,6 +30,9 @@ export interface IEnrolledPlan extends Document {
   refundReason?: string;
   totalAmount: number;
   finalAmount: number;
+  pointsRedeemed?: number;
+  pointsValue?: number;
+  pointsRefunded?: boolean;
   paymentDetails?: {
     paidAt?: Date;
     amount: number;
@@ -74,6 +77,9 @@ const EnrolledPlanSchema = new Schema<IEnrolledPlan>(
     refundReason: { type: String },
     totalAmount: { type: Number, required: true },
     finalAmount: { type: Number, required: true },
+    pointsRedeemed: { type: Number, default: 0 },
+    pointsValue: { type: Number, default: 0 },
+    pointsRefunded: { type: Boolean, default: false },
     paymentDetails: { type: PlanPaymentDetailsSchema },
     status: {
       type: String,

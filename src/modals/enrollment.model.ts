@@ -27,6 +27,9 @@ export interface IEnrollment extends Document {
   progress?: number;
   totalAmount: number;
   finalAmount: number;
+  pointsRedeemed?: number;
+  pointsValue?: number;
+  pointsRefunded?: boolean;
   refundReason?: string;
   numberOfPeople: number;
   appliedCoupon?: {
@@ -68,6 +71,9 @@ const EnrollmentSchema = new Schema<IEnrollment>(
     enrolledAt: { type: Date, default: Date.now },
     totalAmount: { type: Number, required: true },
     finalAmount: { type: Number, required: true },
+    pointsRedeemed: { type: Number, default: 0 },
+    pointsValue: { type: Number, default: 0 },
+    pointsRefunded: { type: Boolean, default: false },
     paymentDetails: { type: PaymentDetailsSchema },
     numberOfPeople: { type: Number, default: 1, min: 1 },
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },

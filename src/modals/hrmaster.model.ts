@@ -12,6 +12,7 @@ export enum HRMasterType {
   JOB_SHIFT = "JobShift",
   CONTRACT_DURATIONS = "ContractDuration ",
   JOINING_PREFERENCE = "joiningPreference",
+  ESIC_SERVICE_TYPE ="esic_service_type",
   CANDIDATE_AVAILABILITY_FILTER = "candidateAvailabilityFilter",
 }
 

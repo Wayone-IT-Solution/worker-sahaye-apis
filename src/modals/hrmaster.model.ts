@@ -9,6 +9,9 @@ export enum HRMasterType {
   JOB_DURATION = "jobDuration",
   BADGE = "badge",
   EXPERIENCE = "experience",
+  JOB_SHIFT = "JobShift",
+  CONTRACT_DURATIONS = "ContractDuration ",
+  JOINING_PREFERENCE = "joiningPreference",
   CANDIDATE_AVAILABILITY_FILTER = "candidateAvailabilityFilter",
 }
 

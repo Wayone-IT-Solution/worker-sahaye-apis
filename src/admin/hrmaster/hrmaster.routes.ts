@@ -14,8 +14,8 @@ const {
 const router = express.Router();
 
 router
+  .get("/", asyncHandler(getAllHRMasters))
   .post("/", authenticateToken, isAdmin, asyncHandler(createHRMaster))
-  .get("/", authenticateToken, isAdmin, asyncHandler(getAllHRMasters))
   .get("/:id", authenticateToken, isAdmin, asyncHandler(getHRMasterById))
   .put("/:id", authenticateToken, isAdmin, asyncHandler(updateHRMasterById))
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteHRMasterById));

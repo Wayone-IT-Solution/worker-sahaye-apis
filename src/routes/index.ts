@@ -97,7 +97,7 @@ import pdfFileRoutes from "../public/pdffile/pdffile.routes";
 import loanSupportRoutes from "../public/loansupport/loansupport.routes";
 import notificationRoutes from "../public/notification/notification.routes";
 import paymentRoutes from "../public/payment/payment.routes";
-import subscriptionRoutes from "../public/subscription/subscription.routes"
+import subscriptionRoutes from "../public/subscription/subscription.routes";
 
 // Create main router
 const router = Router();
@@ -106,14 +106,15 @@ const router = Router();
 // Specific routes MUST come before general routes to avoid conflicts
 router.use("/admin/compliancecalendar", complianceCalendarRoutes);
 
+router.use("/faq", faqRoutes);
 router.use("/role", roleRoutes);
 router.use("/slot", slotRoutes);
 router.use("/admin", adminRoutes);
 router.use("/badge", badgeRoutes);
-router.use("/badge-bundles", badgeBundleRoutes);
 router.use("/trade", tradeRoutes);
 router.use("/nature", natureRoutes);
 router.use("/banner", bannerRoutes);
+router.use("/jobrole", jobRoleRoutes);
 router.use("/page", pageBannerRoutes);
 router.use("/booking", bookingRoutes);
 router.use("/courses", coursesRoutes);
@@ -128,32 +129,31 @@ router.use("/virtualhr", virtualHRRoutes);
 router.use("/quotation", quotationRoutes);
 router.use("/bulkhiring", bulkhiringRoutes);
 router.use("/salesperson", salespersonRoutes);
+router.use("/faqcategory", faqCategoryRoutes);
+router.use("/subindustry", subIndustryRoutes);
 router.use("/planfeature", planfeatureRoutes);
 router.use("/jobcategory", jobCategoryRoutes);
 router.use("/branding-content", contentRoutes);
+router.use("/badge-bundles", badgeBundleRoutes);
 router.use("/callsupport", callSupportAgentRoutes);
 router.use("/workercategory", workerCategoryRoutes);
-router.use("/subscriptionplan", subscriptionPlanRoutes);
-router.use("/projectbasedhiring", projectBasedHiringRoutes);
-router.use("/faq", faqRoutes);
-router.use("/faqcategory", faqCategoryRoutes);
-router.use("/jobrole", jobRoleRoutes);
 router.use("/supportservice", supportServiceRoutes);
 router.use("/servicelocation", serviceLocationRoutes);
-router.use("/subindustry", subIndustryRoutes);
+router.use("/subscriptionplan", subscriptionPlanRoutes);
+router.use("/projectbasedhiring", projectBasedHiringRoutes);
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);
 router.use("/ivr", IVRCallRoutes);
-router.use("/engagement", engagementRoutes);
-router.use("/invite", engagementRoutes); // backward compatibility
 router.use("/feature", featureRoutes);
 router.use("/message", messageRoutes);
+router.use("/invite", engagementRoutes);
 router.use("/jobsaved", jobSavedRoutes);
 router.use("/saveitems", saveItemRoutes);
 router.use("/forumpost", forumPostRoutes);
 router.use("/statecity", stateCityRoutes);
 router.use("/assistant", assistantRoutes);
+router.use("/engagement", engagementRoutes);
 router.use("/enrollment", enrollmentRoutes);
 router.use("/enrollplan", enrollPlanRoutes);
 router.use("/connection", connectionRoutes);
@@ -186,14 +186,14 @@ router.use("/policeverification", policeVerificationRoutes);
 router.use("/compliancechecklist", complianceChecklistRoutes);
 router.use("/unifiedservicerequest", unifiedServcieRequestRoutes);
 router.use("/bestpracticesfacility", bestPracticesFacilityRoutes);
+router.use("/compliancecalendar", publicComplianceCalendarRoutes);
 router.use("/candidatebrandingbadge", candidateBrandingBadgeRoutes);
 router.use("/preinterviewedcontractor", preInterviewedContractorRoutes);
-router.use("/compliancecalendar", publicComplianceCalendarRoutes);
 router.use("/header", headerRoutes);
 router.use("/pdffile", pdfFileRoutes);
+router.use("/payment", paymentRoutes);
 router.use("/loansupport", loanSupportRoutes);
 router.use("/notifications", notificationRoutes);
-router.use("/payment", paymentRoutes);
 router.use("/subscription", subscriptionRoutes);
 
 export default router;

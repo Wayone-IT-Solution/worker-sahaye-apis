@@ -11,10 +11,12 @@ const {
   updateSubscriptionplanById,
   deleteSubscriptionplanById,
   getPlansByUserType,
+  getPlansGroupedByUserType,
   getRecommendedPlans,
   getPopularPlans,
   updatePlanFeatures,
   togglePlanStatus,
+  compairPlansByUserType,
 } = SubscriptionplanController;
 
 // Setup multer for file uploads (memory storage for direct processing)
@@ -37,10 +39,12 @@ const upload = multer({
 const router = express.Router();
 
 // Public routes - accessible to all authenticated users
-router.get("/", authenticateToken, asyncHandler(getAllSubscriptionplans)); // Allow all authenticated users to view plans
+router.get("/",  asyncHandler(getAllSubscriptionplans)); // Allow all authenticated users to view plans
 router.get("/recommended", authenticateToken, asyncHandler(getRecommendedPlans));
 router.get("/popular", authenticateToken, asyncHandler(getPopularPlans));
-router.get("/user-type/:userType", authenticateToken, asyncHandler(getPlansByUserType));
+router.get("/user-type/:userType", asyncHandler(getPlansByUserType));
+router.get("/plans/:userType", asyncHandler(getPlansGroupedByUserType));
+router.get("/compair/:userType", asyncHandler(compairPlansByUserType));
 
 // Admin-only routes
 router.post("/", authenticateToken, isAdmin, upload.single("planImage"), asyncHandler(createSubscriptionplan));

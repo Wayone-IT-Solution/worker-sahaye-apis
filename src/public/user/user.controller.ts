@@ -531,6 +531,18 @@ export class UserController {
         });
       }
 
+      // CHECK IF USER EXISTS FIRST before sending OTP
+      const user = await User.findOne(
+        mobile ? { mobile } : { email }
+      );
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "No user found with this mobile number or email",
+        });
+      }
+
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
 

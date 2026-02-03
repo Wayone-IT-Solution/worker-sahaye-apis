@@ -381,6 +381,7 @@ export class SubscriptionplanController {
               displayName: familyDisplay[plan.planType] || (plan.planType.charAt(0).toUpperCase() + plan.planType.slice(1)),
               tagline: null,
               description: null,
+              planImage: null,
               isRecommended: false,
               isPopular: false,
               priority: Number.MAX_SAFE_INTEGER,
@@ -410,6 +411,7 @@ export class SubscriptionplanController {
             currency: plan.currency,
             status: plan.status,
             priority: plan.priority || 0,
+            planImage: plan.planImage || null,
           });
 
           // Helper to normalize number/string/object limits
@@ -462,11 +464,13 @@ export class SubscriptionplanController {
           if (billingCycle === BillingCycle.MONTHLY || billingCycle === BillingCycle.LIFETIME) {
             groups[key].tagline = groups[key].tagline || plan.tagline || null;
             groups[key].description = groups[key].description || plan.description || null;
+            groups[key].planImage = groups[key].planImage || plan.planImage || null;
           }
 
-          // fallback to any available tagline/description
+          // fallback to any available tagline/description/image
           groups[key].tagline = groups[key].tagline || plan.tagline || null;
           groups[key].description = groups[key].description || plan.description || null;
+          groups[key].planImage = groups[key].planImage || plan.planImage || null;
 
           // aggregate flags and find minimal priority
           groups[key].isRecommended = groups[key].isRecommended || !!plan.isRecommended;

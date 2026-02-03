@@ -45,6 +45,7 @@ import jobRoleRoutes from "../admin/jobrole/jobrole.routes";
 import supportServiceRoutes from "../admin/supportservice/supportservice.routes";
 import serviceLocationRoutes from "../admin/servicelocation/servicelocation.routes";
 import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
+import minimumWagesRoutes from "../admin/minimumwages/minimumwages.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -123,6 +124,7 @@ router.use("/chatbot", questionsRoutes);
 router.use("/servetel", servetelRoutes);
 router.use("/industry", industryRoutes);
 router.use("/hrmaster", hrMasterRoutes);
+router.use("/minimumwages", minimumWagesRoutes);
 router.use("/community", communityRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/virtualhr", virtualHRRoutes);

@@ -3,6 +3,9 @@ import { MinimumWageController } from "./minimumwages.controller";
 
 const router = Router();
 
+// Get all unique cities/states with minimum wages
+router.get("/cities/list", MinimumWageController.getAllCities);
+
 // Get all wage structures with pagination
 router.get("/", MinimumWageController.getAllWages);
 

@@ -7,6 +7,27 @@ import ApiResponse from "../../utils/ApiResponse";
 const minimumWageService = new CommonService(MinimumWage);
 
 export class MinimumWageController {
+  // Get all unique cities/states with minimum wages
+  static async getAllCities(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      // Get all unique states from the minimumwages collection
+      const cities = await MinimumWage.distinct("state");
+      
+      // Sort cities alphabetically
+      const sortedCities = cities.sort();
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, sortedCities, "Cities fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // Get all wage structures with pagination
   static async getAllWages(
     req: Request,

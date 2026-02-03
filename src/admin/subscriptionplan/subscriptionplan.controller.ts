@@ -3,6 +3,7 @@ import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { SubscriptionPlan, PlanType, UserType, BillingCycle } from "../../modals/subscriptionplan.model";
+import { uploadToS3 } from "../../config/s3Uploader";
 
 const subscriptionPlanService = new CommonService(SubscriptionPlan);
 
@@ -28,15 +29,55 @@ export class SubscriptionplanController {
     next: NextFunction
   ) {
     try {
+      // Parse JSON fields if they come as FormData strings
+      let body = req.body;
+      const jsonFields = [
+        'agencyJobPostLimits',
+        'employerJobPostLimits',
+        'inviteSendLimit',
+        'viewProfileLimit',
+        'contactUnlockLimit',
+        'saveProfileLimit',
+        'features'
+      ];
+
+      // Parse stringified JSON fields
+      jsonFields.forEach(field => {
+        if (body[field] && typeof body[field] === 'string') {
+          try {
+            body[field] = JSON.parse(body[field]);
+          } catch (e) {
+            // If it fails to parse, keep original value
+          }
+        }
+      });
+
+      // Handle file upload if present
+      if (req.file) {
+        try {
+          const imageUrl = await uploadToS3(
+            req.file.buffer,
+            req.file.originalname,
+            "subscription-plans"
+          );
+          body.planImage = imageUrl;
+        } catch (uploadError) {
+          console.error("Error uploading image to S3:", uploadError);
+          return res
+            .status(400)
+            .json(new ApiError(400, "Failed to upload plan image"));
+        }
+      }
+
       // Validate required fields
-      const validationErrors = validateSubscriptionPlanData(req.body);
+      const validationErrors = validateSubscriptionPlanData(body);
       if (validationErrors.length > 0) {
         return res
           .status(400)
           .json(new ApiError(400, validationErrors.join(", ")));
       }
 
-      const result = await subscriptionPlanService.create(req.body);
+      const result = await subscriptionPlanService.create(body);
       if (!result)
         return res
           .status(400)
@@ -128,8 +169,48 @@ export class SubscriptionplanController {
     next: NextFunction
   ) {
     try {
+      // Parse JSON fields if they come as FormData strings
+      let body = req.body;
+      const jsonFields = [
+        'agencyJobPostLimits',
+        'employerJobPostLimits',
+        'inviteSendLimit',
+        'viewProfileLimit',
+        'contactUnlockLimit',
+        'saveProfileLimit',
+        'features'
+      ];
+
+      // Parse stringified JSON fields
+      jsonFields.forEach(field => {
+        if (body[field] && typeof body[field] === 'string') {
+          try {
+            body[field] = JSON.parse(body[field]);
+          } catch (e) {
+            // If it fails to parse, keep original value
+          }
+        }
+      });
+
+      // Handle file upload if present
+      if (req.file) {
+        try {
+          const imageUrl = await uploadToS3(
+            req.file.buffer,
+            req.file.originalname,
+            "subscription-plans"
+          );
+          body.planImage = imageUrl;
+        } catch (uploadError) {
+          console.error("Error uploading image to S3:", uploadError);
+          return res
+            .status(400)
+            .json(new ApiError(400, "Failed to upload plan image"));
+        }
+      }
+
       // Validate only provided fields
-      const validationErrors = validateSubscriptionPlanData(req.body);
+      const validationErrors = validateSubscriptionPlanData(body);
       if (validationErrors.length > 0) {
         return res
           .status(400)
@@ -138,7 +219,7 @@ export class SubscriptionplanController {
 
       const result = await subscriptionPlanService.updateById(
         req.params.id,
-        req.body
+        body
       );
       if (!result)
         return res

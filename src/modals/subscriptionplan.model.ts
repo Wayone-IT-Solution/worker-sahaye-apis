@@ -129,6 +129,7 @@ export interface ISubscriptionPlan extends Document {
   jobViewPerMonth?: number | null;
   // number = monthly limit
   // null = unlimited
+  planImage?: string; // Image URL/path for this plan type (one image per plan type, not per duration)
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -271,6 +272,12 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       type: Number,
       min: 0,
       default: 20,
+    },
+    planImage: {
+      type: String,
+      default: null,
+      // Image URL/path specific to plan type (not duration)
+      // e.g., basic.jpg, premium.jpg, etc.
     },
   },
   { timestamps: true },

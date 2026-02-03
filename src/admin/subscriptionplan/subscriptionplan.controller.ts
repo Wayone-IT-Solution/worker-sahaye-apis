@@ -69,7 +69,7 @@ export class SubscriptionplanController {
       query.limit = req.query.limit || 10;
 
       const result = await subscriptionPlanService.getAll(query);
-      
+
       // Sort plans by planType in ascending order: FREE → BASIC → PREMIUM → GROWTH → ENTERPRISE → PROFESSIONAL
       const planTypeOrder = {
         [PlanType.FREE]: 1,
@@ -238,6 +238,183 @@ export class SubscriptionplanController {
     }
   }
 
+  // Get plans grouped by plan family (consolidate billing cycles per plan)
+  static async getPlansGroupedByUserType(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { userType } = req.params;
+      const pipeline = [
+        {
+          $lookup: {
+            from: "features",
+            localField: "features",
+            foreignField: "_id",
+            as: "features",
+          },
+        },
+        { $sort: { priority: 1 } },
+      ];
+
+      const rawResult: any = await subscriptionPlanService.getAll(
+        {
+          userType,
+          status: "active",
+        },
+        pipeline
+      );
+
+      let plans: any[] = [];
+      if (Array.isArray(rawResult)) plans = rawResult;
+      else if (rawResult && typeof rawResult === "object" && Array.isArray(rawResult.result)) plans = rawResult.result;
+
+      // Normalize billing cycle keys (accept both 'annual' and 'annually' etc.)
+      const billingOrder: any = { lifetime: 0, monthly: 1, quarterly: 2, annually: 3, annual: 3, semi_annually: 4, pay_as_you_go: 5 };
+
+      // Determine which plan families exist for this userType, then order by our preferred family order
+      const presentTypes = Array.from(new Set(plans.map((p: any) => p.planType)));
+      const preferredOrder = [PlanType.FREE, PlanType.BASIC, PlanType.PREMIUM, PlanType.GROWTH, PlanType.ENTERPRISE, PlanType.PROFESSIONAL];
+      const orderedTypes = preferredOrder.filter((t) => presentTypes.includes(t));
+
+      const groups: Record<string, any> = {};
+
+      plans
+        .filter((p: any) => orderedTypes.includes(p.planType))
+        .forEach((plan: any) => {
+          const key = plan.planType; // group by planType only
+          if (!groups[key]) {
+            // Friendly family display names
+            const familyDisplay: Record<string, string> = {
+              [PlanType.FREE]: "Free",
+              [PlanType.BASIC]: "Basic",
+              [PlanType.PREMIUM]: "Premium",
+              [PlanType.GROWTH]: "Growth",
+              [PlanType.ENTERPRISE]: "Enterprise",
+              [PlanType.PROFESSIONAL]: "Professional",
+            };
+
+            groups[key] = {
+              planType: plan.planType,
+              displayName: familyDisplay[plan.planType] || (plan.planType.charAt(0).toUpperCase() + plan.planType.slice(1)),
+              tagline: null,
+              description: null,
+              isRecommended: false,
+              isPopular: false,
+              priority: Number.MAX_SAFE_INTEGER,
+              // New aggregated limit/feature fields
+              inviteSendLimit: null,
+              viewProfileLimit: null,
+              contactUnlockLimit: null,
+              saveProfileLimit: null,
+              agencyJobPostLimits: null,
+              employerJobPostLimits: null,
+              jobViewPerMonth: null,
+              billingOptions: [],
+            };
+          }
+
+          // Normalize billing cycle value
+          const rawCycle = String(plan.billingCycle || "").toLowerCase();
+          const billingCycle = rawCycle === "annual" ? "annually" : rawCycle;
+
+          // collect billing option (use normalized billingCycle)
+          groups[key].billingOptions.push({
+            id: plan._id,
+            name: plan.name,
+            displayName: plan.displayName,
+            billingCycle: billingCycle,
+            basePrice: plan.basePrice,
+            currency: plan.currency,
+            status: plan.status,
+            priority: plan.priority || 0,
+          });
+
+          // Helper to normalize number/string/object limits
+          const normalizeLimit = (val: any) => {
+            if (val === null || val === undefined) return null;
+            if (typeof val === "number") return val;
+            if (typeof val === "string") {
+              const n = Number(val);
+              return isNaN(n) ? val : n;
+            }
+            if (typeof val === "object") {
+              const res: any = {};
+              Object.keys(val).forEach((k) => {
+                const v = val[k];
+                if (v === null || v === undefined) res[k] = null;
+                else if (typeof v === "number") res[k] = v;
+                else if (typeof v === "string") {
+                  const n = Number(v);
+                  res[k] = isNaN(n) ? v : n;
+                } else res[k] = v;
+              });
+              return res;
+            }
+            return val;
+          };
+
+          // prefer monthly or lifetime plans to set group-level limits and fall back to first available
+          const prefer = [BillingCycle.MONTHLY, BillingCycle.LIFETIME].includes(billingCycle as BillingCycle);
+
+          const nInvite = normalizeLimit(plan.inviteSendLimit);
+          if (prefer || groups[key].inviteSendLimit === null) groups[key].inviteSendLimit = nInvite;
+
+          const nView = normalizeLimit(plan.viewProfileLimit);
+          if (prefer || groups[key].viewProfileLimit === null) groups[key].viewProfileLimit = nView;
+
+          const nContact = normalizeLimit(plan.contactUnlockLimit);
+          if (prefer || groups[key].contactUnlockLimit === null) groups[key].contactUnlockLimit = nContact;
+
+          const nSaveProfile = normalizeLimit(plan.saveProfileLimit);
+          if (prefer || groups[key].saveProfileLimit === null) groups[key].saveProfileLimit = nSaveProfile;
+
+          // job post limits are objects
+          if (prefer || groups[key].agencyJobPostLimits === null) groups[key].agencyJobPostLimits = plan.agencyJobPostLimits || null;
+          if (prefer || groups[key].employerJobPostLimits === null) groups[key].employerJobPostLimits = plan.employerJobPostLimits || null;
+
+          const nJobView = normalizeLimit(plan.jobViewPerMonth);
+          if (prefer || groups[key].jobViewPerMonth === null) groups[key].jobViewPerMonth = nJobView;
+
+          // Prefer monthly or lifetime for family-level tagline/description.
+          if (billingCycle === BillingCycle.MONTHLY || billingCycle === BillingCycle.LIFETIME) {
+            groups[key].tagline = groups[key].tagline || plan.tagline || null;
+            groups[key].description = groups[key].description || plan.description || null;
+          }
+
+          // fallback to any available tagline/description
+          groups[key].tagline = groups[key].tagline || plan.tagline || null;
+          groups[key].description = groups[key].description || plan.description || null;
+
+          // aggregate flags and find minimal priority
+          groups[key].isRecommended = groups[key].isRecommended || !!plan.isRecommended;
+          groups[key].isPopular = groups[key].isPopular || !!plan.isPopular;
+          groups[key].priority = Math.min(groups[key].priority, plan.priority || 0);
+        });
+
+      // Build final grouped array in preferred order (only includes present types)
+      const groupedArr = preferredOrder
+        .filter((t) => !!groups[t])
+        .map((t) => {
+          const g = groups[t];
+          // sort billing options by billing cycle order
+          g.billingOptions.sort((a: any, b: any) => (billingOrder[a.billingCycle] || 999) - (billingOrder[b.billingCycle] || 999));
+          // remove priority from top-level if it was Number.MAX_SAFE_INTEGER (no plans)
+          if (g.priority === Number.MAX_SAFE_INTEGER) g.priority = 0;
+          return g;
+        });
+
+
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, { result: groupedArr }, "Plans grouped by user type"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // Get recommended plans
   static async getRecommendedPlans(
     req: Request,
@@ -252,6 +429,144 @@ export class SubscriptionplanController {
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Recommended plans fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async compairPlansByUserType(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { userType } = req.params;
+
+      // Fetch plans (no need to $lookup features for this comparison)
+      const rawResult: any = await subscriptionPlanService.getAll(
+        {
+          userType,
+          status: "active",
+        }
+      );
+
+      // Normalize to array of plans
+      let plans: any[] = [];
+      if (Array.isArray(rawResult)) plans = rawResult;
+      else if (rawResult && typeof rawResult === "object" && Array.isArray(rawResult.result)) plans = rawResult.result;
+
+      // Define ordering for plan types and billing cycles
+      const planTypeOrder: any = {
+        [PlanType.FREE]: 1,
+        [PlanType.BASIC]: 2,
+        [PlanType.PREMIUM]: 3,
+        [PlanType.GROWTH]: 4,
+        [PlanType.ENTERPRISE]: 5,
+        [PlanType.PROFESSIONAL]: 6,
+      };
+      const billingOrder: any = { monthly: 1, quarterly: 2, annually: 3 };
+
+      plans.sort((a: any, b: any) => {
+        const pa = planTypeOrder[a.planType] || 999;
+        const pb = planTypeOrder[b.planType] || 999;
+        if (pa !== pb) return pa - pb;
+        const ba = billingOrder[a.billingCycle] || 999;
+        const bb = billingOrder[b.billingCycle] || 999;
+        if (ba !== bb) return ba - bb;
+        return (a.priority || 0) - (b.priority || 0);
+      });
+
+      // Attributes to compare (per your request)
+      const attributesToCompare = [
+        "monthlyJobListingLimit",
+        "agencyJobPostLimits",
+        "employerJobPostLimits",
+        "totalSavesLimit",
+        "saveProfilesLimit",
+        "saveJobsLimit",
+        "saveDraftsLimit",
+        "inviteSendLimit",
+        "viewProfileLimit",
+        "contactUnlockLimit",
+        "saveProfileLimit",
+        "jobViewPerMonth",
+      ];
+
+      // Helper to normalize mixed/legacy fields (number | string | object)
+      const normalizeLimit = (val: any) => {
+        if (val === null || val === undefined) return null;
+        if (typeof val === "number") return val;
+        if (typeof val === "string") {
+          const n = Number(val);
+          return isNaN(n) ? val : n;
+        }
+        if (typeof val === "object") {
+          // Normalize sub-fields and coerce numeric strings to numbers
+          const res: any = {};
+          Object.keys(val).forEach((k) => {
+            const v = val[k];
+            if (v === null || v === undefined) res[k] = null;
+            else if (typeof v === "number") res[k] = v;
+            else if (typeof v === "string") {
+              const n = Number(v);
+              res[k] = isNaN(n) ? v : n;
+            } else res[k] = v;
+          });
+          return res;
+        }
+        return val;
+      };
+
+      const comparison = attributesToCompare.map((attr) => {
+        const values = plans.map((plan) => {
+          let value: any = null;
+
+          if ([
+            "inviteSendLimit",
+            "viewProfileLimit",
+            "contactUnlockLimit",
+            "saveProfileLimit",
+          ].includes(attr)) {
+            value = normalizeLimit((plan as any)[attr]);
+          } else if (["agencyJobPostLimits", "employerJobPostLimits"].includes(attr)) {
+            const obj = (plan as any)[attr];
+            value = obj ? {
+              customer: obj.customer ?? null,
+              agency: obj.agency ?? null,
+              candidate: obj.candidate ?? null,
+            } : null;
+          } else {
+            // Numeric or simple fields
+            const raw = (plan as any)[attr];
+            if (raw === undefined) value = null;
+            else if (typeof raw === "string") {
+              const n = Number(raw);
+              value = isNaN(n) ? raw : n;
+            } else value = raw;
+          }
+
+          return {
+            id: plan._id,
+            name: plan.displayName || plan.name,
+            planType: plan.planType,
+            billingCycle: plan.billingCycle,
+            value,
+          };
+        });
+
+        const first = JSON.stringify(values[0]?.value ?? null);
+        const allEqual = values.every((v) => JSON.stringify(v.value ?? null) === first);
+        return {
+          attribute: attr,
+          different: !allEqual,
+          values,
+        };
+      });
+
+      // Return only the comparison array
+      return res
+        .status(200)
+        .json(new ApiResponse(200, comparison, "Plans compared by user type"));
     } catch (err) {
       next(err);
     }

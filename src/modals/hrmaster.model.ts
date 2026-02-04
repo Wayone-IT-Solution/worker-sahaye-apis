@@ -16,6 +16,8 @@ export enum HRMasterType {
   EXCLUSIVE_SUPPORT_SERVICE = "exclusive_support_service",
   CANDIDATE_AVAILABILITY_FILTER = "candidateAvailabilityFilter",
   WORK_MODE = "workMode",
+  PERSONAL_ASSITANT_CITY = "PA_CITY",
+  PERSONAL_ASSITANT_STATE = "PA_STATE",
 }
 
 export enum HRMasterStatus {

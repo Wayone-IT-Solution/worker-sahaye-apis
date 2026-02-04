@@ -7,6 +7,164 @@ import { uploadToS3 } from "../../config/s3Uploader";
 
 const subscriptionPlanService = new CommonService(SubscriptionPlan);
 
+// Helper function to get all benefits for a plan
+const getPlanBenefits = (plan: any, userType: string): string[] => {
+  const benefits: string[] = [];
+  const UNLIMITED_THRESHOLD = 1000000; // Treat numbers above 1M as unlimited
+
+  // Helper to check if a number represents unlimited
+  const isUnlimited = (num: any): boolean => {
+    const n = typeof num === 'string' ? Number(num) : num;
+    return !isNaN(n) && n > UNLIMITED_THRESHOLD;
+  };
+
+  // Add feature names from features array
+  if (plan.features && Array.isArray(plan.features)) {
+    plan.features.forEach((feature: any) => {
+      if (feature.name) {
+        benefits.push(feature.name);
+      }
+    });
+  }
+
+  // Add default benefits for all users
+  benefits.push("Browse job listings");
+  benefits.push("Create and manage profile");
+  benefits.push("Apply for jobs");
+  
+  // Add plan-type specific default benefits
+  if (plan.planType === PlanType.BASIC || plan.planType === PlanType.PREMIUM || 
+      plan.planType === PlanType.GROWTH || plan.planType === PlanType.ENTERPRISE || 
+      plan.planType === PlanType.PROFESSIONAL) {
+    benefits.push("Email notifications");
+    benefits.push("Job recommendations");
+  }
+
+  // Add benefits based on limits (for contractor/employer)
+  if (userType === UserType.CONTRACTOR || userType === UserType.EMPLOYER) {
+    if (plan.viewProfileLimit) {
+      const limit = typeof plan.viewProfileLimit === 'object' ? plan.viewProfileLimit[userType] : plan.viewProfileLimit;
+      if (limit && limit > 0) {
+        if (isUnlimited(limit)) {
+          benefits.push(`Unlimited profile viewing`);
+        } else {
+          benefits.push(`View up to ${limit.toLocaleString()} profiles/month`);
+        }
+      }
+    }
+
+    if (plan.contactUnlockLimit) {
+      const limit = typeof plan.contactUnlockLimit === 'object' ? plan.contactUnlockLimit[userType] : plan.contactUnlockLimit;
+      if (limit && limit > 0) {
+        if (isUnlimited(limit)) {
+          benefits.push(`Unlimited contact unlocking`);
+        } else {
+          benefits.push(`Unlock contact details of ${limit.toLocaleString()} candidates/month`);
+        }
+      }
+    }
+
+    if (plan.saveProfileLimit) {
+      const limit = typeof plan.saveProfileLimit === 'object' ? plan.saveProfileLimit[userType] : plan.saveProfileLimit;
+      if (limit && limit > 0) {
+        if (isUnlimited(limit)) {
+          benefits.push(`Unlimited profile saving`);
+        } else {
+          benefits.push(`Save up to ${limit.toLocaleString()} profiles/month`);
+        }
+      }
+    }
+
+    if (plan.inviteSendLimit) {
+      const limit = typeof plan.inviteSendLimit === 'object' ? plan.inviteSendLimit[userType] : plan.inviteSendLimit;
+      if (limit && limit > 0) {
+        if (isUnlimited(limit)) {
+          benefits.push(`Unlimited invitations`);
+        } else {
+          benefits.push(`Send ${limit.toLocaleString()} invitations/month`);
+        }
+      }
+    }
+
+    if (plan.jobViewPerMonth && plan.jobViewPerMonth > 0) {
+      if (isUnlimited(plan.jobViewPerMonth)) {
+        benefits.push(`Unlimited job viewing`);
+      } else {
+        benefits.push(`View up to ${plan.jobViewPerMonth.toLocaleString()} jobs/month`);
+      }
+    }
+
+    if (plan.agencyJobPostLimits) {
+      if (plan.agencyJobPostLimits.agency && plan.agencyJobPostLimits.agency > 0) {
+        if (isUnlimited(plan.agencyJobPostLimits.agency)) {
+          benefits.push(`Unlimited agency job listings`);
+        } else {
+          benefits.push(`Post ${plan.agencyJobPostLimits.agency} agency job listings`);
+        }
+      }
+      if (plan.agencyJobPostLimits.customer && plan.agencyJobPostLimits.customer > 0) {
+        if (isUnlimited(plan.agencyJobPostLimits.customer)) {
+          benefits.push(`Unlimited customer job listings`);
+        } else {
+          benefits.push(`Post ${plan.agencyJobPostLimits.customer} customer job listings`);
+        }
+      }
+    }
+
+    if (plan.employerJobPostLimits) {
+      if (plan.employerJobPostLimits.agency && plan.employerJobPostLimits.agency > 0) {
+        if (isUnlimited(plan.employerJobPostLimits.agency)) {
+          benefits.push(`Unlimited agency job listings`);
+        } else {
+          benefits.push(`Post ${plan.employerJobPostLimits.agency} agency job listings`);
+        }
+      }
+      if (plan.employerJobPostLimits.candidate && plan.employerJobPostLimits.candidate > 0) {
+        if (isUnlimited(plan.employerJobPostLimits.candidate)) {
+          benefits.push(`Unlimited candidate job listings`);
+        } else {
+          benefits.push(`Post ${plan.employerJobPostLimits.candidate} candidate job listings`);
+        }
+      }
+    }
+  } else if (userType === UserType.WORKER) {
+    // For workers
+    if (plan.viewProfileLimit) {
+      const limit = typeof plan.viewProfileLimit === 'object' ? plan.viewProfileLimit[userType] : plan.viewProfileLimit;
+      if (limit && limit > 0) {
+        if (isUnlimited(limit)) {
+          benefits.push(`Unlimited profile viewing`);
+        } else {
+          benefits.push(`View up to ${limit.toLocaleString()} profiles/month`);
+        }
+      }
+    }
+
+    if (plan.saveProfileLimit) {
+      const limit = typeof plan.saveProfileLimit === 'object' ? plan.saveProfileLimit[userType] : plan.saveProfileLimit;
+      if (limit && limit > 0) {
+        if (isUnlimited(limit)) {
+          benefits.push(`Unlimited job saving`);
+        } else {
+          benefits.push(`Save up to ${limit.toLocaleString()} jobs/month`);
+        }
+      }
+    }
+  }
+
+  return [...new Set(benefits)]; // Remove duplicates
+};
+
+// Helper function to generate whatYouGet and whatYouMiss based on plan features
+const generatePlanBenefits = (plan: any, userType: string): { whatYouGet: string[]; whatYouMiss: string[] } => {
+  const whatYouGet = getPlanBenefits(plan, userType);
+  
+  return {
+    whatYouGet,
+    whatYouMiss: plan.whatYouMiss || [],
+  };
+};
+
 // Validation function for subscription plan data
 const validateSubscriptionPlanData = (data: any) => {
   const errors: string[] = [];
@@ -121,19 +279,39 @@ export class SubscriptionplanController {
         [PlanType.PROFESSIONAL]: 6,
       };
 
+      // Helper function to process plans and add benefits
+      const processPlans = (plans: any[]) => {
+        return plans.map((plan: any) => {
+          const { whatYouGet, whatYouMiss } = generatePlanBenefits(plan, plan.userType);
+          return {
+            ...plan.toObject ? plan.toObject() : plan,
+            whatYouGet,
+            whatYouMiss,
+          };
+        });
+      };
+
       // Handle both array and object responses
       if (Array.isArray(result)) {
-        result.sort((a: any, b: any) => {
+        const processedPlans = processPlans(result);
+        processedPlans.sort((a: any, b: any) => {
           const orderA = planTypeOrder[a.planType as PlanType] || 999;
           const orderB = planTypeOrder[b.planType as PlanType] || 999;
           return orderA - orderB;
         });
+        return res
+          .status(200)
+          .json(new ApiResponse(200, processedPlans, "Subscription plans fetched successfully"));
       } else if (result && typeof result === 'object' && 'result' in result && Array.isArray(result.result)) {
-        result.result.sort((a: any, b: any) => {
+        const processedPlans = processPlans(result.result);
+        processedPlans.sort((a: any, b: any) => {
           const orderA = planTypeOrder[a.planType as PlanType] || 999;
           const orderB = planTypeOrder[b.planType as PlanType] || 999;
           return orderA - orderB;
         });
+        return res
+          .status(200)
+          .json(new ApiResponse(200, { ...result, result: processedPlans }, "Subscription plans fetched successfully"));
       }
 
       return res
@@ -393,6 +571,8 @@ export class SubscriptionplanController {
               agencyJobPostLimits: null,
               employerJobPostLimits: null,
               jobViewPerMonth: null,
+              whatYouGet: [],
+              whatYouMiss: [],
               billingOptions: [],
             };
           }
@@ -476,17 +656,45 @@ export class SubscriptionplanController {
           groups[key].isRecommended = groups[key].isRecommended || !!plan.isRecommended;
           groups[key].isPopular = groups[key].isPopular || !!plan.isPopular;
           groups[key].priority = Math.min(groups[key].priority, plan.priority || 0);
+
+          // Generate benefits based on plan limits and features
+          const { whatYouGet, whatYouMiss } = generatePlanBenefits(plan, userType);
+          
+          // Aggregate whatYouGet and whatYouMiss (combine arrays, remove duplicates)
+          groups[key].whatYouGet = [...new Set([...groups[key].whatYouGet, ...whatYouGet])];
+          if (whatYouMiss && Array.isArray(whatYouMiss)) {
+            groups[key].whatYouMiss = [...new Set([...groups[key].whatYouMiss, ...whatYouMiss])];
+          }
         });
 
       // Build final grouped array in preferred order (only includes present types)
       const groupedArr = preferredOrder
         .filter((t) => !!groups[t])
-        .map((t) => {
+        .map((t, index, arr) => {
           const g = groups[t];
           // sort billing options by billing cycle order
           g.billingOptions.sort((a: any, b: any) => (billingOrder[a.billingCycle] || 999) - (billingOrder[b.billingCycle] || 999));
           // remove priority from top-level if it was Number.MAX_SAFE_INTEGER (no plans)
           if (g.priority === Number.MAX_SAFE_INTEGER) g.priority = 0;
+          
+          // Calculate whatYouMiss by comparing with higher tier plans
+          const allBenefitsAbove = new Set<string>();
+          
+          // Collect all benefits from higher tier plans
+          for (let i = index + 1; i < arr.length; i++) {
+            const higherPlanType = arr[i];
+            const higherPlanGroup = groups[higherPlanType];
+            if (higherPlanGroup && higherPlanGroup.whatYouGet) {
+              higherPlanGroup.whatYouGet.forEach((benefit: string) => {
+                allBenefitsAbove.add(benefit);
+              });
+            }
+          }
+          
+          // whatYouMiss = benefits in higher plans that this plan doesn't have
+          const currentBenefits = new Set(g.whatYouGet);
+          g.whatYouMiss = Array.from(allBenefitsAbove).filter(benefit => !currentBenefits.has(benefit));
+          
           return g;
         });
 

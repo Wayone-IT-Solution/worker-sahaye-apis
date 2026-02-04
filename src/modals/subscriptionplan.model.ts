@@ -81,6 +81,8 @@ export interface ISubscriptionPlan extends Document {
   description: string;
   isRecommended: boolean;
   billingCycle: BillingCycle;
+  whatYouGet?: string[]; // Array of features/benefits user gets in this plan
+  whatYouMiss?: string[]; // Array of features/benefits user is missing compared to higher plans
   monthlyJobListingLimit?: number | null;
   // Job Post Limits
   agencyJobPostLimits?: {
@@ -278,6 +280,16 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       default: null,
       // Image URL/path specific to plan type (not duration)
       // e.g., basic.jpg, premium.jpg, etc.
+    },
+    whatYouGet: {
+      type: [String],
+      default: [],
+      // Array of features/benefits user gets in this plan
+    },
+    whatYouMiss: {
+      type: [String],
+      default: [],
+      // Array of features/benefits user is missing compared to higher plans
     },
   },
   { timestamps: true },

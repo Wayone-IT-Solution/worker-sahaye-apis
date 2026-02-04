@@ -531,15 +531,15 @@ export class UserController {
         });
       }
 
-      // CHECK IF USER EXISTS FIRST before sending OTP
+      // CHECK IF USER EXISTS FIRST before sending OTP - also check userType
       const user = await User.findOne(
-        mobile ? { mobile } : { email }
+        mobile ? { mobile, userType } : { email, userType }
       );
       
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "No user found with this mobile number or email",
+          message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
 
@@ -652,7 +652,7 @@ export class UserController {
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "No user found with this phone number",
+          message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
 

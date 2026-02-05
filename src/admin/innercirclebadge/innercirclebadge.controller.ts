@@ -183,11 +183,11 @@ export class InnerCircleBadgeController {
 
       const { duration, price } = req.body; // Optional fields
 
-      // Check if request already exists (with pending status)
+      // Check if request already exists (with pending or requested status)
       const existingRequest = await InnerCircleBadgeRequest.findOne({
         userId,
         badgeId: badge._id,
-        status: InnerCircleBadgeRequestStatus.PENDING,
+        status: { $in: [InnerCircleBadgeRequestStatus.PENDING, InnerCircleBadgeRequestStatus.REQUESTED] },
       });
 
       if (existingRequest) {
@@ -207,7 +207,7 @@ export class InnerCircleBadgeController {
           phone: userFromDb.mobile || "",
           avatar: (userFromDb as any).profilePicUrl || "",
         },
-        status: InnerCircleBadgeRequestStatus.PENDING,
+        status: InnerCircleBadgeRequestStatus.REQUESTED,
       });
 
       return res
@@ -479,24 +479,24 @@ export class InnerCircleBadgeController {
           .json(new ApiError(404, "Request not found"));
       }
 
-      if (request.status !== InnerCircleBadgeRequestStatus.PENDING) {
+      if (request.status !== InnerCircleBadgeRequestStatus.REQUESTED) {
         return res
           .status(400)
           .json(
             new ApiError(
               400,
-              "Only pending requests can be cancelled"
+              "Only requested requests can be cancelled"
             )
           );
       }
 
-      request.status = InnerCircleBadgeRequestStatus.CANCELLED;
-      await request.save();
+      // Delete the request instead of marking as cancelled
+      await InnerCircleBadgeRequest.findByIdAndDelete(id);
 
       return res
         .status(200)
         .json(
-          new ApiResponse(200, request, "Request cancelled successfully")
+          new ApiResponse(200, null, "Request cancelled successfully")
         );
     } catch (err) {
       next(err);

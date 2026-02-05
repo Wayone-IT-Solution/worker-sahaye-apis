@@ -2,9 +2,9 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export enum InnerCircleBadgeRequestStatus {
   PENDING = "pending",
+  REQUESTED = "requested",
   APPROVED = "approved",
   REJECTED = "rejected",
-  CANCELLED = "cancelled",
 }
 
 export interface IInnerCircleBadgeRequest extends Document {

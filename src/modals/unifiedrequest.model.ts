@@ -81,13 +81,13 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     field: {
       type: String,
-      required: true,
+      required: false,
       maxlength: 100,
     },
     preferredCommunicationMode: {
       type: String,
       default: "Email",
-      required: true,
+      required: false,
     },
     preferredDateTime: {
       type: Date,
@@ -99,7 +99,7 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     numberOfEmployees: {
       type: Number,
-      required: true,
+      required: false,
       min: 1,
     },
     additionalNotes: {

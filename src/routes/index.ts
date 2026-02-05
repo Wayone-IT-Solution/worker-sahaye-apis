@@ -46,6 +46,7 @@ import supportServiceRoutes from "../admin/supportservice/supportservice.routes"
 import serviceLocationRoutes from "../admin/servicelocation/servicelocation.routes";
 import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
 import minimumWagesRoutes from "../admin/minimumwages/minimumwages.routes";
+import innerCircleBadgeRoutes from "../admin/innercirclebadge/innercirclebadge.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -125,6 +126,7 @@ router.use("/servetel", servetelRoutes);
 router.use("/industry", industryRoutes);
 router.use("/hrmaster", hrMasterRoutes);
 router.use("/minimumwages", minimumWagesRoutes);
+router.use("/innercirclebadge", innerCircleBadgeRoutes);
 router.use("/community", communityRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/virtualhr", virtualHRRoutes);

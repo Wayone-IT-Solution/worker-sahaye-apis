@@ -9,6 +9,12 @@ router.post("/", BadgeBundleController.create);
 // Get all badge bundles (supports query filters & pagination)
 router.get("/", BadgeBundleController.getAll);
 
+// Bulk update order of bundles
+router.put("/order", BadgeBundleController.updateOrder);
+
+// Get bundles ordered by `order` (optionally limit via ?limit)
+router.get("/ordered", BadgeBundleController.getOrdered);
+
 // Get a single badge bundle by ID
 router.get("/:id", BadgeBundleController.getById);
 

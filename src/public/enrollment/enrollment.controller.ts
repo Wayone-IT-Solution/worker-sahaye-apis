@@ -89,12 +89,15 @@ const buildEnrollmentAmounts = async (
   const isFree = courseDetails.isFree;
   const benefits = await getCourseAccessBenefits(userId);
 
-  if (courseDetails.certificate && !benefits.canGetSkillCertification) {
-    throw new ApiError(
-      403,
-      "You are not eligible for skill certification with your current plan. Upgrade to BASIC or PREMIUM."
-    );
-  }
+  // if (courseDetails.certificate && !benefits.canGetSkillCertification) {
+  //   throw new ApiError(
+  //     403,
+  //     "You are not eligible for skill certification with your current plan. Upgrade to BASIC or PREMIUM."
+  //   );
+  // }
+
+  // Removed restriction: allow enrollment for certificate courses regardless of subscription plan.
+  // Certification issuance will be governed separately based on the user's plan at the time of certification.
 
   const baseAmount = Math.round(courseDetails.amount * numberOfPeople);
   let discountAmount = 0;

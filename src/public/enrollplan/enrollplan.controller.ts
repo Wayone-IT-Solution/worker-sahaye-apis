@@ -23,8 +23,9 @@ const buildPlanAmounts = async (
   planDetails: any,
   pointsToRedeem?: number
 ) => {
-  const isFree = planDetails.planType === PlanType.FREE;
-  const baseAmount = Math.round(planDetails.basePrice);
+  // If plan details are not available (plan is optional now), treat it as free with 0 price
+  const isFree = planDetails ? planDetails.planType === PlanType.FREE : true;
+  const baseAmount = Math.round(planDetails?.basePrice ?? 0);
   let finalAmount = baseAmount;
   let pointsRedeemed = 0;
   let pointsValue = 0;
@@ -75,21 +76,23 @@ export class EnrollPlanController {
           case PlanEnrollmentStatus.REFUNDED:
           case PlanEnrollmentStatus.CANCELLED: {
             const planDetails = await SubscriptionPlan.findById(plan);
-            if (!planDetails)
-              return res
-                .status(404)
-                .json(new ApiError(404, "Plan not found or unavailable"));
+            // Plan is optional now. Do not return 404 if plan is not found.
+            // Any user type can purchase, so skip the userType availability check.
+            // if (!planDetails)
+            //   return res
+            //     .status(404)
+            //     .json(new ApiError(404, "Plan not found or unavailable"));
 
-            if (planDetails?.userType !== role) {
-              return res
-                .status(403)
-                .json(
-                  new ApiError(
-                    403,
-                    `This plan is not available for ${role} users.`
-                  )
-                );
-            }
+            // if (planDetails?.userType !== role) {
+            //   return res
+            //     .status(403)
+            //     .json(
+            //       new ApiError(
+            //         403,
+            //         `This plan is not available for ${role} users.`
+            //       )
+            //     );
+            // }
 
             await refundPlanPointsIfNeeded(exists);
 
@@ -111,7 +114,7 @@ export class EnrollPlanController {
               ? PlanEnrollmentStatus.ACTIVE
               : PlanEnrollmentStatus.PENDING;
 
-            if (planDetails.billingCycle) {
+            if (planDetails?.billingCycle) {
               exists.expiredAt = calculateExpiryDate(
                 exists.enrolledAt,
                 planDetails.billingCycle
@@ -168,18 +171,20 @@ export class EnrollPlanController {
       }
 
       const planDetails = await SubscriptionPlan.findById(plan);
-      if (!planDetails)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Plan not found or unavailable"));
+      // Plan is optional now. Do not return 404 if plan is not found.
+      // Any user type can purchase, so skip the userType availability check.
+      // if (!planDetails)
+      //   return res
+      //     .status(404)
+      //     .json(new ApiError(404, "Plan not found or unavailable"));
 
-      if (planDetails?.userType !== role) {
-        return res
-          .status(403)
-          .json(
-            new ApiError(403, `This plan is not available for ${role} users.`)
-          );
-      }
+      // if (planDetails?.userType !== role) {
+      //   return res
+      //     .status(403)
+      //     .json(
+      //       new ApiError(403, `This plan is not available for ${role} users.`)
+      //     );
+      // }
 
       const {
         isFree,
@@ -212,7 +217,7 @@ export class EnrollPlanController {
         };
       }
       const result = await enrollPlanService.create(data);
-      if (result && planDetails.billingCycle) {
+      if (result && planDetails?.billingCycle) {
         const expiredAt = calculateExpiryDate(
           result.enrolledAt,
           planDetails.billingCycle

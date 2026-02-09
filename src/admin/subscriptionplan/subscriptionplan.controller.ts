@@ -31,11 +31,11 @@ const getPlanBenefits = (plan: any, userType: string): string[] => {
   benefits.push("Browse job listings");
   benefits.push("Create and manage profile");
   benefits.push("Apply for jobs");
-  
+
   // Add plan-type specific default benefits
-  if (plan.planType === PlanType.BASIC || plan.planType === PlanType.PREMIUM || 
-      plan.planType === PlanType.GROWTH || plan.planType === PlanType.ENTERPRISE || 
-      plan.planType === PlanType.PROFESSIONAL) {
+  if (plan.planType === PlanType.BASIC || plan.planType === PlanType.PREMIUM ||
+    plan.planType === PlanType.GROWTH || plan.planType === PlanType.ENTERPRISE ||
+    plan.planType === PlanType.PROFESSIONAL) {
     benefits.push("Email notifications");
     benefits.push("Job recommendations");
   }
@@ -156,9 +156,10 @@ const getPlanBenefits = (plan: any, userType: string): string[] => {
 };
 
 // Helper function to generate whatYouGet and whatYouMiss based on plan features
+// NOTE: Controllers do NOT use this. Users must provide whatYouGet/whatYouMiss directly in requests.
 const generatePlanBenefits = (plan: any, userType: string): { whatYouGet: string[]; whatYouMiss: string[] } => {
   const whatYouGet = getPlanBenefits(plan, userType);
-  
+
   return {
     whatYouGet,
     whatYouMiss: plan.whatYouMiss || [],
@@ -196,7 +197,9 @@ export class SubscriptionplanController {
         'viewProfileLimit',
         'contactUnlockLimit',
         'saveProfileLimit',
-        'features'
+        'features',
+        'whatYouGet',
+        'whatYouMiss'
       ];
 
       // Parse stringified JSON fields
@@ -279,39 +282,25 @@ export class SubscriptionplanController {
         [PlanType.PROFESSIONAL]: 6,
       };
 
-      // Helper function to process plans and add benefits
-      const processPlans = (plans: any[]) => {
-        return plans.map((plan: any) => {
-          const { whatYouGet, whatYouMiss } = generatePlanBenefits(plan, plan.userType);
-          return {
-            ...plan.toObject ? plan.toObject() : plan,
-            whatYouGet,
-            whatYouMiss,
-          };
-        });
-      };
-
       // Handle both array and object responses
       if (Array.isArray(result)) {
-        const processedPlans = processPlans(result);
-        processedPlans.sort((a: any, b: any) => {
+        result.sort((a: any, b: any) => {
           const orderA = planTypeOrder[a.planType as PlanType] || 999;
           const orderB = planTypeOrder[b.planType as PlanType] || 999;
           return orderA - orderB;
         });
         return res
           .status(200)
-          .json(new ApiResponse(200, processedPlans, "Subscription plans fetched successfully"));
+          .json(new ApiResponse(200, result, "Subscription plans fetched successfully"));
       } else if (result && typeof result === 'object' && 'result' in result && Array.isArray(result.result)) {
-        const processedPlans = processPlans(result.result);
-        processedPlans.sort((a: any, b: any) => {
+        result.result.sort((a: any, b: any) => {
           const orderA = planTypeOrder[a.planType as PlanType] || 999;
           const orderB = planTypeOrder[b.planType as PlanType] || 999;
           return orderA - orderB;
         });
         return res
           .status(200)
-          .json(new ApiResponse(200, { ...result, result: processedPlans }, "Subscription plans fetched successfully"));
+          .json(new ApiResponse(200, { ...result, result: result.result }, "Subscription plans fetched successfully"));
       }
 
       return res
@@ -356,7 +345,9 @@ export class SubscriptionplanController {
         'viewProfileLimit',
         'contactUnlockLimit',
         'saveProfileLimit',
-        'features'
+        'features',
+        'whatYouGet',
+        'whatYouMiss'
       ];
 
       // Parse stringified JSON fields
@@ -640,61 +631,46 @@ export class SubscriptionplanController {
           const nJobView = normalizeLimit(plan.jobViewPerMonth);
           if (prefer || groups[key].jobViewPerMonth === null) groups[key].jobViewPerMonth = nJobView;
 
-          // Prefer monthly or lifetime for family-level tagline/description.
+          // Prefer monthly or lifetime for family-level tagline/description/whatYouGet/whatYouMiss.
           if (billingCycle === BillingCycle.MONTHLY || billingCycle === BillingCycle.LIFETIME) {
             groups[key].tagline = groups[key].tagline || plan.tagline || null;
             groups[key].description = groups[key].description || plan.description || null;
             groups[key].planImage = groups[key].planImage || plan.planImage || null;
+            if (plan.whatYouGet && Array.isArray(plan.whatYouGet)) {
+              groups[key].whatYouGet = groups[key].whatYouGet.length === 0 ? plan.whatYouGet : groups[key].whatYouGet;
+            }
+            if (plan.whatYouMiss && Array.isArray(plan.whatYouMiss)) {
+              groups[key].whatYouMiss = groups[key].whatYouMiss.length === 0 ? plan.whatYouMiss : groups[key].whatYouMiss;
+            }
           }
 
-          // fallback to any available tagline/description/image
+          // fallback to any available tagline/description/image/whatYouGet/whatYouMiss
           groups[key].tagline = groups[key].tagline || plan.tagline || null;
           groups[key].description = groups[key].description || plan.description || null;
           groups[key].planImage = groups[key].planImage || plan.planImage || null;
+          if (groups[key].whatYouGet.length === 0 && plan.whatYouGet && Array.isArray(plan.whatYouGet)) {
+            groups[key].whatYouGet = plan.whatYouGet;
+          }
+          if (groups[key].whatYouMiss.length === 0 && plan.whatYouMiss && Array.isArray(plan.whatYouMiss)) {
+            groups[key].whatYouMiss = plan.whatYouMiss;
+          }
 
           // aggregate flags and find minimal priority
           groups[key].isRecommended = groups[key].isRecommended || !!plan.isRecommended;
           groups[key].isPopular = groups[key].isPopular || !!plan.isPopular;
           groups[key].priority = Math.min(groups[key].priority, plan.priority || 0);
-
-          // Generate benefits based on plan limits and features
-          const { whatYouGet, whatYouMiss } = generatePlanBenefits(plan, userType);
-          
-          // Aggregate whatYouGet and whatYouMiss (combine arrays, remove duplicates)
-          groups[key].whatYouGet = [...new Set([...groups[key].whatYouGet, ...whatYouGet])];
-          if (whatYouMiss && Array.isArray(whatYouMiss)) {
-            groups[key].whatYouMiss = [...new Set([...groups[key].whatYouMiss, ...whatYouMiss])];
-          }
         });
 
       // Build final grouped array in preferred order (only includes present types)
       const groupedArr = preferredOrder
         .filter((t) => !!groups[t])
-        .map((t, index, arr) => {
+        .map((t) => {
           const g = groups[t];
           // sort billing options by billing cycle order
           g.billingOptions.sort((a: any, b: any) => (billingOrder[a.billingCycle] || 999) - (billingOrder[b.billingCycle] || 999));
           // remove priority from top-level if it was Number.MAX_SAFE_INTEGER (no plans)
           if (g.priority === Number.MAX_SAFE_INTEGER) g.priority = 0;
-          
-          // Calculate whatYouMiss by comparing with higher tier plans
-          const allBenefitsAbove = new Set<string>();
-          
-          // Collect all benefits from higher tier plans
-          for (let i = index + 1; i < arr.length; i++) {
-            const higherPlanType = arr[i];
-            const higherPlanGroup = groups[higherPlanType];
-            if (higherPlanGroup && higherPlanGroup.whatYouGet) {
-              higherPlanGroup.whatYouGet.forEach((benefit: string) => {
-                allBenefitsAbove.add(benefit);
-              });
-            }
-          }
-          
-          // whatYouMiss = benefits in higher plans that this plan doesn't have
-          const currentBenefits = new Set(g.whatYouGet);
-          g.whatYouMiss = Array.from(allBenefitsAbove).filter(benefit => !currentBenefits.has(benefit));
-          
+
           return g;
         });
 

@@ -547,7 +547,8 @@ export class SubscriptionplanController {
 
             groups[key] = {
               planType: plan.planType,
-              displayName: familyDisplay[plan.planType] || (plan.planType.charAt(0).toUpperCase() + plan.planType.slice(1)),
+              displayName:plan.displayName,
+              // displayName: familyDisplay[plan.planType] || (plan.planType.charAt(0).toUpperCase() + plan.planType.slice(1)),
               tagline: null,
               description: null,
               planImage: null,

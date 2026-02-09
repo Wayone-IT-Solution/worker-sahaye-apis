@@ -178,6 +178,13 @@ const validateSubscriptionPlanData = (data: any) => {
   if (!data.userType || !Object.values(UserType).includes(data.userType)) errors.push("Valid user type is required");
   if (!data.billingCycle || !Object.values(BillingCycle).includes(data.billingCycle)) errors.push("Valid billing cycle is required");
 
+  // Optional: paymentTagline (string, max length 200)
+  if (data.paymentTagline !== undefined && data.paymentTagline !== null) {
+    if (typeof data.paymentTagline !== 'string' || data.paymentTagline.length > 200) {
+      errors.push("paymentTagline must be a string up to 200 characters");
+    }
+  }
+
   return errors;
 };
 
@@ -199,7 +206,8 @@ export class SubscriptionplanController {
         'saveProfileLimit',
         'features',
         'whatYouGet',
-        'whatYouMiss'
+        'whatYouMiss',
+        'paymentTagline'
       ];
 
       // Parse stringified JSON fields
@@ -347,7 +355,8 @@ export class SubscriptionplanController {
         'saveProfileLimit',
         'features',
         'whatYouGet',
-        'whatYouMiss'
+        'whatYouMiss',
+        'paymentTagline'
       ];
 
       // Parse stringified JSON fields
@@ -550,6 +559,7 @@ export class SubscriptionplanController {
               displayName:plan.displayName,
               // displayName: familyDisplay[plan.planType] || (plan.planType.charAt(0).toUpperCase() + plan.planType.slice(1)),
               tagline: null,
+                paymentTagline: null,
               description: null,
               planImage: null,
               isRecommended: false,
@@ -584,6 +594,7 @@ export class SubscriptionplanController {
             status: plan.status,
             priority: plan.priority || 0,
             planImage: plan.planImage || null,
+            paymentTagline: plan.paymentTagline || null,
           });
 
           // Helper to normalize number/string/object limits
@@ -635,6 +646,7 @@ export class SubscriptionplanController {
           // Prefer monthly or lifetime for family-level tagline/description/whatYouGet/whatYouMiss.
           if (billingCycle === BillingCycle.MONTHLY || billingCycle === BillingCycle.LIFETIME) {
             groups[key].tagline = groups[key].tagline || plan.tagline || null;
+            groups[key].paymentTagline = groups[key].paymentTagline || plan.paymentTagline || null;
             groups[key].description = groups[key].description || plan.description || null;
             groups[key].planImage = groups[key].planImage || plan.planImage || null;
             if (plan.whatYouGet && Array.isArray(plan.whatYouGet)) {
@@ -647,6 +659,7 @@ export class SubscriptionplanController {
 
           // fallback to any available tagline/description/image/whatYouGet/whatYouMiss
           groups[key].tagline = groups[key].tagline || plan.tagline || null;
+          groups[key].paymentTagline = groups[key].paymentTagline || plan.paymentTagline || null;
           groups[key].description = groups[key].description || plan.description || null;
           groups[key].planImage = groups[key].planImage || plan.planImage || null;
           if (groups[key].whatYouGet.length === 0 && plan.whatYouGet && Array.isArray(plan.whatYouGet)) {

@@ -75,6 +75,7 @@ export interface ISubscriptionPlan extends Document {
   currency: Currency;
   planType: PlanType;
   userType: UserType;
+  paymentTagline:string;
   status: PlanStatus;
   isPopular: boolean;
   displayName: string;
@@ -156,6 +157,10 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       maxlength: 2000,
     },
     tagline: {
+      type: String,
+      maxlength: 200,
+    },
+    paymentTagline: {
       type: String,
       maxlength: 200,
     },

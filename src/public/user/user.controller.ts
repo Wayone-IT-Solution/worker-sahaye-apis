@@ -6,6 +6,8 @@ import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
 import { sendEmail } from "../../utils/emailService";
+import { sendMsg91Otp } from "../../utils/msg91";
+
 import crypto from "crypto";
 import {
   User,
@@ -298,13 +300,13 @@ export class UserController {
 
       const result = await userService.updateById(id, data);
       result.profileCompletion = calculateProfileCompletion(result);
-      
+
       // Update fast responder score if it's a worker
       if (result.userType === UserType.WORKER) {
         const { updateFastResponderScore } = await import("../../services/fastResponder.service");
         await updateFastResponderScore(result._id);
       }
-      
+
       await result.save();
 
       const { userType } = result;
@@ -474,20 +476,20 @@ export class UserController {
         // Add filter stage based on engagementType query parameter
         ...(engagementType
           ? [
-              {
-                $match:
-                  engagementType === "invite"
-                    ? { inviteEngagement: { $ne: [] } }
-                    : engagementType === "viewprofile"
-                      ? { viewProfileEngagement: { $ne: [] } }
-                      : engagementType === "contactunlock"
-                        ? { contactUnlockEngagement: { $ne: [] } }
-                        : engagementType === "saveprofile" ||
-                            engagementType === "saved"
-                          ? { saveProfileEngagement: { $ne: [] } }
-                          : {},
-              },
-            ]
+            {
+              $match:
+                engagementType === "invite"
+                  ? { inviteEngagement: { $ne: [] } }
+                  : engagementType === "viewprofile"
+                    ? { viewProfileEngagement: { $ne: [] } }
+                    : engagementType === "contactunlock"
+                      ? { contactUnlockEngagement: { $ne: [] } }
+                      : engagementType === "saveprofile" ||
+                        engagementType === "saved"
+                        ? { saveProfileEngagement: { $ne: [] } }
+                        : {},
+            },
+          ]
           : []),
         // Sort: Early Access Badge first, then Premium users, then by profile completion
         {
@@ -530,29 +532,24 @@ export class UserController {
           message: "Mobile number or email is required",
         });
       }
-
-      // CHECK IF USER EXISTS FIRST before sending OTP - also check userType
       const user = await User.findOne(
         mobile ? { mobile, userType } : { email, userType }
       );
-      
       if (!user) {
         return res.status(404).json({
           success: false,
           message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
-
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
 
       // Save or update OTP in DB
-      await Otp.findOneAndUpdate(
+      const savedOtp = await Otp.findOneAndUpdate(
         mobile ? { mobile } : { email },
         { otp: otpCode, expiresAt, verified: false, mobile, email },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-
       if (email) {
         // Send OTP via email
         await sendEmail({
@@ -561,77 +558,26 @@ export class UserController {
           subject: "Your OTP Code",
           text: `Your OTP is ${otpCode}`,
         });
-        console.log(`OTP sent to email: ${email}`);
       } else if (mobile) {
-        // Send OTP via SMS (integrate your SMS provider)
-        console.log(`OTP sent to mobile: ${mobile} -> ${otpCode}`);
-        // Example: await smsService.sendOtp(mobile, otpCode);
+
+        const msg91Response: any = await sendMsg91Otp(mobile, otpCode);
+
+        if (msg91Response?.type === "error" || msg91Response?.message?.includes("error")) {
+          return res.status(500).json({
+            success: false,
+            message: `Failed to send OTP: ${msg91Response?.message}`,
+          });
+        }
       }
 
       return res.status(200).json({
         success: true,
         message: "OTP has been sent successfully",
-        otp: otpCode, // Remove this in production for security
       });
     } catch (error) {
       next(error);
     }
   }
-
-
-  // static async generateOtp(
-  //   req: Request,
-  //   res: Response,
-  //   next: NextFunction
-  // ): Promise<any> {
-  //   try {
-  //     const { mobile, userType } = req.body;
-
-  //     if (!mobile) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "Phone number is required",
-  //       });
-  //     }
-
-  //     const user = await User.findOne({ mobile, userType });
-  //     if (!user) {
-  //       return res.status(404).json({
-  //         success: false,
-  //         message: "No user found with this phone number",
-  //       });
-  //     }
-
-  //     const otpCode =
-  //       mobile.toString() === "6397228522"
-  //         ? "123456"
-  //         : Math.floor(100000 + Math.random() * 900000).toString();
-  //     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
-
-  //     // Save or update OTP
-  //     await Otp.findOneAndUpdate(
-  //       { mobile },
-  //       {
-  //         expiresAt,
-  //         mobile,
-  //         otp: otpCode,
-  //         verified: false,
-  //       },
-  //       { upsert: true, new: true, setDefaultsOnInsert: true }
-  //     );
-
-  //     // TODO: Integrate real SMS service like Twilio or Fast2SMS
-  //     console.log(`OTP sent to ${mobile}: ${otpCode}`);
-
-  //     return res.status(200).json({
-  //       otp: otpCode,
-  //       success: true,
-  //       message: "OTP has been sent successfully",
-  //     });
-  //   } catch (error) {
-  //     next(error);
-  //   }
-  // }
 
   static async generateAdminOtp(
     req: Request,
@@ -678,13 +624,11 @@ export class UserController {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      // TODO: Integrate real SMS service like Twilio or Fast2SMS
-      console.log(`OTP sent to ${mobile}: ${otpCode}`);
+      await sendMsg91Otp(mobile, otpCode);
 
       return res.status(200).json({
-        otp: otpCode,
         success: true,
-        message: `OTP has been sent successfully! OTP: ${otpCode}`,
+        message: `OTP has been sent successfully`,
       });
     } catch (error) {
       next(error);
@@ -1142,17 +1086,17 @@ export class UserController {
           subscriptionInfo.isBasicPlan = subscriptionPlanType === PlanType.BASIC;
           subscriptionInfo.isGrowthPlan = subscriptionPlanType === PlanType.GROWTH;
           subscriptionInfo.isEnterprisePlan = subscriptionPlanType === PlanType.ENTERPRISE;
-          
+
           // Convenience flags for checking tier thresholds
-          subscriptionInfo.hasBasicOrAbove = 
-            subscriptionPlanType === PlanType.BASIC || 
-            subscriptionPlanType === PlanType.GROWTH || 
+          subscriptionInfo.hasBasicOrAbove =
+            subscriptionPlanType === PlanType.BASIC ||
+            subscriptionPlanType === PlanType.GROWTH ||
             subscriptionPlanType === PlanType.ENTERPRISE;
-          
-          subscriptionInfo.hasGrowthOrAbove = 
-            subscriptionPlanType === PlanType.GROWTH || 
+
+          subscriptionInfo.hasGrowthOrAbove =
+            subscriptionPlanType === PlanType.GROWTH ||
             subscriptionPlanType === PlanType.ENTERPRISE;
-          
+
           subscriptionInfo.hasEnterprise = subscriptionPlanType === PlanType.ENTERPRISE;
         }
       } else {
@@ -1325,7 +1269,7 @@ export class UserController {
       // Only allow for EMPLOYER, CONTRACTOR, or AGENT
       if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(user.userType as UserType)) {
         return res.status(400).json(
-          new ApiError(400, `Early Access Badge is only for Employers and Contractors. User type is: ${user.userType}`)
+          new ApiError(400, `Early Access Badge is only for Employers and Contractors.User type is: ${user.userType} `)
         );
       }
 
@@ -1336,7 +1280,7 @@ export class UserController {
         new ApiResponse(
           200,
           user,
-          `Early Access Badge granted to ${user.fullName}`
+          `Early Access Badge granted to ${user.fullName} `
         )
       );
     } catch (error) {
@@ -1373,7 +1317,7 @@ export class UserController {
         new ApiResponse(
           200,
           user,
-          `Early Access Badge revoked from ${user.fullName}`
+          `Early Access Badge revoked from ${user.fullName} `
         )
       );
     } catch (error) {

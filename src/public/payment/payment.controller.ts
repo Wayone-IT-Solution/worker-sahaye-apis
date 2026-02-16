@@ -68,21 +68,32 @@ export class PaymentController {
         });
       }
 
-      const order = await razorpay.orders.create({
-        amount: bundle.fee * 100,
-        currency: "INR",
-        receipt: `b_${bundleId.slice(-6)}_u_${userId.slice(-6)}`,
-        // receipt: `bundle_${bundleId}_user_${userId}`,
-      });
+      let order;
+      try {
+        order = await razorpay.orders.create({
+          amount: Number(bundle.fee) * 100,
+          currency: "INR",
+          receipt: `b_${bundleId.slice(-6)}_u_${userId.slice(-6)}`,
+        });
+      } catch (rpErr: any) {
+        console.error("Razorpay create order error:", rpErr);
+        return res.status(502).json({
+          success: false,
+          message: "Payment gateway error while creating order",
+        });
+      }
 
       return res.json({
         success: true,
         order,
         key: process.env.RAZORPAY_KEY_ID,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("createOrder error:", error);
-      throw error;
+      return res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
     }
   }
 

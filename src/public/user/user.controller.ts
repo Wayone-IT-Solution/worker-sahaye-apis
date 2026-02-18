@@ -541,7 +541,13 @@ export class UserController {
           message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      // Check if mobile is one of the test numbers
+      let otpCode: string;
+      if (mobile && (mobile === "9354697528" || mobile === "9999999999")) {
+        otpCode = "123456";
+      } else {
+        otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      }
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
 
       // Save or update OTP in DB

@@ -79,15 +79,22 @@ const getCourseAccessBenefits = async (userId: string | null) => {
 export class CourseController {
   static async createCourse(req: Request, res: Response, next: NextFunction) {
     try {
+      let { isFree, tags } = req.body;
+
+      // Normalize isFree coming from form ('active'/'inactive' or boolean)
+      if (isFree === "active" || isFree === "inactive") {
+        isFree = isFree === "active";
+      }
+      // Normalize tags string -> array
+      if (typeof tags === "string") tags = tags.split(",").map((t: string) => t.trim()).filter(Boolean);
+
       const data = {
         ...req.body,
-        imageUrl: req?.body?.imageUrl[0]?.url,
+        isFree,
+        tags,
+        imageUrl: req?.body?.imageUrl?.[0]?.url,
       };
-      let { isFree, tags } = req.body;
-      if (isFree === "active" || isFree === "inactive") {
-        req.body.isFree = isFree === "active";
-      }
-      if (typeof tags === "string") req.body.tags = tags.split(",");
+
       const result = await courseService.create(data);
       if (!result)
         return res
@@ -108,7 +115,7 @@ export class CourseController {
       const categoryWise = String(req.query.categoryWise) === "true";
       console.log(req.query.categoryWise);
       console.log("categoryWise:", categoryWise);
-      
+
       // Fetch user's worker category if authenticated
       let userWorkerCategoryId = null;
       if (userId && categoryWise) {
@@ -213,7 +220,7 @@ export class CourseController {
       let result = await courseService.getById(req.params.id, role !== "admin");
       if (!result)
         return res.status(404).json(new ApiError(404, "course not found"));
-      
+
       const reviewsData = await getReviewStats(req.params.id.toString());
       result = JSON.parse(JSON.stringify(result));
 

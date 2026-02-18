@@ -543,7 +543,7 @@ export class UserController {
       }
       // Check if mobile is one of the test numbers
       let otpCode: string;
-      if (mobile && (mobile === "9354697528" || mobile === "9999999999")) {
+      if (mobile && (mobile == "9354697528" || mobile == "9999999999")) {
         otpCode = "123456";
       } else {
         otpCode = Math.floor(100000 + Math.random() * 900000).toString();

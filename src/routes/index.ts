@@ -100,7 +100,7 @@ import loanSupportRoutes from "../public/loansupport/loansupport.routes";
 import notificationRoutes from "../public/notification/notification.routes";
 import paymentRoutes from "../public/payment/payment.routes";
 import subscriptionRoutes from "../public/subscription/subscription.routes";
-
+import promotionRoutes from "../public/promotion/promotion.routes"
 // Create main router
 const router = Router();
 
@@ -199,5 +199,6 @@ router.use("/payment", paymentRoutes);
 router.use("/loansupport", loanSupportRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/subscription", subscriptionRoutes);
+router.use("/promotion", promotionRoutes);
 
 export default router;

@@ -52,10 +52,10 @@ export interface IUserPreference extends Document {
   };
   updatedAt: Date;
   createdAt: Date;
-  jobType: JobType;
+  jobType: string;
   workModes: WorkMode;
   isWillingToRelocate: boolean;
-  experienceLevel: ExperienceLevel;
+  experienceLevel: string;
 }
 
 const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
@@ -93,7 +93,6 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
     jobType: {
       type: String,
       default: JobType.FULL_TIME,
-      enum: Object.values(JobType),
     },
     workModes: {
       index: true,
@@ -105,7 +104,6 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
       index: true,
       type: String,
       default: ExperienceLevel.ENTRY,
-      enum: Object.values(ExperienceLevel),
     },
     isWillingToRelocate: { type: Boolean, default: false },
   },

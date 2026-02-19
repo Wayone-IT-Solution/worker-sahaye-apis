@@ -427,6 +427,31 @@ export class JobController {
         },
         {
           $lookup: {
+            from: "workercategories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$categoryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: { path: "$natureDetails", preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
             from: "trades",
             localField: "trades",
             foreignField: "_id",
@@ -812,6 +837,42 @@ export class JobController {
           },
         },
         {
+          $lookup: {
+            from: "workercategories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$categoryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$natureDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        {
           $project: {
             _id: 1,
             tags: 1,
@@ -845,6 +906,11 @@ export class JobController {
             applicationProcess: 1,
             applicationDeadline: 1,
             userType: 1,
+            postedBy: 1,
+            approvedBy: 1,
+            imageUrl: 1,
+            history: 1,
+            attributes: 1,
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
             industryDetails: {
@@ -859,6 +925,18 @@ export class JobController {
               _id: "$categoryDetails._id",
               type: "$categoryDetails.type",
               description: "$categoryDetails.description",
+            },
+            nature: {
+              _id: "$natureDetails._id",
+              name: "$natureDetails.name",
+              description: "$natureDetails.description",
+            },
+            trades: {
+              $map: {
+                input: "$tradesDetails",
+                as: "t",
+                in: { _id: "$$t._id", name: "$$t.name", description: "$$t.description" },
+              },
             },
           },
         },
@@ -1082,7 +1160,7 @@ export class JobController {
         },
         {
           $lookup: {
-            from: "jobcategories",
+            from: "workercategories",
             localField: "category",
             foreignField: "_id",
             as: "categoryInfo",
@@ -1191,6 +1269,18 @@ export class JobController {
               name: {
                 $ifNull: [
                   "$categoryInfo.name",
+                  null
+                ]
+              },
+              type: {
+                $ifNull: [
+                  "$categoryInfo.type",
+                  null
+                ]
+              },
+              description: {
+                $ifNull: [
+                  "$categoryInfo.description",
                   null
                 ]
               }

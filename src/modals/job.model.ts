@@ -195,7 +195,7 @@ export interface IJob extends Document {
   attributes: any;
 
   // Job Details
-  jobType: JobType;
+  jobType: string;
   workMode: WorkMode;
   industry: Industry;
   industryId?: Types.ObjectId; // Reference to industry document
@@ -338,7 +338,7 @@ const JobSchema = new Schema<IJob>(
       type: String,
       index: true,
       default: JobType.FULL_TIME,
-      enum: Object.values(JobType),
+      // enum: Object.values(JobType),
     },
     // Job Details
     userType: {

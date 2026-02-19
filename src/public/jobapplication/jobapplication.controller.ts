@@ -181,6 +181,7 @@ export const applyToJob = async (
       coverLetter,
       availability,
       expectedSalary,
+      email,
     } = req.body;
 
     if (!job || !resumeUrl) {
@@ -188,6 +189,13 @@ export const applyToJob = async (
         .status(400)
         .json(new ApiError(400, "Job ID and resume URL are required"));
     }
+
+    if (!email) {
+  return res.status(400).json(
+    new ApiError(400, "Email is required to apply")
+  );
+}
+
 
     const [jobDoc, userDoc]: any = await Promise.all([
       Job.findById(job).select("status title postedBy"),
@@ -252,7 +260,7 @@ export const applyToJob = async (
       expectedSalary,
       applicant: applicantId,
       applicantSnapshot: {
-        email: userDoc.email,
+        email: email,
         phone: userDoc.mobile,
         name: userDoc.fullName,
       },

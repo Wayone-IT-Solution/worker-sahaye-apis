@@ -67,7 +67,7 @@ const JobApplicationSchema = new Schema<IJobApplication>(
         questionId: { type: Schema.Types.ObjectId, required: true },
       },
     ],
-    expectedSalary: { type: Number },
+    expectedSalary: { type: Number , min:0},
     availability: { type: String },
 
     status: {

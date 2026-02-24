@@ -14,6 +14,7 @@ import { SubscriptionPlan, ISubscriptionPlan, PlanType } from "../../modals/subs
 import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { getMonthKey } from "../../utils/date";
 import { JobView } from "../../modals/jobView.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const JobService = new CommonService(Job);
 
@@ -22,11 +23,8 @@ export class JobController {
     try {
       const userId = (req as any).user.id;
 
-      // Fetch user's active enrollment plan
-      const enrollment = await EnrolledPlan.findOne({
-        user: userId,
-        status: PlanEnrollmentStatus.ACTIVE,
-      }).populate<{ plan: ISubscriptionPlan }>("plan");
+      // Fetch user's highest priority active enrollment plan
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
       if (!enrollment) {
         throw new ApiError(403, "No active subscription plan found");
       }
@@ -211,10 +209,10 @@ export class JobController {
       // If user is logged in and is a contractor, enforce plan check
       const currentUser = (req as any).user;
       if (currentUser && currentUser.role === "contractor") {
-        const enrolled = await EnrolledPlan.findOne({ user: currentUser.id, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(currentUser.id);
         // If no enrollment or plan is Free/Basic, do not show data
-        const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-        if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+        if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
           return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing job listings"));
         }
       }
@@ -1342,16 +1340,15 @@ export class JobController {
         const monthKey = getMonthKey();
 
         // Fetch active plan enrollment (contractor / employer only)
-        const enrolled = await EnrolledPlan.findOne({
-          user: currentUser.id,
-          status: PlanEnrollmentStatus.ACTIVE,
-        }).populate<{ plan: ISubscriptionPlan }>("plan");
+        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(
+          currentUser.id
+        );
 
-        if (!enrolled || !enrolled.plan) {
+        if (!enrollment || !enrollment.plan) {
           throw new ApiError(403, "No active subscription plan found");
         }
 
-        const limit: number | null = enrolled.plan.jobViewPerMonth ?? null;
+        const limit: number | null = enrollment.plan.jobViewPerMonth ?? null;
 
         const alreadyViewed = await JobView.exists({
           user: currentUser.id,

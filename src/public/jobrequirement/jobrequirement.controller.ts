@@ -12,24 +12,22 @@ import { sendSingleNotification } from "../../services/notification.service";
 import { JobRequirement, JobRequirementStatus } from "../../modals/jobrequirement.model";
 import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const jobRequirementService = new CommonService(JobRequirement);
 
 // Helper function to check if user can request on-demand worker allocation
 const checkOnDemandWorkerAllocationServiceEligibility = async (userId: string) => {
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: PlanEnrollmentStatus.ACTIVE,
-  }).populate("plan");
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return {
       eligible: false,
       message: "Your subscription plan does not allow requesting on-demand worker allocation services. Please upgrade to BASIC or above.",
     };
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   if (planType === PlanType.FREE) {
     return {

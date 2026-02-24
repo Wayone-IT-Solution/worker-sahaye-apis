@@ -59,20 +59,17 @@ const VirtualHRRequestSchema = new Schema<IVirtualHRRequest>(
     },
     serviceType: {
       type: String,
-      enum: ["Virtual HR"],
       default: "Virtual HR",
     },
     designation: {
       type: String,
-      enum: ["Executive", "Manager", "Lead"],
       required: true,
     },
     role: {
       type: String,
-      enum: ["Onboarding", "Payroll", "Recruitment"],
       required: true,
     },
-    location: { type: String, required: true },
+    location: { type: String},
     expectedStartDate: { type: Date, required: true },
     duration: {
       from: { type: Date, required: true },
@@ -93,7 +90,6 @@ const VirtualHRRequestSchema = new Schema<IVirtualHRRequest>(
     },
     communicationMode: {
       type: String,
-      enum: ["Google Meet", "Phone Call", "WhatsApp", "Zoom"],
       required: true,
     },
     jobDescriptionUrl: { type: String },

@@ -95,9 +95,10 @@ export class ForumPostController {
 
       // If contractor, enforce subscription plan: only GROWTH or ENTERPRISE can post
       if (userType === UserType.CONTRACTOR || userType === UserType.EMPLOYER) {
-        const enrolled = await EnrolledPlan.findOne({ user, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
-        const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-        if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+        const { UserSubscriptionService } = require("../../services/userSubscription.service");
+        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(user);
+        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+        if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
           if (attachments && attachments.length > 0) {
             attachments.map(async (file: any) => {
               await extractImageUrl(file);

@@ -39,16 +39,14 @@ export const syncPlanStatus = async () => {
 
     // Step 3: For each user, check their active enrollment status
     for (const user of allUsers) {
-      // Find any active enrollment with a non-free plan
-      const activeNonFreePlan = await EnrolledPlan.findOne({
-        user: user._id,
-        status: PlanEnrollmentStatus.ACTIVE,
-      }).populate("plan", "planType");
+      // Find highest priority active enrollment
+      const { UserSubscriptionService } = require("../services/userSubscription.service");
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(user._id);
 
       let shouldHavePremium = false;
 
-      if (activeNonFreePlan) {
-        const plan = activeNonFreePlan.plan as any;
+      if (enrollment) {
+        const plan = enrollment.plan as any;
         // Only set to true if plan exists and is NOT FREE
         if (plan && plan.planType !== PlanType.FREE) {
           shouldHavePremium = true;

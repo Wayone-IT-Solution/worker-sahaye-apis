@@ -30,18 +30,16 @@ const getCourseAccessBenefits = async (userId: string | null) => {
     return defaultBenefits;
   }
 
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const { UserSubscriptionService } = require("../../services/userSubscription.service");
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, return FREE plan benefits
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return defaultBenefits;
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   // Define course benefits based on plan type
   const benefitsMap: Record<

@@ -56,17 +56,18 @@ export const getContentBlockByKey = async (
     const block = await ContentBlock.findOne({ key });
     if (!block) return res.status(404).json(new ApiError(404, "Content block not found"));
 
-    const enrolledPlan = await EnrolledPlan.findOne({ user: user.id, status: "active" });
+    const { UserSubscriptionService } = require("../../services/userSubscription.service");
+    const enrollment = await UserSubscriptionService.getHighestPriorityPlan(user.id);
 
-    if (!enrolledPlan?.plan) enrolled = false
+    if (!enrollment?.plan) enrolled = false
     const now = new Date();
-    if (enrolledPlan && enrolledPlan.expiredAt && now > enrolledPlan.expiredAt) {
+    if (enrollment && enrollment.expiredAt && now > enrollment.expiredAt) {
       enrolled = false
     }
     let plan;
-    if (enrolledPlan) {
-      plan = await SubscriptionPlan.findById(enrolledPlan.plan).populate("features", "key");
-      if (!plan) enrolled = false
+    if (enrollment) {
+      plan = await SubscriptionPlan.findById(enrollment.plan).populate("features", "key");
+      if (!plan) enrolled = false;
     }
 
     if (plan?.features) {

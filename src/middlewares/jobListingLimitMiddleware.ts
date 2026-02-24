@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { Job } from "../modals/job.model";
 import { EnrolledPlan, PlanEnrollmentStatus } from "../modals/enrollplan.model";
 import ApiError from "../utils/ApiError";
+import { UserSubscriptionService } from "../services/userSubscription.service";
 
 /**
  * Helper to get current month date range
@@ -25,20 +26,18 @@ export const enforceJobListingLimit = async (req: Request, res: Response, next: 
     // Only apply to Employers and Contractors
     if (!["employer", "contractor"].includes(role)) return next();
 
-    // 1. Get Active Plan
-    const enrolled = await EnrolledPlan.findOne({ user: userId, status: PlanEnrollmentStatus.ACTIVE })
-      .populate("plan")
-      .lean();
+    // 1. Get Active Plan (highest priority if multiple plans)
+    const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
-    if (!enrolled) {
+    if (!enrollment) {
       return res.status(403).json(new ApiError(403, "Active subscription required to post jobs. Please subscribe to a plan first."));
     }
 
-    if (enrolled.expiredAt && new Date(enrolled.expiredAt) < new Date()) {
+    if (enrollment.expiredAt && new Date(enrollment.expiredAt) < new Date()) {
       return res.status(403).json(new ApiError(403, "Your subscription has expired. Please renew your plan to post jobs."));
     }
 
-    const plan: any = enrolled.plan;
+    const plan: any = enrollment.plan;
 
     // Check if plan exists
     if (!plan) {
@@ -98,12 +97,10 @@ export const enforceJobListingLimit = async (req: Request, res: Response, next: 
  */
 export const getJobListingUsage = async (userId: string) => {
   try {
-    // 1. Get Active Plan
-    const enrolled = await EnrolledPlan.findOne({ user: userId, status: PlanEnrollmentStatus.ACTIVE })
-      .populate("plan")
-      .lean();
+    // 1. Get Active Plan (highest priority if multiple plans)
+    const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
-    if (!enrolled || (enrolled.expiredAt && new Date(enrolled.expiredAt) < new Date())) {
+    if (!enrollment || (enrollment.expiredAt && new Date(enrollment.expiredAt) < new Date())) {
       return {
         worker: { used: 0, limit: 0, remaining: 0 },
         contractor: { used: 0, limit: 0, remaining: 0 },
@@ -111,7 +108,7 @@ export const getJobListingUsage = async (userId: string) => {
       };
     }
 
-    const plan: any = enrolled.plan;
+    const plan: any = enrollment.plan;
 
     // Check if plan exists
     if (!plan) {

@@ -52,18 +52,16 @@ const getCandidateBrandingEligibility = async (userId: string | null) => {
     return defaultEligibility;
   }
 
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const { UserSubscriptionService } = require("../../services/userSubscription.service");
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, return FREE plan eligibility
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return defaultEligibility;
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   // Define branding eligibility based on plan type
   const eligibilityMap: Record<
@@ -1053,30 +1051,18 @@ export class UserController {
       // Check if user has active plan
       const hasActivePlan = enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
 
-      // Get subscription plan type for flags
+      // Get subscription plan type for flags using highest priority plan
       let subscriptionPlanType = PlanType.FREE;
       let subscriptionInfo: any = {
         planType: subscriptionPlanType,
       };
 
-      // Find the first valid plan with non-null plan data that hasn't expired
-      let validPlan = null;
-      if (hasActivePlan) {
-        for (const enrollment of enrollSubscriptionPlans) {
-          if (
-            enrollment &&
-            enrollment.plan &&
-            enrollment.expiredAt &&
-            new Date(enrollment.expiredAt) > new Date()
-          ) {
-            validPlan = enrollment.plan;
-            break;
-          }
-        }
-      }
+      // Get the highest priority plan
+      const { UserSubscriptionService } = require("../../services/userSubscription.service");
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
-      if (validPlan) {
-        subscriptionPlanType = (validPlan as any).planType;
+      if (enrollment && enrollment.plan) {
+        subscriptionPlanType = (enrollment.plan as any).planType;
         subscriptionInfo.planType = subscriptionPlanType;
 
         const userType = result?.userType;

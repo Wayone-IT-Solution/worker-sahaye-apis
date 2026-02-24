@@ -5,17 +5,15 @@ import ApiResponse from "../../utils/ApiResponse";
 import { buildMatchStage, buildSortObject, buildPaginationResponse, SEARCH_FIELD_MAP } from "../../utils/queryBuilder";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 // Helper function to check loan application eligibility based on subscription plan
 const getLoanEligibility = async (userId: string) => {
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, user is on FREE plan - not eligible for loan application
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return {
       eligible: false,
       planType: PlanType.FREE,
@@ -23,7 +21,7 @@ const getLoanEligibility = async (userId: string) => {
     };
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   // BASIC and PREMIUM plans are eligible, FREE plan is not
   if (planType === PlanType.FREE) {

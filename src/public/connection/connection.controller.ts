@@ -38,17 +38,18 @@ export const createConnection = async (
     }
 
     // Check subscription plan based on userType
-    const enrolled = await EnrolledPlan.findOne({ user: requester, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
-    const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+    const { UserSubscriptionService } = require("../../services/userSubscription.service");
+    const enrollment = await UserSubscriptionService.getHighestPriorityPlan(requester);
+    const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
 
     if (requesterUser.userType === "worker") {
       // Workers need BASIC or PREMIUM plan
-      if (!enrolled || !(planType === PlanType.BASIC || planType === PlanType.PREMIUM)) {
+      if (!enrollment || !(planType === PlanType.BASIC || planType === PlanType.PREMIUM)) {
         return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating connections. Please upgrade to BASIC or PREMIUM plan."));
       }
     } else if (requesterUser.userType === "contractor" || requesterUser.userType === "employer") {
       // Contractors and agencies need GROWTH or ENTERPRISE plan
-      if (!enrolled || !(planType === PlanType.GROWTH || planType === PlanType.ENTERPRISE)) {
+      if (!enrollment || !(planType === PlanType.GROWTH || planType === PlanType.ENTERPRISE)) {
         return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating connections. Please upgrade to GROWTH or ENTERPRISE plan."));
       }
     }

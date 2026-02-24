@@ -13,23 +13,22 @@ import { CommonService } from "../../services/common.services";
 import { sendDualNotification } from "../../services/notification.service";
 import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const JobApplicationService = new CommonService(JobApplication);
 
 // Helper function to get job application eligibility and monthly application limit
 const getJobApplicationEligibility = async (userId: string) => {
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // Default eligibility for FREE plan
   let planType = PlanType.FREE;
   let monthlyLimit = 5;
 
-  if (enrolledPlan) {
-    planType = (enrolledPlan.plan as any).planType;
+  if (enrollment) {
+    const plan = (enrollment.plan as any);
+    planType = plan.planType;
     
     // Set monthly limits based on plan type
     if (planType === PlanType.BASIC) {
@@ -69,11 +68,8 @@ const getJobApplicationEligibility = async (userId: string) => {
 
 // Helper function to get contractor job application eligibility
 const getContractorJobApplicationEligibility = async (userId: string) => {
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // Default eligibility for FREE plan - no applications allowed
   let planType = PlanType.FREE;
@@ -81,8 +77,8 @@ const getContractorJobApplicationEligibility = async (userId: string) => {
   let priorityApply = false;
   let applyVisibility = "standard"; // default mode
 
-  if (enrolledPlan) {
-    const plan = (enrolledPlan.plan as any);
+  if (enrollment) {
+    const plan = (enrollment.plan as any);
     planType = plan.planType;
     
     // Set monthly limits and features based on plan type for contractors
@@ -456,12 +452,11 @@ export const getReceivedApplications = async (
     if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(role)) {
       return res.status(404).json(new ApiError(403, "Unauthorized access."));
     }
-
     // If the requester is a contractor, enforce subscription plan check
     if (role === UserType.CONTRACTOR) {
-      const enrolled = await EnrolledPlan.findOne({ user: userId, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
-      const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-      if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+      const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+      if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
         return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing received applications"));
       }
     }

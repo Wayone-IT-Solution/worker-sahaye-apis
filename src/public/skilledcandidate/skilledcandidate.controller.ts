@@ -42,12 +42,10 @@ export class SkilledCandidateController {
       }
 
       // Check if user has premium plan subscription
-      const enrolledPlan: any = await EnrolledPlan.findOne({
-        user,
-        status: "active",
-      }).populate("plan");
+      const { UserSubscriptionService } = require("../../services/userSubscription.service");
+      const enrollment: any = await UserSubscriptionService.getHighestPriorityPlan(user);
 
-      if (!enrolledPlan || enrolledPlan.plan.planType !== PlanType.PREMIUM) {
+      if (!enrollment || enrollment.plan.planType !== PlanType.PREMIUM) {
         return res
           .status(403)
           .json(

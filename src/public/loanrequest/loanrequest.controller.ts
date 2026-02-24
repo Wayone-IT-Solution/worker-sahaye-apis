@@ -21,12 +21,10 @@ export const createLoanRequest = async (req: Request, res: Response) => {
     const { id: user } = (req as any).user;
     if (!user) return res.status(401).json(new ApiError(401, "Unauthorized"));
 
-    const enrolled = await EnrolledPlan.findOne({
-      user,
-      status: PlanEnrollmentStatus.ACTIVE,
-    });
+    const { UserSubscriptionService } = require("../../services/userSubscription.service");
+    const enrollment = await UserSubscriptionService.getHighestPriorityPlan(user);
 
-    if (!enrolled)
+    if (!enrollment)
       return res
         .status(403)
         .json(new ApiError(403, "Please enroll in subscription first"));
@@ -64,6 +62,7 @@ export const createLoanRequest = async (req: Request, res: Response) => {
       .status(201)
       .json(new ApiResponse(201, loan, "Loan request submitted successfully"));
   } catch (error) {
+    console.error("Loan request creation error:", error);
     return res.status(500).json(new ApiError(500, "Could not create loan request"));
   }
 };
@@ -73,11 +72,9 @@ export const getAllLoanRequests = async (req: Request, res: Response) => {
     const { id: user } = (req as any).user;
     if (!user) return res.status(401).json(new ApiError(401, "Unauthorized"));
 
-    const enrolled = await EnrolledPlan.findOne({
-      userId: user,
-      status: PlanEnrollmentStatus.ACTIVE,
-    });
-    if (!enrolled)
+    const { UserSubscriptionService } = require("../../services/userSubscription.service");
+    const enrollment = await UserSubscriptionService.getHighestPriorityPlan(user);
+    if (!enrollment)
       return res
         .status(403)
         .json(new ApiError(403, "You must enroll in a plan to request a loan"));

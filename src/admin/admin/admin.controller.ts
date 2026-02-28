@@ -9,28 +9,95 @@ const secret = config.jwt.secret;
 const adminService = new CommonService(Admin);
 const expiresIn = config.jwt.expiresIn as SignOptions["expiresIn"];
 
+interface AdminCreatePayload {
+  role: string;
+  email: string;
+  status?: boolean | string | number;
+  username: string;
+  password: string;
+  employeeCode?: string;
+}
+
 /**
  * User Controller
  */
 export class AdminController {
+  static normalizeStatus(status: unknown): boolean {
+    if (typeof status === "boolean") return status;
+    if (typeof status === "number") return status === 1;
+    if (typeof status === "string") {
+      const normalized = status.trim().toLowerCase();
+      return normalized === "active" || normalized === "true" || normalized === "1";
+    }
+    return false;
+  }
+
+  static sanitizeAdmin(user: any) {
+    const adminData = user?.toObject ? user.toObject() : user;
+    if (adminData?.password) delete adminData.password;
+    return adminData;
+  }
+
   /**
    * Create a new user
    */
   static async createAdmin(req: Request, res: Response, next: NextFunction) {
     try {
+      if (Array.isArray(req.body)) {
+        if (req.body.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: "No user records found in request body",
+          });
+        }
+
+        const users = [];
+        for (let index = 0; index < req.body.length; index += 1) {
+          const row = req.body[index] as AdminCreatePayload;
+          const { username, employeeCode, email, password, role, status } = row;
+
+          if (!username || !email || !password || !role) {
+            return res.status(400).json({
+              success: false,
+              message: `Missing required fields at row ${index + 1}`,
+            });
+          }
+
+          const user = await AdminController.createUser({
+            role,
+            email,
+            password,
+            username,
+            employeeCode,
+            status: AdminController.normalizeStatus(status),
+          });
+
+          users.push(AdminController.sanitizeAdmin(user));
+        }
+
+        return res.status(201).json({
+          success: true,
+          users,
+          message: `${users.length} users created successfully`,
+        });
+      }
+
       const { username, employeeCode, email, password, role, status } =
-        req.body;
+        req.body as AdminCreatePayload;
       const user = await AdminController.createUser({
         role,
         email,
         password,
         username,
         employeeCode,
-        status: status === "active",
+        status: AdminController.normalizeStatus(status),
       });
-      res
-        .status(201)
-        .json({ success: true, message: "User created successfully", user });
+
+      return res.status(201).json({
+        success: true,
+        message: "User created successfully",
+        user: AdminController.sanitizeAdmin(user),
+      });
     } catch (error) {
       next(error);
     }
@@ -213,9 +280,9 @@ export class AdminController {
     status: boolean;
     username: string;
     password: string;
-    employeeCode: string;
+    employeeCode?: string;
   }) {
-    const { username, email, password, role, status } = userData;
+    const { username, email, password, role, status, employeeCode } = userData;
 
     const existingUser = await Admin.findOne({
       $or: [{ email }, { username }],
@@ -223,7 +290,14 @@ export class AdminController {
     if (existingUser)
       throw new Error("User with this email or username already exists");
 
-    const user = new Admin({ username, email, password, role, status });
+    const user = new Admin({
+      role,
+      email,
+      status,
+      password,
+      username,
+      employeeCode,
+    });
     return await user.save();
   }
 

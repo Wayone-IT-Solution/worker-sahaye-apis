@@ -113,110 +113,162 @@ const getCandidateBrandingEligibility = async (userId: string | null) => {
 };
 
 export class UserController {
+  private static normalizeUserType(input: unknown): UserType | null {
+    const value = String(input ?? "").trim().toLowerCase();
+    return (Object.values(UserType) as string[]).includes(value)
+      ? (value as UserType)
+      : null;
+  }
+
+  private static async createSingleUser(
+    payload: any,
+    rowNumber?: number
+  ): Promise<any> {
+    const prefix = rowNumber ? `Row ${rowNumber}: ` : "";
+    const email = String(payload?.email ?? "").trim();
+    const mobile = String(payload?.mobile ?? "").trim();
+    const fullName = String(payload?.fullName ?? "").trim();
+    const userType = UserController.normalizeUserType(payload?.userType);
+    const referralCode = String(payload?.referralCode ?? "").trim();
+
+    const missingFields: string[] = [];
+    if (!mobile) missingFields.push("mobile");
+    if (!fullName) missingFields.push("fullName");
+    if (!userType) missingFields.push("userType");
+
+    if (missingFields.length) {
+      throw new ApiError(
+        400,
+        `${prefix}Missing required fields: ${missingFields.join(", ")}`
+      );
+    }
+
+    if (
+      (userType === UserType.EMPLOYER || userType === UserType.CONTRACTOR) &&
+      !email
+    ) {
+      throw new ApiError(400, `${prefix}Email is required for this user type`);
+    }
+
+    const userData: any = {
+      status: payload?.status,
+      profile: payload?.profile,
+      relocate: payload?.relocate,
+      fullName,
+      userType,
+      mobile,
+      workerCategory: payload?.workerCategory,
+      primaryLocation: payload?.primaryLocation,
+      agreedToTerms: payload?.agreedToTerms,
+      privacyPolicyAccepted: payload?.privacyPolicyAccepted,
+    };
+
+    if (email) userData.email = email;
+
+    if (userType === UserType.EMPLOYER || userType === UserType.CONTRACTOR) {
+      userData.isEmailVerified = false;
+    }
+
+    const mobileExist = await User.findOne({ mobile });
+    if (mobileExist) {
+      throw new ApiError(
+        400,
+        `${prefix}A ${mobileExist.userType} account with this phone number already exists.`
+      );
+    }
+
+    if (email) {
+      const emailExist = await User.findOne({ email });
+      if (emailExist) {
+        throw new ApiError(
+          400,
+          `${prefix}A ${emailExist.userType} account with this email address already exists.`
+        );
+      }
+    }
+
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+      if (!referrer) throw new ApiError(400, `${prefix}Invalid referral code`);
+
+      userData.referredBy = referrer._id;
+      userData.referredCode = referralCode;
+      await referrer.updateOne({ $inc: { pointsEarned: 50 } });
+    }
+
+    const newUser: any = await userService.create(userData);
+    newUser.referralCode = generateReferralCode(newUser._id);
+    newUser.profileCompletion = calculateProfileCompletion(newUser);
+    await newUser.save();
+    return newUser;
+  }
+
   static async createUser(req: Request, res: Response, next: NextFunction) {
     try {
-      const {
-        email,
-        mobile,
-        fullName,
-        userType,
-        referralCode,
-        agreedToTerms,
-        privacyPolicyAccepted,
-        relocate,
-        workerCategory,
-      } = req.body;
-
-      // 1. Validation (basic example)
-      if (!mobile || !fullName || !userType) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Missing required fields"));
-      }
-
-      if (
-        (userType === UserType.EMPLOYER ||
-          userType === UserType.CONTRACTOR) &&
-        !email
-      ) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Email is required for this user type"));
-      }
-
-      const userData: any = {
-        email,
-        mobile,
-        fullName,
-        userType,
-        agreedToTerms,
-        privacyPolicyAccepted,
-        relocate,
-        workerCategory,
-      };
-
-      // Email is optional for WORKER
-      if (email) {
-        userData.email = email;
-      }
-
-      if (
-        userType === UserType.EMPLOYER ||
-        userType === UserType.CONTRACTOR
-      ) {
-        userData.isEmailVerified = false;
-      }
-
-      const mobileExist = await User.findOne({ mobile });
-      if (mobileExist) {
-        return res.status(400).json(
-          new ApiError(
-            400,
-            `A ${mobileExist.userType} account with this phone number already exists.`
-          )
-        );
-      }
-
-      if (email) {
-        const emailExist = await User.findOne({ email });
-        if (emailExist) {
-          return res.status(400).json(
-            new ApiError(
-              400,
-              `A ${emailExist.userType} account with this email address already exists.`
-            )
-          );
-        }
-      }
-
-      // 2. Handle referral (if any) before creating referralCode
-      if (referralCode) {
-        const referrer = await User.findOne({ referralCode });
-        if (!referrer)
+      if (Array.isArray(req.body)) {
+        if (!req.body.length) {
           return res
             .status(400)
-            .json(new ApiError(400, "Invalid referral code"));
-        userData.referredBy = referrer._id;
-        userData.referredCode = referralCode;
-        await referrer.updateOne({ $inc: { pointsEarned: 50 } });
+            .json(new ApiError(400, "Missing required fields: mobile, fullName, userType"));
+        }
+
+        const seenMobiles = new Set<string>();
+        const seenEmails = new Set<string>();
+
+        for (let index = 0; index < req.body.length; index += 1) {
+          const row = req.body[index] || {};
+          const rowNumber = index + 1;
+          const mobile = String(row?.mobile ?? "").trim();
+          const email = String(row?.email ?? "").trim().toLowerCase();
+
+          if (mobile) {
+            if (seenMobiles.has(mobile)) {
+              return res
+                .status(400)
+                .json(new ApiError(400, `Row ${rowNumber}: Duplicate mobile in upload payload`));
+            }
+            seenMobiles.add(mobile);
+          }
+
+          if (email) {
+            if (seenEmails.has(email)) {
+              return res
+                .status(400)
+                .json(new ApiError(400, `Row ${rowNumber}: Duplicate email in upload payload`));
+            }
+            seenEmails.add(email);
+          }
+        }
+
+        const createdUsers: any[] = [];
+        for (let index = 0; index < req.body.length; index += 1) {
+          const created = await UserController.createSingleUser(
+            req.body[index],
+            index + 1
+          );
+          createdUsers.push(created);
+        }
+
+        return res
+          .status(201)
+          .json(
+            new ApiResponse(
+              201,
+              createdUsers,
+              `${createdUsers.length} users created successfully`
+            )
+          );
       }
-      console.log("userData", userData);
-      const newUser: any = await userService.create(userData);
-      newUser.referralCode = generateReferralCode(newUser._id);
-      newUser.profileCompletion = calculateProfileCompletion(newUser);
 
-      await newUser.save();
-
-      return res
-        .status(201)
-        .json(
-          new ApiResponse(
-            201,
-            newUser,
-            `${userType.charAt(0).toUpperCase() + userType.slice(1)
-            } created successfully`
-          )
-        );
+      const newUser = await UserController.createSingleUser(req.body);
+      const createdUserType = String(newUser?.userType || req.body?.userType || "user");
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          newUser,
+          `${createdUserType.charAt(0).toUpperCase() + createdUserType.slice(1)} created successfully`
+        )
+      );
     } catch (error) {
       next(error);
     }
@@ -224,13 +276,23 @@ export class UserController {
 
   static async deleteUserById(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id: user, role } = (req as any).user;
-      if (role === "admin")
+      const authUser: any = (req as any).user || null;
+      const targetUserId = req.params.id || authUser?.id;
+
+      if (!targetUserId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "User ID is required"));
+      }
+
+      // Prevent admin token from deleting itself using generic self-delete route.
+      if (!req.params.id && authUser?.role === "admin") {
         return res
           .status(403)
           .json(new ApiError(403, "Cannot delete admin users"));
+      }
 
-      const result = await userService.deleteById(req.params.id || user);
+      const result = await userService.deleteById(targetUserId);
       if (!result)
         return res.status(404).json(new ApiError(404, "Failed to delete city"));
       return res
@@ -1398,4 +1460,3 @@ export class UserController {
     }
   }
 }
-

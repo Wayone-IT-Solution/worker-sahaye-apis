@@ -27,7 +27,9 @@ export class AdminController {
     if (typeof status === "number") return status === 1;
     if (typeof status === "string") {
       const normalized = status.trim().toLowerCase();
-      return normalized === "active" || normalized === "true" || normalized === "1";
+      return (
+        normalized === "active" || normalized === "true" || normalized === "1"
+      );
     }
     return false;
   }
@@ -106,7 +108,7 @@ export class AdminController {
   static async getAdminById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { id } = req.params;
@@ -132,7 +134,7 @@ export class AdminController {
   static async updateAdmin(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { id } = req.params;
@@ -140,7 +142,7 @@ export class AdminController {
       const updatedUser = await Admin.findByIdAndUpdate(
         id,
         { username, role, status: status === "active", employeeCode },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
 
       if (!updatedUser) {
@@ -162,7 +164,7 @@ export class AdminController {
   static async getAllAdmins(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const pipeline = [
@@ -234,7 +236,7 @@ export class AdminController {
   static async getCurrentAdmin(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> {
     try {
       const userId = (req as any).user.id; // Extracted from the decoded JWT token
@@ -269,6 +271,53 @@ export class AdminController {
       select: "name permissions",
     });
     return user;
+  }
+
+  /**
+   * Reset password for an admin user
+   */
+  static async resetPassword(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<any> {
+    try {
+      const { id } = req.params;
+      const { newPassword } = req.body;
+
+      if (!newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "New password is required",
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters long",
+        });
+      }
+
+      const admin = await Admin.findById(id);
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found",
+        });
+      }
+
+      // Update password (it will be hashed by the pre-save hook)
+      admin.password = newPassword;
+      await admin.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 
   /**
@@ -319,7 +368,7 @@ export class AdminController {
     const token = jwt.sign(
       { _id: user._id, email: user.email, role: user?.role?.name },
       secret,
-      { expiresIn }
+      { expiresIn },
     );
 
     return {

@@ -30,25 +30,25 @@ const WageRowSchema = new Schema<IWageRow>(
   {
     // Dynamic fields based on columns
   },
-  { strict: false }
+  { strict: false },
 );
 
 const MinimumWageSchema: Schema<IMinimumWage> = new Schema(
   {
-    state: { type: String, required: true, trim: true, index: true },
+    state: { type: String, required: true, trim: true },
     columns: [ColumnDefinitionSchema],
     rows: [WageRowSchema],
     createdBy: { type: String },
     updatedBy: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 MinimumWageSchema.index({ state: 1 }, { unique: true });
 
 const MinimumWage: Model<IMinimumWage> = mongoose.model<IMinimumWage>(
   "MinimumWage",
-  MinimumWageSchema
+  MinimumWageSchema,
 );
 
 export default MinimumWage;

@@ -11,13 +11,17 @@ userRouter.post("/login", asyncHandler(AdminController.loginAdmin));
 userRouter.get(
   "/current/user",
   authenticateToken,
-  asyncHandler(AdminController.getCurrentAdmin)
+  asyncHandler(AdminController.getCurrentAdmin),
 );
 
 // Routes with authentication & admin check
 // userRouter.use(authenticateToken, isAdmin);
 
 userRouter.route("/").get(asyncHandler(AdminController.getAllAdmins)); // GET / (list users)
+
+userRouter
+  .route("/reset-password/:id")
+  .post(asyncHandler(AdminController.resetPassword));
 
 userRouter
   .route("/:id")

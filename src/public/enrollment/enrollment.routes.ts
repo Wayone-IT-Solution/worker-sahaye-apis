@@ -1,10 +1,11 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { EnrollmentController } from "./enrollment.controller";
-import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const {
   createEnrollment,
+  adminAssignCourse,
   refundEnrollment,
   getAllEnrollments,
   getEnrollmentById,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 router
   .post("/", authenticateToken, asyncHandler(createEnrollment)) // Enroll in course
+  .post("/admin/assign", authenticateToken, isAdmin, asyncHandler(adminAssignCourse))
   .get("/", authenticateToken, asyncHandler(getAllEnrollments)) // Get all enrollments
   .get("/all", authenticateToken, asyncHandler(getAllAdminEnrollments)) // Get all enrollments till now
   .get("/:id", authenticateToken, asyncHandler(getEnrollmentById)) // Get specific enrollment

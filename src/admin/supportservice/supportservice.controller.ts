@@ -1,30 +1,25 @@
-import { Request, Response } from "express";
-import SupportService from "../../modals/supportservice.model";
 import { PipelineStage } from "mongoose";
+import { Request, Response } from "express";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
-import { Booking } from "../../modals/booking.model";
-import { SubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
-import {
-  buildMatchStage,
-  buildSortObject,
-  buildPaginationResponse,
-} from "../../utils/queryBuilder";
+import SupportService from "../../modals/supportservice.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
+import { buildPaginationResponse } from "../../utils/queryBuilder";
 
 // Helper function to get subscription-based access flags for a user and service
 const getServiceAccessFlags = async (
   userId: string | null,
-  serviceFor: string
-): Promise<{ canChat: boolean; canCall: boolean; canDiscountedPersonalAssistance: boolean }> => {
+  serviceFor: string,
+): Promise<{
+  canChat: boolean;
+  canCall: boolean;
+  canDiscountedPersonalAssistance: boolean;
+}> => {
   // Default access for non-authenticated users (FREE plan equivalent)
   const defaultAccess = {
     canChat: serviceFor !== "LOAN",
     canCall: false,
     canDiscountedPersonalAssistance: false,
   };
-
-  console.log("=== getServiceAccessFlags called ===");
-  console.log("userId:", userId);
-  console.log("serviceFor:", serviceFor);
 
   if (!userId) {
     console.log("No userId, returning defaultAccess");
@@ -51,15 +46,20 @@ const getServiceAccessFlags = async (
     for (let i = 0; i < enrolledPlans.length; i++) {
       const enrolled = enrolledPlans[i];
       const enrolledObj = enrolled.toObject ? enrolled.toObject() : enrolled;
-      
+
       console.log(`Checking enrollment ${i}:`, {
         hasEnrolled: !!enrolledObj,
         hasPlan: !!enrolledObj?.plan,
         hasExpiredAt: !!enrolledObj?.expiredAt,
         expiredAt: enrolledObj?.expiredAt,
-        planData: enrolledObj?.plan ? { name: (enrolledObj.plan as any).name, planType: (enrolledObj.plan as any).planType } : null,
+        planData: enrolledObj?.plan
+          ? {
+              name: (enrolledObj.plan as any).name,
+              planType: (enrolledObj.plan as any).planType,
+            }
+          : null,
       });
-      
+
       if (
         enrolledObj &&
         enrolledObj.plan &&
@@ -74,39 +74,116 @@ const getServiceAccessFlags = async (
 
     // If no active plan found, return FREE plan access
     if (!planType) {
-      console.log("No valid plan found after checking all enrollments, returning default access");
+      console.log(
+        "No valid plan found after checking all enrollments, returning default access",
+      );
       return defaultAccess;
     }
 
     // Define access levels based on plan type and service type
-    const accessMap: Record<string, Record<string, { canChat: boolean; canCall: boolean; canDiscountedPersonalAssistance: boolean }>> = {
+    const accessMap: Record<
+      string,
+      Record<
+        string,
+        {
+          canChat: boolean;
+          canCall: boolean;
+          canDiscountedPersonalAssistance: boolean;
+        }
+      >
+    > = {
       [PlanType.FREE]: {
-        EPFO: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-        ESIC: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-        LWF: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
-        LOAN: { canChat: false, canCall: false, canDiscountedPersonalAssistance: false },
-        AWARENESS: { canChat: true, canCall: false, canDiscountedPersonalAssistance: false },
+        EPFO: {
+          canChat: true,
+          canCall: false,
+          canDiscountedPersonalAssistance: false,
+        },
+        ESIC: {
+          canChat: true,
+          canCall: false,
+          canDiscountedPersonalAssistance: false,
+        },
+        LWF: {
+          canChat: true,
+          canCall: false,
+          canDiscountedPersonalAssistance: false,
+        },
+        LOAN: {
+          canChat: false,
+          canCall: false,
+          canDiscountedPersonalAssistance: false,
+        },
+        AWARENESS: {
+          canChat: true,
+          canCall: false,
+          canDiscountedPersonalAssistance: false,
+        },
       },
       [PlanType.BASIC]: {
-        EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-        ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-        LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-        LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
-        AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: false },
+        EPFO: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: false,
+        },
+        ESIC: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: false,
+        },
+        LWF: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: false,
+        },
+        LOAN: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: false,
+        },
+        AWARENESS: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: false,
+        },
       },
       [PlanType.PREMIUM]: {
-        EPFO: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-        ESIC: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-        LWF: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-        LOAN: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
-        AWARENESS: { canChat: true, canCall: true, canDiscountedPersonalAssistance: true },
+        EPFO: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: true,
+        },
+        ESIC: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: true,
+        },
+        LWF: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: true,
+        },
+        LOAN: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: true,
+        },
+        AWARENESS: {
+          canChat: true,
+          canCall: true,
+          canDiscountedPersonalAssistance: true,
+        },
       },
     };
 
-    console.log("Looking up access for planType:", planType, "serviceFor:", serviceFor);
+    console.log(
+      "Looking up access for planType:",
+      planType,
+      "serviceFor:",
+      serviceFor,
+    );
     const access = accessMap[planType]?.[serviceFor];
     console.log("Access found:", access);
-    
+
     // Return access flags based on plan type and service
     const result = access ?? defaultAccess;
     console.log("Returning access:", result);
@@ -136,7 +213,8 @@ export const createSupportService = async (req: Request, res: Response) => {
     if (!title || !subtitle || !description || !serviceFor) {
       return res.status(400).json({
         success: false,
-        message: "All fields (title, subtitle, description, serviceFor) are required",
+        message:
+          "All fields (title, subtitle, description, serviceFor) are required",
       });
     }
 
@@ -201,8 +279,17 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     // Search functionality
     const search = req.query.search as string;
     const searchKey = req.query.searchKey as string;
-    if (search && searchKey && SUPPORT_SERVICE_SEARCH_FIELDS[searchKey as keyof typeof SUPPORT_SERVICE_SEARCH_FIELDS]) {
-      const fields = SUPPORT_SERVICE_SEARCH_FIELDS[searchKey as keyof typeof SUPPORT_SERVICE_SEARCH_FIELDS];
+    if (
+      search &&
+      searchKey &&
+      SUPPORT_SERVICE_SEARCH_FIELDS[
+        searchKey as keyof typeof SUPPORT_SERVICE_SEARCH_FIELDS
+      ]
+    ) {
+      const fields =
+        SUPPORT_SERVICE_SEARCH_FIELDS[
+          searchKey as keyof typeof SUPPORT_SERVICE_SEARCH_FIELDS
+        ];
       if (fields.length === 1) {
         matchStage[fields[0]] = { $regex: search, $options: "i" };
       }
@@ -285,18 +372,26 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     // Add access flags for each service based on user's subscription plan
     const servicesWithAccessFlags = await Promise.all(
       services.map(async (service: any) => {
-        const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
+        const accessFlags = await getServiceAccessFlags(
+          userId,
+          service.serviceFor,
+        );
         return {
           ...service,
           ...accessFlags,
         };
-      })
+      }),
     );
 
     return res.status(200).json({
       success: true,
       message: "Support services fetched successfully",
-      data: buildPaginationResponse(servicesWithAccessFlags, total, page, limit),
+      data: buildPaginationResponse(
+        servicesWithAccessFlags,
+        total,
+        page,
+        limit,
+      ),
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -312,7 +407,7 @@ export const getServicesByType = async (req: Request, res: Response) => {
     const { serviceFor } = req.params;
     // Try both .id and ._id for userId extraction
     const userId = (req as any).user?.id || (req as any).user?._id || null;
-    
+
     console.log("getServicesByType called:");
     console.log("Request user object:", (req as any).user);
     console.log("Extracted userId:", userId);
@@ -365,12 +460,15 @@ export const getServicesByType = async (req: Request, res: Response) => {
     // Add access flags for each service based on user's subscription plan
     const servicesWithAccessFlags = await Promise.all(
       services.map(async (service: any) => {
-        const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
+        const accessFlags = await getServiceAccessFlags(
+          userId,
+          service.serviceFor,
+        );
         return {
           ...service,
           ...accessFlags,
         };
-      })
+      }),
     );
 
     return res.status(200).json({
@@ -394,7 +492,10 @@ export const getSupportServiceById = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id || null;
     const isAuthenticatedRequest = Boolean(userId);
 
-    const service = await SupportService.findById(id).populate("createdBy", "name email");
+    const service = await SupportService.findById(id).populate(
+      "createdBy",
+      "name email",
+    );
 
     if (!service) {
       return res.status(404).json({
@@ -443,11 +544,11 @@ export const updateSupportService = async (req: Request, res: Response) => {
       description,
       serviceFor,
       status,
-      order
+      order,
     });
 
     // Normalize status to lowercase
-    if (status !== undefined && typeof status === 'string') {
+    if (status !== undefined && typeof status === "string") {
       status = status.toLowerCase();
     }
 
@@ -470,7 +571,10 @@ export const updateSupportService = async (req: Request, res: Response) => {
     }
 
     // Validate description if provided
-    if (description && (!Array.isArray(description) || description.length === 0)) {
+    if (
+      description &&
+      (!Array.isArray(description) || description.length === 0)
+    ) {
       return res.status(400).json({
         success: false,
         message: "Description must be an array with at least one point",
@@ -488,10 +592,14 @@ export const updateSupportService = async (req: Request, res: Response) => {
 
     console.log("Update Data to save:", updateData);
 
-    const updatedService = await SupportService.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    }).populate("createdBy updatedBy", "name email");
+    const updatedService = await SupportService.findByIdAndUpdate(
+      id,
+      updateData,
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).populate("createdBy updatedBy", "name email");
 
     if (!updatedService) {
       return res.status(404).json({
@@ -608,12 +716,15 @@ export const searchSupportServices = async (req: Request, res: Response) => {
     // Add access flags for each service based on user's subscription plan
     const servicesWithAccessFlags = await Promise.all(
       services.map(async (service: any) => {
-        const accessFlags = await getServiceAccessFlags(userId, service.serviceFor);
+        const accessFlags = await getServiceAccessFlags(
+          userId,
+          service.serviceFor,
+        );
         return {
           ...service,
           ...accessFlags,
         };
-      })
+      }),
     );
 
     return res.status(200).json({

@@ -11,6 +11,7 @@ import {
 } from "../../utils/queryBuilder";
 
 const jobRoleService = new CommonService(JobRole);
+const PUBLIC_JOB_ROLE_STATUSES = new Set(["active", "inactive"]);
 
 /**
  * Generate URL-friendly slug from name
@@ -34,6 +35,78 @@ export class JobRoleController {
   ) {
     try {
       const adminId = (req as any).user?.id;
+      const incomingPayload = req.body;
+
+      if (Array.isArray(incomingPayload)) {
+        if (!incomingPayload.length) {
+          return res
+            .status(400)
+            .json(new ApiError(400, "Bulk payload cannot be empty"));
+        }
+
+        const seenSlugs = new Set<string>();
+        const bulkPayload: Array<Record<string, any>> = [];
+
+        for (let index = 0; index < incomingPayload.length; index += 1) {
+          const item = incomingPayload[index];
+          const rowNumber = index + 1;
+          const name = String(item?.name || "").trim();
+
+          if (!name) {
+            return res
+              .status(400)
+              .json(new ApiError(400, `Row ${rowNumber}: "name" is required`));
+          }
+
+          const slug = generateSlug(name);
+          if (!slug) {
+            return res.status(400).json(
+              new ApiError(400, `Row ${rowNumber}: Unable to generate slug from name`)
+            );
+          }
+
+          if (seenSlugs.has(slug)) {
+            return res.status(400).json(
+              new ApiError(400, `Row ${rowNumber}: Duplicate job role name in upload`)
+            );
+          }
+
+          seenSlugs.add(slug);
+          bulkPayload.push({
+            ...item,
+            name,
+            slug,
+            createdBy: adminId,
+          });
+        }
+
+        const existingRoles = await JobRole.find({
+          slug: { $in: Array.from(seenSlugs) },
+        })
+          .select("name")
+          .lean();
+
+        if (existingRoles.length > 0) {
+          const existingNames = existingRoles
+            .map((role: any) => String(role?.name || "").trim())
+            .filter(Boolean);
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Job role(s) already exist: ${existingNames.join(", ")}`
+            )
+          );
+        }
+
+        const result = await JobRole.insertMany(bulkPayload);
+        return res.status(201).json(
+          new ApiResponse(
+            201,
+            result,
+            `${result.length} job role(s) created successfully`
+          )
+        );
+      }
 
       // Generate slug from name
       const slug = generateSlug(req.body.name);
@@ -78,9 +151,24 @@ export class JobRoleController {
   ) {
     try {
       const isAuthenticatedRequest = Boolean((req as any).user?.id);
-      const effectiveStatus =
-        (req.query.status as string) ||
-        (!isAuthenticatedRequest ? "active" : undefined);
+      const rawStatusQuery = String(req.query.status || "").trim().toLowerCase();
+      const hasStatusQuery = rawStatusQuery.length > 0;
+
+      if (
+        !isAuthenticatedRequest &&
+        hasStatusQuery &&
+        !PUBLIC_JOB_ROLE_STATUSES.has(rawStatusQuery)
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Public status supports only active or inactive"));
+      }
+
+      const effectiveStatus = hasStatusQuery
+        ? rawStatusQuery
+        : !isAuthenticatedRequest
+          ? "active"
+          : undefined;
 
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
@@ -101,7 +189,7 @@ export class JobRoleController {
       const sortObj = buildSortObject(
         req.query.sortKey as string,
         req.query.sortDir as string,
-        { createdAt: -1 }
+        { order: 1, name: 1 }
       );
 
       const pipeline = [
@@ -132,6 +220,7 @@ export class JobRoleController {
                   _id: 1,
                   name: 1,
                   slug: 1,
+                  order: 1,
                   description: 1,
                   status: 1,
                   salaryRange: 1,
@@ -335,6 +424,8 @@ export class JobRoleController {
       const query = {
         ...req.query,
         status: "active",
+        sortKey: (req.query.sortKey as string) || "order",
+        sortDir: (req.query.sortDir as string) || "1",
       };
 
       const result = await jobRoleService.getAll(query);

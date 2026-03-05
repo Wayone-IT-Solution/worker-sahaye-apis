@@ -61,6 +61,23 @@ interface INote {
   status: QuotationStatus;
 }
 
+interface IUserQuotationResponse {
+  comment?: string;
+  respondedAt?: Date;
+  respondedBy?: Types.ObjectId;
+  decision: "accepted" | "declined";
+}
+
+interface IQuotationActivity {
+  action: "created" | "updated" | "accepted" | "declined";
+  actorRole: "admin" | "employer" | "contractor" | "worker" | "agent" | "system";
+  actorId?: Types.ObjectId;
+  status: QuotationStatus;
+  comment?: string;
+  snapshot: Record<string, any>;
+  createdAt?: Date;
+}
+
 export interface IQuotation extends Document {
   notes: INote[];
   amount: number;
@@ -79,11 +96,14 @@ export interface IQuotation extends Document {
   paymentDate?: Date;
   advanceAmount?: number;
   userId: Types.ObjectId;
-  agentId: Types.ObjectId;
+  agentId?: Types.ObjectId;
+  quotationDocument?: string;
   isAdvancePaid?: boolean;
   status: QuotationStatus;
   requestId: Types.ObjectId;
   requestModel: RequestModelType;
+  userResponse?: IUserQuotationResponse;
+  activityTimeline?: IQuotationActivity[];
   paymentMode?: "cash" | "upi" | "bank_transfer" | "card";
 }
 
@@ -93,6 +113,54 @@ const NoteSchema = new Schema<INote>(
     status: {
       type: String,
       enum: Object.values(QuotationStatus),
+      required: true,
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const UserResponseSchema = new Schema<IUserQuotationResponse>(
+  {
+    decision: {
+      type: String,
+      enum: ["accepted", "declined"],
+      required: true,
+    },
+    comment: { type: String, trim: true },
+    respondedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    respondedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const QuotationActivitySchema = new Schema<IQuotationActivity>(
+  {
+    action: {
+      type: String,
+      enum: ["created", "updated", "accepted", "declined"],
+      required: true,
+    },
+    actorRole: {
+      type: String,
+      enum: ["admin", "employer", "contractor", "worker", "agent", "system"],
+      required: true,
+    },
+    actorId: {
+      type: Schema.Types.ObjectId,
+      required: false,
+    },
+    status: {
+      type: String,
+      enum: Object.values(QuotationStatus),
+      required: true,
+    },
+    comment: { type: String, trim: true },
+    snapshot: {
+      type: Schema.Types.Mixed,
       required: true,
     },
     createdAt: { type: Date, default: Date.now },
@@ -147,13 +215,24 @@ const QuotationSchema = new Schema<IQuotation>(
       type: Schema.Types.ObjectId,
     },
     agentId: {
-      required: true,
+      required: false,
       ref: "Salesperson",
       type: Schema.Types.ObjectId,
+    },
+    quotationDocument: {
+      type: String,
+      trim: true,
+    },
+    userResponse: {
+      type: UserResponseSchema,
     },
     notes: {
       default: [],
       type: [NoteSchema],
+    },
+    activityTimeline: {
+      default: [],
+      type: [QuotationActivitySchema],
     },
   },
   {

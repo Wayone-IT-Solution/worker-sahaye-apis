@@ -11,8 +11,14 @@ import { User } from "../../modals/user.model";
 import { UserType } from "../../modals/notification.model";
 import { CommonService } from "../../services/common.services";
 import { sendDualNotification } from "../../services/notification.service";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
-import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import {
+  EnrolledPlan,
+  PlanEnrollmentStatus,
+} from "../../modals/enrollplan.model";
+import {
+  ISubscriptionPlan,
+  PlanType,
+} from "../../modals/subscriptionplan.model";
 import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const JobApplicationService = new CommonService(JobApplication);
@@ -20,16 +26,17 @@ const JobApplicationService = new CommonService(JobApplication);
 // Helper function to get job application eligibility and monthly application limit
 const getJobApplicationEligibility = async (userId: string) => {
   // Get user's highest priority active subscription plan
-  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+  const enrollment =
+    await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // Default eligibility for FREE plan
   let planType = PlanType.FREE;
   let monthlyLimit = 5;
 
   if (enrollment) {
-    const plan = (enrollment.plan as any);
+    const plan = enrollment.plan as any;
     planType = plan.planType;
-    
+
     // Set monthly limits based on plan type
     if (planType === PlanType.BASIC) {
       monthlyLimit = 20;
@@ -51,7 +58,10 @@ const getJobApplicationEligibility = async (userId: string) => {
     },
   });
 
-  const applicationsRemaining = monthlyLimit === Infinity ? Infinity : Math.max(0, monthlyLimit - applicationsThisMonth);
+  const applicationsRemaining =
+    monthlyLimit === Infinity
+      ? Infinity
+      : Math.max(0, monthlyLimit - applicationsThisMonth);
 
   return {
     planType: planType,
@@ -69,7 +79,8 @@ const getJobApplicationEligibility = async (userId: string) => {
 // Helper function to get contractor job application eligibility
 const getContractorJobApplicationEligibility = async (userId: string) => {
   // Get user's highest priority active subscription plan
-  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+  const enrollment =
+    await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // Default eligibility for FREE plan - no applications allowed
   let planType = PlanType.FREE;
@@ -78,9 +89,9 @@ const getContractorJobApplicationEligibility = async (userId: string) => {
   let applyVisibility = "standard"; // default mode
 
   if (enrollment) {
-    const plan = (enrollment.plan as any);
+    const plan = enrollment.plan as any;
     planType = plan.planType;
-    
+
     // Set monthly limits and features based on plan type for contractors
     if (planType === PlanType.BASIC) {
       monthlyLimit = 10;
@@ -110,7 +121,10 @@ const getContractorJobApplicationEligibility = async (userId: string) => {
     },
   });
 
-  const applicationsRemaining = monthlyLimit === Infinity ? Infinity : Math.max(0, monthlyLimit - applicationsThisMonth);
+  const applicationsRemaining =
+    monthlyLimit === Infinity
+      ? Infinity
+      : Math.max(0, monthlyLimit - applicationsThisMonth);
 
   return {
     planType: planType,
@@ -124,8 +138,8 @@ const getContractorJobApplicationEligibility = async (userId: string) => {
       monthlyLimit === 0
         ? "Your current plan does not allow applying to employer jobs. Please upgrade to BASIC or above."
         : applicationsRemaining === 0
-        ? `You have reached your monthly job application limit (${monthlyLimit}). Please upgrade your subscription or try again next month.`
-        : `You have ${applicationsRemaining === Infinity ? "unlimited" : applicationsRemaining} applications remaining this month.`,
+          ? `You have reached your monthly job application limit (${monthlyLimit}). Please upgrade your subscription or try again next month.`
+          : `You have ${applicationsRemaining === Infinity ? "unlimited" : applicationsRemaining} applications remaining this month.`,
   };
 };
 
@@ -166,7 +180,7 @@ export const resetJobMetrics = async (jobId: string) => {
 export const applyToJob = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const applicantId = (req as any).user.id;
@@ -187,11 +201,10 @@ export const applyToJob = async (
     }
 
     if (!email) {
-  return res.status(400).json(
-    new ApiError(400, "Email is required to apply")
-  );
-}
-
+      return res
+        .status(400)
+        .json(new ApiError(400, "Email is required to apply"));
+    }
 
     const [jobDoc, userDoc]: any = await Promise.all([
       Job.findById(job).select("status title postedBy"),
@@ -202,19 +215,20 @@ export const applyToJob = async (
     if (userDoc && userDoc.userType === "worker") {
       const jobAppEligibility = await getJobApplicationEligibility(applicantId);
       if (!jobAppEligibility.eligible) {
-        return res.status(403).json(
-          new ApiError(403, jobAppEligibility.message)
-        );
+        return res
+          .status(403)
+          .json(new ApiError(403, jobAppEligibility.message));
       }
     }
 
     // Check monthly job application limit for contractors
     if (userDoc && userDoc.userType === "contractor") {
-      const contractorEligibility = await getContractorJobApplicationEligibility(applicantId);
+      const contractorEligibility =
+        await getContractorJobApplicationEligibility(applicantId);
       if (!contractorEligibility.eligible) {
-        return res.status(403).json(
-          new ApiError(403, contractorEligibility.message)
-        );
+        return res
+          .status(403)
+          .json(new ApiError(403, contractorEligibility.message));
       }
     }
 
@@ -279,7 +293,8 @@ export const applyToJob = async (
 
     // Update fast responder score after job application
     try {
-      const { updateFastResponderScore } = await import("../../services/fastResponder.service");
+      const { updateFastResponderScore } =
+        await import("../../services/fastResponder.service");
       await updateFastResponderScore(applicantId);
     } catch (error) {
       console.error("Error updating fast responder score:", error);
@@ -292,8 +307,8 @@ export const applyToJob = async (
         new ApiResponse(
           201,
           application,
-          "Job application submitted successfully"
-        )
+          "Job application submitted successfully",
+        ),
       );
   } catch (err) {
     next(err);
@@ -303,7 +318,7 @@ export const applyToJob = async (
 export const getUserApplications = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const applicantId = (req as any)?.user?.id;
@@ -422,15 +437,15 @@ export const getUserApplications = async (
             totalPages: Math.ceil(total / limit),
           },
         },
-        "Applications fetched"
-      )
+        "Applications fetched",
+      ),
     );
   } catch (err) {
     console.log("❌ Error in getUserApplications:", err);
     return next(
       err instanceof ApiError
         ? err
-        : new ApiError(500, "Failed to fetch applications")
+        : new ApiError(500, "Failed to fetch applications"),
     );
   }
 };
@@ -438,7 +453,7 @@ export const getUserApplications = async (
 export const getReceivedApplications = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id: userId, role } = (req as any).user;
@@ -454,10 +469,23 @@ export const getReceivedApplications = async (
     }
     // If the requester is a contractor, enforce subscription plan check
     if (role === UserType.CONTRACTOR) {
-      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
-      const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-      if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
-        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing received applications"));
+      const enrollment =
+        await UserSubscriptionService.getHighestPriorityPlan(userId);
+      const planType = (enrollment?.plan as ISubscriptionPlan | undefined)
+        ?.planType as PlanType | undefined;
+      if (
+        !enrollment ||
+        planType === PlanType.FREE ||
+        planType === PlanType.BASIC
+      ) {
+        return res
+          .status(403)
+          .json(
+            new ApiError(
+              403,
+              "Your subscription plan does not allow viewing received applications",
+            ),
+          );
       }
     }
 
@@ -630,8 +658,8 @@ export const getReceivedApplications = async (
             totalPages: Math.ceil(totalItems / limit),
           },
         },
-        "Applications received"
-      )
+        "Applications received",
+      ),
     );
   } catch (err) {
     console.log("❌ Error in getReceivedApplications:", err);
@@ -644,7 +672,7 @@ export const getReceivedApplications = async (
 export const getAllUserApplications = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id: user, role } = (req as any).user;
@@ -652,7 +680,7 @@ export const getAllUserApplications = async (
 
     let matchStage: any = {
       "postedDetails._id": { $exists: true, $ne: null },
-      user: { $exists: true, $ne: null },
+      applicant: { $exists: true, $ne: null },
     };
 
     if (role === "employer" || role === "contractor") {
@@ -773,7 +801,7 @@ export const getAllUserApplications = async (
 export const getApplicationById = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const app = await JobApplication.findById(req.params.id);
@@ -790,7 +818,7 @@ export const getApplicationById = async (
 export const handleOfferAccepted = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const applicantId = (req as any).user.id;
@@ -805,7 +833,7 @@ export const handleOfferAccepted = async (
       return res
         .status(403)
         .json(
-          new ApiError(403, "You are not authorized to perform this action.")
+          new ApiError(403, "You are not authorized to perform this action."),
         );
     }
 
@@ -815,8 +843,8 @@ export const handleOfferAccepted = async (
         .json(
           new ApiError(
             400,
-            "You have already accepted the job offer for this application."
-          )
+            "You have already accepted the job offer for this application.",
+          ),
         );
 
     if (app.status !== ApplicationStatus.OFFERED) {
@@ -838,7 +866,7 @@ export const handleOfferAccepted = async (
     ]);
 
     const receiver = await User.findById(jobDoc?.postedBy).select(
-      "_id userType"
+      "_id userType",
     );
     if (jobDoc && receiver?._id) {
       await sendDualNotification({
@@ -861,8 +889,8 @@ export const handleOfferAccepted = async (
         new ApiResponse(
           200,
           app,
-          "You have successfully accepted the job offer."
-        )
+          "You have successfully accepted the job offer.",
+        ),
       );
   } catch (err) {
     next(err);
@@ -872,7 +900,7 @@ export const handleOfferAccepted = async (
 export const withdrawApplication = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const app = await JobApplication.findById(req.params.id);
@@ -887,7 +915,7 @@ export const withdrawApplication = async (
       return res
         .status(403)
         .json(
-          new ApiError(403, "You are not authorized to perform this action.")
+          new ApiError(403, "You are not authorized to perform this action."),
         );
     }
 
@@ -895,7 +923,7 @@ export const withdrawApplication = async (
       return res
         .status(400)
         .json(
-          new ApiError(400, "This application has already been withdrawn.")
+          new ApiError(400, "This application has already been withdrawn."),
         );
     }
 
@@ -905,8 +933,8 @@ export const withdrawApplication = async (
         .json(
           new ApiError(
             400,
-            "You cannot withdraw an application that has been hired."
-          )
+            "You cannot withdraw an application that has been hired.",
+          ),
         );
     }
 
@@ -924,8 +952,8 @@ export const withdrawApplication = async (
         .json(
           new ApiError(
             400,
-            `You cannot withdraw an application that has already been offer ${statusMessage}.`
-          )
+            `You cannot withdraw an application that has already been offer ${statusMessage}.`,
+          ),
         );
     }
 
@@ -935,8 +963,8 @@ export const withdrawApplication = async (
         .json(
           new ApiError(
             400,
-            "Associated job ID is missing from the application."
-          )
+            "Associated job ID is missing from the application.",
+          ),
         );
     }
 
@@ -947,8 +975,8 @@ export const withdrawApplication = async (
         .json(
           new ApiError(
             404,
-            "The job associated with this application no longer exists."
-          )
+            "The job associated with this application no longer exists.",
+          ),
         );
     }
 
@@ -956,7 +984,7 @@ export const withdrawApplication = async (
       return res
         .status(400)
         .json(
-          new ApiError(400, "This job is no longer open for applications.")
+          new ApiError(400, "This job is no longer open for applications."),
         );
     }
 
@@ -975,7 +1003,7 @@ export const withdrawApplication = async (
     ]);
 
     const receiver = await User.findById(jobDoc?.postedBy).select(
-      "_id userType"
+      "_id userType",
     );
     if (jobDoc && receiver?._id) {
       await sendDualNotification({
@@ -998,8 +1026,8 @@ export const withdrawApplication = async (
         new ApiResponse(
           200,
           app,
-          "Your application has been successfully withdrawn."
-        )
+          "Your application has been successfully withdrawn.",
+        ),
       );
   } catch (err) {
     next(err);
@@ -1009,7 +1037,7 @@ export const withdrawApplication = async (
 export const updateStatusByEmployer = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const employerId = (req as any).user.id;
@@ -1030,8 +1058,8 @@ export const updateStatusByEmployer = async (
         .json(
           new ApiError(
             404,
-            "The job associated with this application could not be found."
-          )
+            "The job associated with this application could not be found.",
+          ),
         );
     }
 
@@ -1041,8 +1069,8 @@ export const updateStatusByEmployer = async (
         .json(
           new ApiError(
             400,
-            "The job is no longer open to accept application updates."
-          )
+            "The job is no longer open to accept application updates.",
+          ),
         );
     }
 
@@ -1052,8 +1080,8 @@ export const updateStatusByEmployer = async (
         .json(
           new ApiError(
             400,
-            "You cannot update the status of an application that has already been accepted."
-          )
+            "You cannot update the status of an application that has already been accepted.",
+          ),
         );
     }
 
@@ -1063,8 +1091,8 @@ export const updateStatusByEmployer = async (
         .json(
           new ApiError(
             403,
-            "You are not authorized to update this application."
-          )
+            "You are not authorized to update this application.",
+          ),
         );
     }
 
@@ -1082,8 +1110,8 @@ export const updateStatusByEmployer = async (
           .json(
             new ApiError(
               400,
-              "Interview mode must be either 'in-person' or 'online'."
-            )
+              "Interview mode must be either 'in-person' or 'online'.",
+            ),
           );
       }
       app.interviewMode = interviewMode;
@@ -1101,7 +1129,7 @@ export const updateStatusByEmployer = async (
     ]);
 
     const receiver = await User.findById(jobDoc?.postedBy).select(
-      "_id userType"
+      "_id userType",
     );
     if (jobDoc && receiver?._id) {
       await sendDualNotification({
@@ -1125,8 +1153,8 @@ export const updateStatusByEmployer = async (
         new ApiResponse(
           200,
           app,
-          "Application status has been updated successfully."
-        )
+          "Application status has been updated successfully.",
+        ),
       );
   } catch (err) {
     next(err);
@@ -1136,7 +1164,7 @@ export const updateStatusByEmployer = async (
 export const handleInterviewMode = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const applicantId = (req as any).user.id;
@@ -1154,8 +1182,8 @@ export const handleInterviewMode = async (
         .json(
           new ApiError(
             400,
-            "You have already accepted the interview mode for this application."
-          )
+            "You have already accepted the interview mode for this application.",
+          ),
         );
     }
 
@@ -1167,8 +1195,8 @@ export const handleInterviewMode = async (
         .json(
           new ApiError(
             404,
-            "The job associated with this application could not be found."
-          )
+            "The job associated with this application could not be found.",
+          ),
         );
     }
     if (job.status !== JobStatus.OPEN) {
@@ -1177,8 +1205,8 @@ export const handleInterviewMode = async (
         .json(
           new ApiError(
             400,
-            "The job is no longer open to accept application updates."
-          )
+            "The job is no longer open to accept application updates.",
+          ),
         );
     }
 
@@ -1188,8 +1216,8 @@ export const handleInterviewMode = async (
         .json(
           new ApiError(
             403,
-            "You are not authorized to update this application."
-          )
+            "You are not authorized to update this application.",
+          ),
         );
     }
     if (interviewMode && !["in-person", "online"].includes(interviewMode)) {
@@ -1198,8 +1226,8 @@ export const handleInterviewMode = async (
         .json(
           new ApiError(
             400,
-            "Interview mode must be either 'in-person' or 'online'."
-          )
+            "Interview mode must be either 'in-person' or 'online'.",
+          ),
         );
     }
     app.availability = rescheduledDate ?? app.availability;
@@ -1216,8 +1244,8 @@ export const handleInterviewMode = async (
         new ApiResponse(
           200,
           app,
-          "Interview mode has been updated successfully."
-        )
+          "Interview mode has been updated successfully.",
+        ),
       );
   } catch (err) {
     next(err);
@@ -1227,7 +1255,7 @@ export const handleInterviewMode = async (
 export const checkJobApplicationEligibility = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = (req as any).user?.id;
@@ -1237,9 +1265,15 @@ export const checkJobApplicationEligibility = async (
     }
 
     const eligibility = await getJobApplicationEligibility(userId);
-    return res.status(200).json(
-      new ApiResponse(200, eligibility, "Job application eligibility checked successfully")
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          eligibility,
+          "Job application eligibility checked successfully",
+        ),
+      );
   } catch (err) {
     next(err);
   }
@@ -1248,7 +1282,7 @@ export const checkJobApplicationEligibility = async (
 export const checkContractorJobApplicationEligibility = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = (req as any).user?.id;
@@ -1258,9 +1292,15 @@ export const checkContractorJobApplicationEligibility = async (
     }
 
     const eligibility = await getContractorJobApplicationEligibility(userId);
-    return res.status(200).json(
-      new ApiResponse(200, eligibility, "Contractor job application eligibility checked successfully")
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          eligibility,
+          "Contractor job application eligibility checked successfully",
+        ),
+      );
   } catch (err) {
     next(err);
   }

@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import Admin from "../modals/admin.model";
 import { config } from "../config/config";
 import Agent from "../modals/agent.model";
-import { User } from "../modals/user.model";
+import { User, UserStatus } from "../modals/user.model";
 import { Request, Response, NextFunction } from "express";
 
 // Role type
@@ -22,11 +22,11 @@ const secret = config.jwt.secret;
 /**
  * Middleware to authenticate JWT token and attach user to request
  */
-export const authenticateToken = (
+export const authenticateToken = async (
   req: Request,
   res: Response,
   next: NextFunction
-): any => {
+): Promise<any> => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
@@ -49,6 +49,29 @@ export const authenticateToken = (
       role: decoded.role,
     };
 
+    const Model: any = getModelByRole(decoded.role);
+    if (!Model) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access. Invalid user role.",
+      });
+    }
+
+    const existingUser = await Model.findById(decoded._id).select("status");
+    if (!existingUser) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access. User account not found.",
+      });
+    }
+
+    if (!isAccountActive(decoded.role, existingUser)) {
+      return res.status(403).json({
+        status: false,
+        message: "Your account is inactive. Please contact support.",
+      });
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({
@@ -63,11 +86,11 @@ export const authenticateToken = (
  * If a valid token is provided, it attaches the user to the request
  * If no token or invalid token, it continues without user info
  */
-export const authenticateTokenOptional = (
+export const authenticateTokenOptional = async (
   req: Request,
   res: Response,
   next: NextFunction
-): any => {
+): Promise<any> => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
@@ -81,6 +104,14 @@ export const authenticateTokenOptional = (
       role: Role;
       email: string;
     };
+
+    const Model: any = getModelByRole(decoded.role);
+    if (!Model) return next();
+
+    const existingUser = await Model.findById(decoded._id).select("status");
+    if (!existingUser || !isAccountActive(decoded.role, existingUser)) {
+      return next();
+    }
 
     (req as AuthenticatedRequest).user = {
       id: decoded._id,
@@ -210,6 +241,13 @@ const getModelByRole = (role: Role) => {
     default:
       return null;
   }
+};
+
+const isAccountActive = (role: Role, account: any): boolean => {
+  if (!account) return false;
+  if (role === "admin") return account.status !== false;
+  if (role === "agent") return account.status !== false;
+  return account.status === UserStatus.ACTIVE;
 };
 
 // Utility: Capitalize the first letter

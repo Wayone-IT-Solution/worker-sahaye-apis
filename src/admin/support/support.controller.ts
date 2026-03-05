@@ -17,6 +17,17 @@ import { extractImageUrl } from "../community/community.controller";
 const agentService = new CommonService(Agent);
 const ticketService = new CommonService(Ticket);
 
+const normalizeAvailability = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "active", "yes"].includes(normalized)) return true;
+    if (["false", "0", "inactive", "no"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
 export const createTicket = async (
   req: Request | any,
   res: Response,
@@ -113,9 +124,9 @@ export const createAgent = async (
         { mobile: req.body.mobile },
       ],
     });
-    let { availability } = req.body;
-    if (availability === "active" || availability === "inactive") {
-      req.body.availability = availability === "active";
+    const normalizedAvailability = normalizeAvailability(req.body.availability);
+    if (normalizedAvailability !== undefined) {
+      req.body.availability = normalizedAvailability;
     }
     if (duplicate) {
       if (profilePictureUrl) {
@@ -642,9 +653,9 @@ export const updateAgent = async (
   req: Request | any,
   res: Response
 ): Promise<any> => {
-  let { availability } = req.body;
-  if (availability === "active" || availability === "inactive") {
-    req.body.availability = availability === "active";
+  const normalizedAvailability = normalizeAvailability(req.body.availability);
+  if (normalizedAvailability !== undefined) {
+    req.body.availability = normalizedAvailability;
   }
   try {
     const userId = req.params.id;
@@ -658,7 +669,7 @@ export const updateAgent = async (
       return res.status(404).json(new ApiError(404, "Agent not found"));
     }
 
-    if (!availability) {
+    if (normalizedAvailability === false) {
       await Ticket.updateMany(
         {
           assignee: userId,

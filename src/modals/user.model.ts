@@ -357,28 +357,33 @@ const userSchema = new Schema<IUser>(
       description: "Early Access badge - user can access all premium features",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Check if user has an active premium plan
 // This helper verifies the actual enrollment status instead of relying on the hasPremiumPlan boolean
-export const checkUserHasActivePremiumPlan = async (userId: string): Promise<boolean> => {
+export const checkUserHasActivePremiumPlan = async (
+  userId: string,
+): Promise<boolean> => {
   try {
     // Import here to avoid circular dependency
-    const { EnrolledPlan, PlanEnrollmentStatus } = require('./enrollplan.model');
-    const { PlanType } = require('./subscriptionplan.model');
+    const {
+      EnrolledPlan,
+      PlanEnrollmentStatus,
+    } = require("./enrollplan.model");
+    const { PlanType } = require("./subscriptionplan.model");
 
     const activeEnrollment = await EnrolledPlan.findOne({
       user: userId,
       status: PlanEnrollmentStatus.ACTIVE,
-    }).populate('plan', 'planType');
+    }).populate("plan", "planType");
 
     if (!activeEnrollment) return false;
-    
+
     const plan = activeEnrollment.plan as any;
     return plan && plan.planType !== PlanType.FREE;
   } catch (error) {
-    console.error('Error checking premium plan status:', error);
+    console.error("Error checking premium plan status:", error);
     return false;
   }
 };
@@ -438,7 +443,6 @@ export const calculateProfileCompletion = (user: any): number => {
   return Math.round((earnedPoints / totalPoints) * 100);
 };
 
-
 export const generateReferralCode = (userId: string) => {
   const prefix = "REF";
   const randomPart = crypto.randomBytes(2).toString("hex");
@@ -449,14 +453,18 @@ export const generateReferralCode = (userId: string) => {
 // Calculate Fast Responder Score (0-100)
 // Components:
 // - Profile Completion: 0-30 points
-// - Job Application Speed: 0-40 points  
+// - Job Application Speed: 0-40 points
 // - Job Application Rate (last 30 days): 0-30 points
-export const calculateFastResponderScore = (profileCompletionPoints: number, applicationSpeedPoints: number, applicationRatePoints: number): number => {
+export const calculateFastResponderScore = (
+  profileCompletionPoints: number,
+  applicationSpeedPoints: number,
+  applicationRatePoints: number,
+): number => {
   // Ensure all components are within their max range
   const profilePoints = Math.min(Math.max(profileCompletionPoints, 0), 30);
   const speedPoints = Math.min(Math.max(applicationSpeedPoints, 0), 40);
   const ratePoints = Math.min(Math.max(applicationRatePoints, 0), 30);
-  
+
   const totalScore = profilePoints + speedPoints + ratePoints;
   return Math.min(totalScore, 100); // Cap at 100
 };
@@ -464,7 +472,7 @@ export const calculateFastResponderScore = (profileCompletionPoints: number, app
 // Calculate Profile Completion Points (0-30)
 export const calculateProfileCompletionPoints = (user: any): number => {
   let points = 30; // Start with full points
-  
+
   const requiredFields = [
     { field: "fullName", weight: 2 },
     { field: "email", weight: 2 },
@@ -488,7 +496,7 @@ export const calculateProfileCompletionPoints = (user: any): number => {
   requiredFields.forEach(({ field, weight }) => {
     totalWeight += weight;
     const value = field.split(".").reduce((obj: any, key) => obj?.[key], user);
-    
+
     if (isFilled(value)) {
       filledWeight += weight;
     }
@@ -499,7 +507,9 @@ export const calculateProfileCompletionPoints = (user: any): number => {
 };
 
 // Calculate Application Speed Points (0-40) based on time between job creation and application
-export const calculateApplicationSpeedPoints = (hoursDifference: number): number => {
+export const calculateApplicationSpeedPoints = (
+  hoursDifference: number,
+): number => {
   if (hoursDifference <= 3) return 30;
   if (hoursDifference <= 12) return 25;
   if (hoursDifference <= 24) return 20;
@@ -510,7 +520,9 @@ export const calculateApplicationSpeedPoints = (hoursDifference: number): number
 };
 
 // Calculate Application Rate Points (0-30) based on percentage of preferred jobs applied to
-export const calculateApplicationRatePoints = (applicationPercentage: number): number => {
+export const calculateApplicationRatePoints = (
+  applicationPercentage: number,
+): number => {
   if (applicationPercentage >= 100) return 30;
   if (applicationPercentage >= 80) return 24;
   if (applicationPercentage >= 60) return 18;

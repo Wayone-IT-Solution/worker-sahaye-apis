@@ -9,6 +9,7 @@ export enum JobRoleStatus {
 export interface IJobRole {
   name: string;
   slug: string;
+  order: number;
   description?: string;
   status: JobRoleStatus;
   category?: mongoose.Types.ObjectId;
@@ -41,6 +42,11 @@ const JobRoleSchema = new Schema<JobRoleDocument>(
       required: true,
       unique: true,
       lowercase: true,
+    },
+    order: {
+      type: Number,
+      default: 0,
+      index: true,
     },
     description: { type: String, trim: true },
 
@@ -91,6 +97,7 @@ const JobRoleSchema = new Schema<JobRoleDocument>(
 // Indexes
 JobRoleSchema.index({ name: 1 }, { unique: true });
 JobRoleSchema.index({ status: 1 });
+JobRoleSchema.index({ order: 1, name: 1 });
 JobRoleSchema.index({ name: "text", description: "text", tags: "text" });
 
 export const JobRole: Model<JobRoleDocument> = mongoose.model(

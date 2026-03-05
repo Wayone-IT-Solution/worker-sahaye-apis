@@ -6,6 +6,7 @@ import ApiResponse from "../../utils/ApiResponse";
 import ApiError from "../../utils/ApiError";
 import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
+import { SequenceCounter } from "../../modals/sequencecounter.model";
 import FileUpload, { FileTag } from "../../modals/fileupload.model";
 import { User } from "../../modals/user.model";
 import {
@@ -42,13 +43,27 @@ interface AdminCreatePayload {
   status?: boolean | string | number;
   username: string;
   password: string;
-  employeeCode?: string;
 }
 
 /**
  * User Controller
  */
 export class AdminController {
+  static async getNextEmployeeCode(): Promise<string> {
+    const counter = await SequenceCounter.findOneAndUpdate(
+      { key: "admin:employee_code" },
+      { $inc: { seq: 1 } },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    ).lean();
+
+    const next = Number(counter?.seq || 0);
+    return `EMP${String(next).padStart(3, "0")}`;
+  }
+
   static normalizeStatus(status: unknown): boolean {
     if (typeof status === "boolean") return status;
     if (typeof status === "number") return status === 1;
@@ -83,7 +98,7 @@ export class AdminController {
         const users = [];
         for (let index = 0; index < req.body.length; index += 1) {
           const row = req.body[index] as AdminCreatePayload;
-          const { username, employeeCode, email, password, role, status } = row;
+          const { username, email, password, role, status } = row;
 
           if (!username || !email || !password || !role) {
             return res.status(400).json({
@@ -97,7 +112,6 @@ export class AdminController {
             email,
             password,
             username,
-            employeeCode,
             status: AdminController.normalizeStatus(status),
           });
 
@@ -111,14 +125,13 @@ export class AdminController {
         });
       }
 
-      const { username, employeeCode, email, password, role, status } =
+      const { username, email, password, role, status } =
         req.body as AdminCreatePayload;
       const user = await AdminController.createUser({
         role,
         email,
         password,
         username,
-        employeeCode,
         status: AdminController.normalizeStatus(status),
       });
 
@@ -165,10 +178,14 @@ export class AdminController {
   ): Promise<any> {
     try {
       const { id } = req.params;
-      const { username, role, status, employeeCode } = req.body;
+      const { username, role, status } = req.body;
       const updatedUser = await Admin.findByIdAndUpdate(
         id,
-        { username, role, status: status === "active", employeeCode },
+        {
+          username,
+          role,
+          status: AdminController.normalizeStatus(status),
+        },
         { new: true, runValidators: true },
       );
 
@@ -803,15 +820,16 @@ export class AdminController {
     status: boolean;
     username: string;
     password: string;
-    employeeCode?: string;
   }) {
-    const { username, email, password, role, status, employeeCode } = userData;
+    const { username, email, password, role, status } = userData;
 
     const existingUser = await Admin.findOne({
       $or: [{ email }, { username }],
     });
     if (existingUser)
       throw new Error("User with this email or username already exists");
+
+    const employeeCode = await AdminController.getNextEmployeeCode();
 
     const user = new Admin({
       role,
@@ -834,10 +852,13 @@ export class AdminController {
       path: "role",
       select: "name permissions",
     });
-    if (!user) throw new Error("User not found with this email");
+    if (!user) throw new ApiError(404, "User not found with this email");
+    if (user.status === false) {
+      throw new ApiError(403, "Your account is inactive. Please contact support.");
+    }
 
     const isMatch = await user.comparePassword(password);
-    if (!isMatch) throw new Error("Password is incorrect");
+    if (!isMatch) throw new ApiError(401, "Password is incorrect");
 
     const token = jwt.sign(
       { _id: user._id, email: user.email, role: user?.role?.name },

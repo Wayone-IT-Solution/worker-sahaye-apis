@@ -8,6 +8,7 @@ import {
   EnrollmentStatus,
 } from "../../modals/enrollment.model";
 import { Course } from "../../modals/courses.model";
+import { User } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
@@ -138,11 +139,122 @@ const refundEnrollmentPointsIfNeeded = async (enrollment: any) => {
   }
 };
 
+const normalizeEnrollmentQuantity = (
+  numberOfPeople: unknown,
+  userType: string
+) => {
+  const parsed = Number(numberOfPeople);
+  const normalized = Number.isFinite(parsed) ? Math.floor(parsed) : 1;
+
+  if (normalized < 1) {
+    throw new ApiError(400, "numberOfPeople must be at least 1");
+  }
+
+  if (String(userType) === "worker" && normalized !== 1) {
+    throw new ApiError(
+      400,
+      "Workers can only be enrolled with quantity 1"
+    );
+  }
+
+  return normalized;
+};
+
 export class EnrollmentController {
+  static async adminAssignCourse(req: any, res: Response, next: NextFunction) {
+    try {
+      const { userId, courseId, numberOfPeople = 1 } = req.body || {};
+
+      if (!userId || !courseId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "userId and courseId are required"));
+      }
+
+      const [targetUser, courseDetails] = await Promise.all([
+        User.findById(userId).select("_id userType"),
+        Course.findById(courseId).select("_id amount"),
+      ]);
+
+      if (!targetUser) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      if (!courseDetails) {
+        return res.status(404).json(new ApiError(404, "Course not found"));
+      }
+
+      const normalizedNumberOfPeople = normalizeEnrollmentQuantity(
+        numberOfPeople,
+        String(targetUser.userType || "")
+      );
+
+      const totalAmount = Math.round(
+        Number(courseDetails.amount || 0) * normalizedNumberOfPeople
+      );
+      const assignedAt = new Date();
+
+      const payload: any = {
+        user: userId,
+        course: courseId,
+        progress: 0,
+        enrolledAt: assignedAt,
+        numberOfPeople: normalizedNumberOfPeople,
+        totalAmount,
+        finalAmount: 0,
+        pointsRedeemed: 0,
+        pointsValue: 0,
+        pointsRefunded: false,
+        appliedCoupon: undefined,
+        refundReason: undefined,
+        refundedAt: undefined,
+        status: EnrollmentStatus.ACTIVE,
+        paymentDetails: {
+          amount: 0,
+          currency: "INR",
+          paidAt: assignedAt,
+          status: PaymentStatus.SUCCESS,
+          gateway: PaymentGateway.ADMIN_ASSIGN,
+          paymentId: `admin_course_${Date.now()}`,
+        },
+      };
+
+      const existing = await Enrollment.findOne({ user: userId, course: courseId });
+      let result;
+      let statusCode = 201;
+      let message = "Course assigned successfully";
+
+      if (existing) {
+        await refundEnrollmentPointsIfNeeded(existing);
+        Object.assign(existing, payload);
+        result = await existing.save();
+        statusCode = 200;
+        message = "Course assignment updated successfully";
+      } else {
+        result = await enrollmentService.create(payload);
+      }
+
+      return res
+        .status(statusCode)
+        .json(new ApiResponse(200, result, message));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async createEnrollment(req: any, res: Response, next: NextFunction) {
     try {
       const { course, numberOfPeople = 1, pointsToRedeem } = req.body;
       const { id: user } = req.user;
+      const targetUser = await User.findById(user).select("_id userType");
+      if (!targetUser) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      const normalizedNumberOfPeople = normalizeEnrollmentQuantity(
+        numberOfPeople,
+        String(targetUser.userType || "")
+      );
 
       const exists = await Enrollment.findOne({ user, course });
       if (exists) {
@@ -190,11 +302,11 @@ export class EnrollmentController {
             } = await buildEnrollmentAmounts(
               user,
               courseDetails,
-              numberOfPeople,
+              normalizedNumberOfPeople,
               pointsToRedeem
             );
 
-            exists.numberOfPeople = numberOfPeople;
+            exists.numberOfPeople = normalizedNumberOfPeople;
             exists.totalAmount = baseAmount;
             exists.finalAmount = finalAmount;
             exists.pointsRedeemed = pointsRedeemed;
@@ -249,14 +361,14 @@ export class EnrollmentController {
       } = await buildEnrollmentAmounts(
         user,
         courseDetails,
-        numberOfPeople,
+        normalizedNumberOfPeople,
         pointsToRedeem
       );
 
       const data: any = {
         user,
         course,
-        numberOfPeople,
+        numberOfPeople: normalizedNumberOfPeople,
         totalAmount: baseAmount,
         finalAmount,
         pointsRedeemed,
@@ -347,6 +459,7 @@ export class EnrollmentController {
             createdAt: 1,
             updatedAt: 1,
             enrolledAt: 1,
+            numberOfPeople: 1,
             totalAmount: 1,
             finalAmount: 1,
             paymentDetails: 1,
@@ -357,6 +470,7 @@ export class EnrollmentController {
             "courseDetails.isFree": 1,
             "courseDetails.amount": 1,
             "userDetails.fullName": 1,
+            "userDetails.userType": 1,
           },
         },
       ];

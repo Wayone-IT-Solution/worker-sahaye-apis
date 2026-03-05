@@ -118,6 +118,7 @@ export const SEARCH_FIELD_MAP = {
     name: ["name"],
     description: ["description"],
     slug: ["slug"],
+    status: ["status"],
   },
   header: {
     title: ["title"],

@@ -10,6 +10,7 @@ import Ticket from "../../modals/ticket.model";
 import { Badge } from "../../modals/badge.model";
 import { Booking } from "../../modals/booking.model";
 import { IVRCallModel } from "../../modals/ivrcall.model";
+import { Promotion } from "../../modals/promotion.model";
 import { TopRecruiter } from "../../modals/toprecruiter.model";
 import { FastResponder } from "../../modals/fastresponder.model";
 import { ReliablePayer } from "../../modals/reliablepayer.model";
@@ -17,7 +18,6 @@ import { SafeWorkplace } from "../../modals/safeworkplace.model";
 import { TrainedWorker } from "../../modals/trainedworker.model";
 import { BulkHiringRequest } from "../../modals/bulkhiring.model";
 import { PreInterviewed } from "../../modals/preinterviewd.model";
-import { LoanRequestModel } from "../../modals/loanrequest.model";
 import { JobRequirement } from "../../modals/jobrequirement.model";
 import { TrustedPartner } from "../../modals/trustedpartner.model";
 import { HighlyPreferred } from "../../modals/highlypreferred.model";
@@ -1502,15 +1502,59 @@ export class DashboardController {
           ? endOfDay(parseISO(endDate as string))
           : undefined;
 
-      const models: Record<string, any> = {
-        bulk_hiring: BulkHiringRequest,
-        loan_request: LoanRequestModel,
-        on_demand_hiring: JobRequirement,
-        virtual_hr_hiring: VirtualHRRequest,
-        virtual_hr_recruiter: VirtualHrRecruiter,
-        support_service: UnifiedServiceRequest,
-        project_based_hiring: ProjectBasedHiring,
-      };
+      const models: Array<{
+        key: string;
+        Model: any;
+        usesVirtualHrFilter: boolean;
+        statusMap?: Partial<Record<VirtualHRRequestStatus, string>>;
+        dateFieldMap?: Partial<Record<VirtualHRRequestStatus, string>>;
+      }> = [
+        {
+          key: "on_demand_hiring",
+          Model: JobRequirement,
+          usesVirtualHrFilter: true,
+        },
+        {
+          key: "bulk_hiring",
+          Model: BulkHiringRequest,
+          usesVirtualHrFilter: true,
+        },
+        {
+          key: "project_based_hiring",
+          Model: ProjectBasedHiring,
+          usesVirtualHrFilter: true,
+        },
+        {
+          key: "virtual_hr_request",
+          Model: VirtualHRRequest,
+          usesVirtualHrFilter: true,
+        },
+        {
+          key: "virtual_hr_recruiter",
+          Model: VirtualHrRecruiter,
+          usesVirtualHrFilter: true,
+        },
+        {
+          key: "promotional_services",
+          Model: Promotion,
+          usesVirtualHrFilter: false,
+          statusMap: {
+            [VirtualHRRequestStatus.PENDING]: "pending",
+            [VirtualHRRequestStatus.COMPLETED]: "approved",
+            [VirtualHRRequestStatus.CANCELLED]: "rejected",
+          },
+          dateFieldMap: {
+            [VirtualHRRequestStatus.PENDING]: "createdAt",
+            [VirtualHRRequestStatus.COMPLETED]: "updatedAt",
+            [VirtualHRRequestStatus.CANCELLED]: "updatedAt",
+          },
+        },
+        {
+          key: "exclusive_services",
+          Model: UnifiedServiceRequest,
+          usesVirtualHrFilter: true,
+        },
+      ];
 
       const results: Record<
         string,
@@ -1518,7 +1562,8 @@ export class DashboardController {
       > = {};
 
       await Promise.all(
-        Object.entries(models).map(async ([key, Model]) => {
+        models.map(
+          async ({ key, Model, usesVirtualHrFilter, statusMap, dateFieldMap }) => {
           const statusCount: Record<VirtualHRRequestStatus, number> = {
             [VirtualHRRequestStatus.PENDING]: 0,
             [VirtualHRRequestStatus.ASSIGNED]: 0,
@@ -1527,61 +1572,54 @@ export class DashboardController {
             [VirtualHRRequestStatus.CANCELLED]: 0,
           };
 
-          const matchBase: any = {};
-          if (virtualHRId) matchBase.assignedTo = virtualHRId;
+          const matchBase: Record<string, any> = {};
+          if (virtualHRId && usesVirtualHrFilter) {
+            matchBase.assignedTo = virtualHRId;
+          }
 
-          if (start && end) {
-            const [pending, assigned, inProgress, completed, cancelled] =
-              await Promise.all([
-                Model.countDocuments({
-                  ...matchBase,
-                  status: "Pending",
-                  createdAt: { $gte: start, $lte: end },
-                }),
-                Model.countDocuments({
-                  ...matchBase,
-                  status: "Assigned",
-                  assignedAt: { $gte: start, $lte: end },
-                }),
-                Model.countDocuments({
-                  ...matchBase,
-                  status: "In Progress",
-                  updatedAt: { $gte: start, $lte: end },
-                }),
-                Model.countDocuments({
-                  ...matchBase,
-                  status: "Completed",
-                  completedAt: { $gte: start, $lte: end },
-                }),
-                Model.countDocuments({
-                  ...matchBase,
-                  status: "Cancelled",
-                  updatedAt: { $gte: start, $lte: end },
-                }),
-              ]);
+          const statusDateFieldMap: Record<VirtualHRRequestStatus, string> = {
+            [VirtualHRRequestStatus.PENDING]: "createdAt",
+            [VirtualHRRequestStatus.ASSIGNED]: "assignedAt",
+            [VirtualHRRequestStatus.IN_PROGRESS]: "updatedAt",
+            [VirtualHRRequestStatus.COMPLETED]: "completedAt",
+            [VirtualHRRequestStatus.CANCELLED]: "updatedAt",
+          };
 
-            statusCount[VirtualHRRequestStatus.PENDING] = pending;
-            statusCount[VirtualHRRequestStatus.ASSIGNED] = assigned;
-            statusCount[VirtualHRRequestStatus.IN_PROGRESS] = inProgress;
-            statusCount[VirtualHRRequestStatus.COMPLETED] = completed;
-            statusCount[VirtualHRRequestStatus.CANCELLED] = cancelled;
-          } else {
-            const matchPipeline = virtualHRId
-              ? [{ $match: { virtualHRId } }]
-              : [];
-            const counts = await Model.aggregate([
-              ...matchPipeline,
-              { $group: { _id: "$status", count: { $sum: 1 } } },
+          const countForStatus = async (status: VirtualHRRequestStatus) => {
+            const mappedStatus = statusMap?.[status] || status;
+            if (!mappedStatus) return 0;
+
+            const query: Record<string, any> = {
+              ...matchBase,
+              status: mappedStatus,
+            };
+
+            if (start && end) {
+              const dateField = dateFieldMap?.[status] || statusDateFieldMap[status];
+              query[dateField] = { $gte: start, $lte: end };
+            }
+
+            return Model.countDocuments(query);
+          };
+
+          const [pending, assigned, inProgress, completed, cancelled] =
+            await Promise.all([
+              countForStatus(VirtualHRRequestStatus.PENDING),
+              countForStatus(VirtualHRRequestStatus.ASSIGNED),
+              countForStatus(VirtualHRRequestStatus.IN_PROGRESS),
+              countForStatus(VirtualHRRequestStatus.COMPLETED),
+              countForStatus(VirtualHRRequestStatus.CANCELLED),
             ]);
 
-            counts.forEach(({ _id, count }: any) => {
-              if (_id in statusCount) {
-                statusCount[_id as VirtualHRRequestStatus] = count;
-              }
-            });
-          }
+          statusCount[VirtualHRRequestStatus.PENDING] = pending;
+          statusCount[VirtualHRRequestStatus.ASSIGNED] = assigned;
+          statusCount[VirtualHRRequestStatus.IN_PROGRESS] = inProgress;
+          statusCount[VirtualHRRequestStatus.COMPLETED] = completed;
+          statusCount[VirtualHRRequestStatus.CANCELLED] = cancelled;
+
           results[key] = statusCount;
-        }),
+          },
+        ),
       );
 
       return res
@@ -1688,13 +1726,13 @@ export class DashboardController {
       const { startDate, endDate, agentId } = req.query;
 
       const requestModels = [
+        "JobRequirement",
         "BulkHiringRequest",
+        "ProjectBasedHiring",
         "VirtualHRRequest",
         "VirtualHrRecruiter",
-        "JobRequirement",
-        "ProjectBasedHiring",
-        "UnifiedServiceRequest",
         "Promotion",
+        "UnifiedServiceRequest",
       ];
 
       const start =

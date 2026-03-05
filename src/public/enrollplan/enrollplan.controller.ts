@@ -8,6 +8,7 @@ import {
   SubscriptionPlan,
   calculateExpiryDate,
   PlanType,
+  PlanStatus,
 } from "../../modals/subscriptionplan.model";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
@@ -57,7 +58,151 @@ const refundPlanPointsIfNeeded = async (enrollment: any) => {
   }
 };
 
+const syncUserPremiumFlag = async (userId: string) => {
+  const activeEnrollments = await EnrolledPlan.find({
+    user: userId,
+    status: PlanEnrollmentStatus.ACTIVE,
+  }).populate("plan", "planType");
+
+  const hasAnyActivePaidPlan = activeEnrollments.some((entry: any) => {
+    const planType = entry?.plan?.planType;
+    return planType && planType !== PlanType.FREE;
+  });
+
+  await User.findByIdAndUpdate(userId, {
+    hasPremiumPlan: hasAnyActivePaidPlan,
+  });
+};
+
 export class EnrollPlanController {
+  static async adminAssignPlan(req: any, res: Response, next: NextFunction) {
+    try {
+      const { userId, planId } = req.body || {};
+
+      if (!userId || !planId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "userId and planId are required"));
+      }
+
+      const [targetUser, planDetails] = await Promise.all([
+        User.findById(userId).select("_id userType"),
+        SubscriptionPlan.findById(planId),
+      ]);
+
+      if (!targetUser) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      if (!planDetails) {
+        return res.status(404).json(new ApiError(404, "Plan not found"));
+      }
+
+      if (planDetails.status !== PlanStatus.ACTIVE) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Only active plans can be assigned"));
+      }
+
+      if (String(planDetails.userType) !== String(targetUser.userType)) {
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              `Plan userType (${planDetails.userType}) does not match userType (${targetUser.userType})`
+            )
+          );
+      }
+
+      const existing = await EnrolledPlan.findOne({ user: userId, plan: planId });
+      if (existing?.status === PlanEnrollmentStatus.ACTIVE) {
+        return res
+          .status(409)
+          .json(new ApiError(409, "User already has this active plan", existing));
+      }
+
+      const enrolledAt = new Date();
+      const expiredAt = planDetails.billingCycle
+        ? calculateExpiryDate(enrolledAt, planDetails.billingCycle)
+        : undefined;
+
+      const payload: any = {
+        user: userId,
+        plan: planId,
+        enrolledAt,
+        expiredAt,
+        totalAmount: Math.round(planDetails.basePrice ?? 0),
+        finalAmount: 0,
+        pointsRedeemed: 0,
+        pointsValue: 0,
+        pointsRefunded: false,
+        status: PlanEnrollmentStatus.ACTIVE,
+        paymentDetails: {
+          amount: 0,
+          currency: "INR",
+          paidAt: enrolledAt,
+          status: PlanPaymentStatus.SUCCESS,
+          gateway: PlanPaymentGateway.ADMIN_ASSIGN,
+          paymentId: `admin_${Date.now()}`,
+        },
+      };
+
+      let result;
+      if (existing) {
+        await refundPlanPointsIfNeeded(existing);
+        Object.assign(existing, payload);
+        result = await existing.save();
+      } else {
+        result = await enrollPlanService.create(payload);
+      }
+
+      await syncUserPremiumFlag(userId);
+
+      return res
+        .status(existing ? 200 : 201)
+        .json(new ApiResponse(200, result, "Plan assigned successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async adminExpireEnrollPlan(
+    req: any,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        return res.status(400).json(new ApiError(400, "Enrollment id is required"));
+      }
+
+      const enrollment = await EnrolledPlan.findById(id).populate("plan", "planType");
+      if (!enrollment) {
+        return res.status(404).json(new ApiError(404, "Enrollment not found"));
+      }
+
+      if (enrollment.status === PlanEnrollmentStatus.EXPIRED) {
+        return res.status(200).json(
+          new ApiResponse(200, enrollment, "Enrollment is already expired")
+        );
+      }
+
+      enrollment.status = PlanEnrollmentStatus.EXPIRED;
+      enrollment.expiredAt = new Date();
+      await enrollment.save();
+
+      await syncUserPremiumFlag(String(enrollment.user));
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, enrollment, "Enrollment marked as expired"));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async createEnrollPlan(req: any, res: Response, next: NextFunction) {
     try {
       const { plan, pointsToRedeem } = req.body;

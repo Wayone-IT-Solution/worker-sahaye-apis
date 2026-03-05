@@ -15,6 +15,7 @@ import { enforceJobListingLimit } from "../../middlewares/jobListingLimitMiddlew
 
 const {
   createJob,
+  createBulkJobsForOwner,
   getAllJobs,
   getJobById,
   addJobComment,
@@ -111,6 +112,12 @@ router
     "/get-comment-history/:id",
     authenticateToken,
     asyncHandler(getJobWithHistory)
+  )
+  .post(
+    "/admin/bulk/:ownerId",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(createBulkJobsForOwner)
   )
   .post(
     "/",

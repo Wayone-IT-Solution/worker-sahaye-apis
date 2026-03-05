@@ -10,6 +10,7 @@ import {
 const {
   getCurrentStats,
   getDashboardStats,
+  getJobPostedGrowth,
   getIvrCallSummary,
   getBadgeStatusCounts,
   getServicesStatusCounts,
@@ -24,6 +25,12 @@ const {
 const router = express.Router();
 
 router.get("/", authenticateToken, isAdmin, asyncHandler(getDashboardStats));
+router.get(
+  "/job-posted-growth",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getJobPostedGrowth),
+);
 router.get("/current-stats", authenticateToken, asyncHandler(getCurrentStats));
 router.get(
   "/revenue-stats",

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { BadgeBundleController } from "./badgeBundle.controller";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 
 const router = Router();
 
@@ -14,6 +15,32 @@ router.put("/order", BadgeBundleController.updateOrder);
 
 // Get bundles ordered by `order` (optionally limit via ?limit)
 router.get("/ordered", BadgeBundleController.getOrdered);
+
+// Bundle assignment to users (admin only)
+router.get(
+  "/eligible/:userId",
+  authenticateToken,
+  isAdmin,
+  BadgeBundleController.getEligibleBundlesByUser
+);
+router.get(
+  "/assigned/:userId",
+  authenticateToken,
+  isAdmin,
+  BadgeBundleController.getAssignedBundlesByUser
+);
+router.post(
+  "/assign",
+  authenticateToken,
+  isAdmin,
+  BadgeBundleController.assignBundleToUser
+);
+router.post(
+  "/unassign",
+  authenticateToken,
+  isAdmin,
+  BadgeBundleController.unassignBundleFromUser
+);
 
 // Get a single badge bundle by ID
 router.get("/:id", BadgeBundleController.getById);

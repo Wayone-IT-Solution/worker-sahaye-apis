@@ -709,7 +709,12 @@ export const getAllUserApplications = async (
 
     // Filter by role name if provided
     if (userType && userType !== "applications")
-      pipeline.push({ $match: { "jobDetails.userType": userType } });
+      pipeline.push({
+        $match: {
+          "jobDetails.userType":
+            userType === "agency" ? "contractor" : userType,
+        },
+      });
 
     pipeline.push({
       $project: {
@@ -731,10 +736,29 @@ export const getAllUserApplications = async (
         postedByMobile: "$postedDetails.mobile",
         postedByName: "$postedDetails.fullName",
         applicantEmail: "$applicantDetails.email",
-        postedByUserType: "$postedDetails.userType",
+        postedByUserType: {
+          $cond: [
+            { $eq: ["$postedDetails.userType", "contractor"] },
+            "agency",
+            "$postedDetails.userType",
+          ],
+        },
+        appliedForUserType: {
+          $cond: [
+            { $eq: ["$jobDetails.userType", "contractor"] },
+            "agency",
+            "$jobDetails.userType",
+          ],
+        },
         applicantMobile: "$applicantDetails.mobile",
         applicantFullName: "$applicantDetails.fullName",
-        applicantUserType: "$applicantDetails.userType",
+        applicantUserType: {
+          $cond: [
+            { $eq: ["$applicantDetails.userType", "contractor"] },
+            "agency",
+            "$applicantDetails.userType",
+          ],
+        },
       },
     });
     const apps = await JobApplicationService.getAll(req.query, pipeline);

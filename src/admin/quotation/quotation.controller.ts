@@ -7,6 +7,47 @@ import mongoose from "mongoose";
 
 const QuotationService = new CommonService(Quotation);
 
+const toSafeNumber = (value: any): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const buildGSTDetails = (payload: any) => {
+  const amount = toSafeNumber(payload?.amount);
+  const gstRate = Math.max(0, toSafeNumber(payload?.gstRate));
+  const gstType = payload?.gstType === "inter_state" ? "inter_state" : "intra_state";
+
+  let cgstRate = 0;
+  let sgstRate = 0;
+  let igstRate = 0;
+
+  if (gstType === "inter_state") {
+    igstRate = gstRate;
+  } else {
+    cgstRate = gstRate / 2;
+    sgstRate = gstRate / 2;
+  }
+
+  const cgstAmount = +((amount * cgstRate) / 100).toFixed(2);
+  const sgstAmount = +((amount * sgstRate) / 100).toFixed(2);
+  const igstAmount = +((amount * igstRate) / 100).toFixed(2);
+  const totalTaxAmount = +(cgstAmount + sgstAmount + igstAmount).toFixed(2);
+  const totalAmountWithTax = +(amount + totalTaxAmount).toFixed(2);
+
+  return {
+    gstType,
+    gstRate,
+    cgstRate,
+    sgstRate,
+    igstRate,
+    cgstAmount,
+    sgstAmount,
+    igstAmount,
+    totalTaxAmount,
+    totalAmountWithTax,
+  };
+};
+
 export class QuotationController {
   static async createQuotation(req: Request, res: Response, next: NextFunction) {
     try {
@@ -45,11 +86,14 @@ export class QuotationController {
           .json(new ApiError(400, "Quotation already exists and is not fulfilled"));
       }
 
+      const gstDetails = buildGSTDetails(req.body);
+
       const quotation = await Quotation.create({
         userId,
         agentId,
         requestId,
         ...req.body,
+        ...gstDetails,
         requestModel,
       });
       return res
@@ -82,7 +126,7 @@ export class QuotationController {
         matchStage.userId = new mongoose.Types.ObjectId(userId)
       }
 
-      const totalCount = await Quotation.countDocuments();
+      const totalCount = await Quotation.countDocuments(matchStage);
       const pipeline: any[] = [
         { $match: matchStage },
         { $sort: { createdAt: -1 } },
@@ -129,6 +173,16 @@ export class QuotationController {
             requestModel: 1,
             isAdvancePaid: 1,
             advanceAmount: 1,
+            gstType: 1,
+            gstRate: 1,
+            cgstRate: 1,
+            sgstRate: 1,
+            igstRate: 1,
+            cgstAmount: 1,
+            sgstAmount: 1,
+            igstAmount: 1,
+            totalTaxAmount: 1,
+            totalAmountWithTax: 1,
 
             // User Info
             "user._id": 1,
@@ -229,10 +283,23 @@ export class QuotationController {
     next: NextFunction
   ) {
     try {
-      const result = await QuotationService.updateById(
-        req.params.id,
-        req.body
-      );
+      const existing = await Quotation.findById(req.params.id);
+      if (!existing) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to update quotation"));
+      }
+
+      const gstDetails = buildGSTDetails({
+        amount: req.body?.amount ?? existing.amount,
+        gstType: req.body?.gstType ?? existing.gstType,
+        gstRate: req.body?.gstRate ?? existing.gstRate,
+      });
+
+      const result = await QuotationService.updateById(req.params.id, {
+        ...req.body,
+        ...gstDetails,
+      });
       if (!result)
         return res
           .status(404)

@@ -181,6 +181,7 @@ export const createSupportService = async (req: Request, res: Response) => {
 export const getAllSupportServices = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || null;
+    const isAuthenticatedRequest = Boolean(userId);
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
@@ -193,6 +194,8 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
     }
     if (req.query.status) {
       matchStage.status = req.query.status as string;
+    } else if (!isAuthenticatedRequest) {
+      matchStage.status = "active";
     }
 
     // Search functionality
@@ -389,10 +392,18 @@ export const getSupportServiceById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).user?.id || null;
+    const isAuthenticatedRequest = Boolean(userId);
 
     const service = await SupportService.findById(id).populate("createdBy", "name email");
 
     if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Support service not found",
+      });
+    }
+
+    if (!isAuthenticatedRequest && service.status !== "active") {
       return res.status(404).json({
         success: false,
         message: "Support service not found",
@@ -537,6 +548,7 @@ export const searchSupportServices = async (req: Request, res: Response) => {
   try {
     const { query, serviceFor } = req.query;
     const userId = (req as any).user?.id || null;
+    const isAuthenticatedRequest = Boolean(userId);
 
     if (!query) {
       return res.status(400).json({
@@ -548,6 +560,9 @@ export const searchSupportServices = async (req: Request, res: Response) => {
     const matchStage: any = { $text: { $search: query as string } };
     if (serviceFor) {
       matchStage.serviceFor = serviceFor;
+    }
+    if (!isAuthenticatedRequest) {
+      matchStage.status = "active";
     }
 
     const services = await SupportService.aggregate([

@@ -39,8 +39,135 @@ import {
 } from "../../modals/virtualhrrequest.model";
 import { VirtualHrRecruiter } from "../../modals/virtualhrecruiter.model";
 import { Job } from "../../modals/job.model";
+import { Subscription } from "../../modals/subscription.model";
 
 export class DashboardController {
+  static async getJobPostedGrowth(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { startDate: start, endDate: end } = req.query;
+
+      const endDate = end ? new Date(end as string) : new Date();
+      const startDate = start ? new Date(start as string) : subDays(endDate, 7);
+
+      const prevEndDate = subDays(startDate, 1);
+      const prevStartDate = subDays(startDate, 7);
+
+      const currentRange = {
+        $gte: startOfDay(startDate),
+        $lte: endOfDay(endDate),
+      };
+
+      const prevRange = {
+        $gte: startOfDay(prevStartDate),
+        $lte: endOfDay(prevEndDate),
+      };
+
+      const buildDateList = (startDt: Date, endDtParam: Date) => {
+        const days: string[] = [];
+        const cur = new Date(startDt);
+        while (cur <= endDtParam) {
+          days.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
+        }
+        return days;
+      };
+
+      const dateList = buildDateList(startOfDay(startDate), endOfDay(endDate));
+
+      const getCounts = async (userType: "contractor" | "employer") => {
+        const [totalCurrent, totalPrevious, currentSeriesRaw] = await Promise.all([
+          Job.countDocuments({ userType, createdAt: currentRange }),
+          Job.countDocuments({ userType, createdAt: prevRange }),
+          Job.aggregate([
+            { $match: { userType, createdAt: currentRange } },
+            {
+              $group: {
+                _id: {
+                  date: {
+                    $dateToString: {
+                      format: "%Y-%m-%d",
+                      date: "$createdAt",
+                    },
+                  },
+                },
+                total: { $sum: 1 },
+              },
+            },
+          ]),
+        ]);
+
+        const seriesMap: Record<string, number> = {};
+        dateList.forEach((d) => {
+          seriesMap[d] = 0;
+        });
+        currentSeriesRaw.forEach((item: any) => {
+          seriesMap[item._id.date] = item.total;
+        });
+
+        const chartData = dateList.map((d) => seriesMap[d] || 0);
+        const percentageChange =
+          totalPrevious === 0
+            ? totalCurrent > 0
+              ? 100
+              : 0
+            : parseFloat(
+                (((totalCurrent - totalPrevious) / totalPrevious) * 100).toFixed(
+                  2,
+                ),
+              );
+
+        return { totalCurrent, totalPrevious, percentageChange, chartData };
+      };
+
+      const [agency, employer] = await Promise.all([
+        getCounts("contractor"),
+        getCounts("employer"),
+      ]);
+
+      const combined = {
+        totalCurrent: agency.totalCurrent + employer.totalCurrent,
+        totalPrevious: agency.totalPrevious + employer.totalPrevious,
+        chartData: agency.chartData.map(
+          (val: number, idx: number) => val + (employer.chartData[idx] || 0),
+        ),
+        percentageChange: 0,
+      };
+
+      combined.percentageChange =
+        combined.totalPrevious === 0
+          ? combined.totalCurrent > 0
+            ? 100
+            : 0
+          : parseFloat(
+              (
+                ((combined.totalCurrent - combined.totalPrevious) /
+                  combined.totalPrevious) *
+                100
+              ).toFixed(2),
+            );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            agency,
+            employer,
+            combined,
+            from: startOfDay(startDate),
+            to: endOfDay(endDate),
+          },
+          "Job posted growth fetched successfully",
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getDashboardStats(
     req: Request,
     res: Response,
@@ -1092,6 +1219,8 @@ export class DashboardController {
       const getMonthlyRevenue = async (
         model: any,
         yr: number,
+        amountField: string,
+        match: Record<string, any>,
       ): Promise<number[]> => {
         const pipeline = [
           {
@@ -1100,13 +1229,13 @@ export class DashboardController {
                 $gte: new Date(`${yr}-01-01T00:00:00.000Z`),
                 $lte: new Date(`${yr}-12-31T23:59:59.999Z`),
               },
-              "paymentDetails.status": "success",
+              ...match,
             },
           },
           {
             $group: {
               _id: { month: { $month: "$createdAt" } },
-              total: { $sum: "$finalAmount" },
+              total: { $sum: `$${amountField}` },
             },
           },
           { $sort: { "_id.month": 1 } },
@@ -1125,13 +1254,61 @@ export class DashboardController {
       const [
         enrollmentCurrent,
         enrolledPlanCurrent,
+        personalCurrent,
+        badgeCurrent,
         enrollmentPrevious,
         enrolledPlanPrevious,
+        personalPrevious,
+        badgePrevious,
       ] = await Promise.all([
-        getMonthlyRevenue(Enrollment, currentYear),
-        getMonthlyRevenue(EnrolledPlan, currentYear),
-        getMonthlyRevenue(Enrollment, previousYear),
-        getMonthlyRevenue(EnrolledPlan, previousYear),
+        getMonthlyRevenue(
+          Enrollment,
+          currentYear,
+          "finalAmount",
+          { "paymentDetails.status": "success" },
+        ),
+        getMonthlyRevenue(
+          EnrolledPlan,
+          currentYear,
+          "finalAmount",
+          { "paymentDetails.status": "success" },
+        ),
+        getMonthlyRevenue(
+          Booking,
+          currentYear,
+          "totalAmount",
+          { paymentStatus: "success" },
+        ),
+        getMonthlyRevenue(
+          Subscription,
+          currentYear,
+          "amount",
+          { status: "active" },
+        ),
+        getMonthlyRevenue(
+          Enrollment,
+          previousYear,
+          "finalAmount",
+          { "paymentDetails.status": "success" },
+        ),
+        getMonthlyRevenue(
+          EnrolledPlan,
+          previousYear,
+          "finalAmount",
+          { "paymentDetails.status": "success" },
+        ),
+        getMonthlyRevenue(
+          Booking,
+          previousYear,
+          "totalAmount",
+          { paymentStatus: "success" },
+        ),
+        getMonthlyRevenue(
+          Subscription,
+          previousYear,
+          "amount",
+          { status: "active" },
+        ),
       ]);
 
       const totalEnrollmentCurrent = enrollmentCurrent.reduce(
@@ -1150,9 +1327,21 @@ export class DashboardController {
         (a, b) => a + b,
         0,
       );
+      const totalPersonalCurrent = personalCurrent.reduce((a, b) => a + b, 0);
+      const totalPersonalPrevious = personalPrevious.reduce((a, b) => a + b, 0);
+      const totalBadgeCurrent = badgeCurrent.reduce((a, b) => a + b, 0);
+      const totalBadgePrevious = badgePrevious.reduce((a, b) => a + b, 0);
 
-      const totalCurrent = totalEnrollmentCurrent + totalEnrolledPlanCurrent;
-      const totalPrevious = totalEnrollmentPrevious + totalEnrolledPlanPrevious;
+      const totalCurrent =
+        totalEnrollmentCurrent +
+        totalEnrolledPlanCurrent +
+        totalPersonalCurrent +
+        totalBadgeCurrent;
+      const totalPrevious =
+        totalEnrollmentPrevious +
+        totalEnrolledPlanPrevious +
+        totalPersonalPrevious +
+        totalBadgePrevious;
 
       const getPercentageChange = (curr: number, prev: number) => {
         if (prev === 0 && curr > 0) return 100;
@@ -1170,6 +1359,14 @@ export class DashboardController {
         totalEnrolledPlanCurrent,
         totalEnrolledPlanPrevious,
       );
+      const personalPercentageChange = getPercentageChange(
+        totalPersonalCurrent,
+        totalPersonalPrevious,
+      );
+      const badgePercentageChange = getPercentageChange(
+        totalBadgeCurrent,
+        totalBadgePrevious,
+      );
 
       return res.status(200).json(
         new ApiResponse(
@@ -1181,19 +1378,29 @@ export class DashboardController {
             totalEnrollmentPrevious,
             totalEnrolledPlanCurrent,
             totalEnrolledPlanPrevious,
+            totalPersonalCurrent,
+            totalPersonalPrevious,
+            totalBadgeCurrent,
+            totalBadgePrevious,
             totalCurrent,
             totalPrevious,
             percentageChange,
             enrollmentPercentageChange,
             enrolledPlanPercentageChange,
+            personalPercentageChange,
+            badgePercentageChange,
             monthlyData: {
               [currentYear]: {
                 enrollment: enrollmentCurrent,
                 enrolledPlan: enrolledPlanCurrent,
+                personalAssistance: personalCurrent,
+                badge: badgeCurrent,
               },
               [previousYear]: {
                 enrollment: enrollmentPrevious,
                 enrolledPlan: enrolledPlanPrevious,
+                personalAssistance: personalPrevious,
+                badge: badgePrevious,
               },
             },
           },
@@ -1487,6 +1694,7 @@ export class DashboardController {
         "JobRequirement",
         "ProjectBasedHiring",
         "UnifiedServiceRequest",
+        "Promotion",
       ];
 
       const start =
@@ -1514,6 +1722,8 @@ export class DashboardController {
                 $cond: [{ $eq: ["$isAdvancePaid", true] }, "$advanceAmount", 0],
               },
             },
+            totalTaxAmount: { $sum: { $ifNull: ["$totalTaxAmount", 0] } },
+            totalAmountWithTax: { $sum: { $ifNull: ["$totalAmountWithTax", "$amount"] } },
             quotationCount: { $sum: 1 },
             advancePaidCount: {
               $sum: { $cond: [{ $eq: ["$isAdvancePaid", true] }, 1, 0] },
@@ -1535,6 +1745,8 @@ export class DashboardController {
                 totalAmount: found.totalAmount,
                 totalAdvancePaid: found.totalAdvancePaid,
                 totalPendingAdvance: found.totalAmount - found.totalAdvancePaid,
+                totalTaxAmount: found.totalTaxAmount || 0,
+                totalAmountWithTax: found.totalAmountWithTax || found.totalAmount || 0,
                 quotationCount: found.quotationCount,
                 advancePaidCount: found.advancePaidCount,
                 advanceUnpaidCount: found.advanceUnpaidCount,
@@ -1543,6 +1755,8 @@ export class DashboardController {
                 totalAmount: 0,
                 totalAdvancePaid: 0,
                 totalPendingAdvance: 0,
+                totalTaxAmount: 0,
+                totalAmountWithTax: 0,
                 quotationCount: 0,
                 advancePaidCount: 0,
                 advanceUnpaidCount: 0,

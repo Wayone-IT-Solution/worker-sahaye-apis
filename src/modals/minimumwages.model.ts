@@ -13,6 +13,7 @@ export interface IWageRow {
 
 export interface IMinimumWage extends Document {
   state: string;
+  order: number;
   columns: IColumnDefinition[];
   rows: IWageRow[];
   createdBy?: string;
@@ -36,6 +37,7 @@ const WageRowSchema = new Schema<IWageRow>(
 const MinimumWageSchema: Schema<IMinimumWage> = new Schema(
   {
     state: { type: String, required: true, trim: true },
+    order: { type: Number, default: 0, index: true },
     columns: [ColumnDefinitionSchema],
     rows: [WageRowSchema],
     createdBy: { type: String },
@@ -45,6 +47,7 @@ const MinimumWageSchema: Schema<IMinimumWage> = new Schema(
 );
 
 MinimumWageSchema.index({ state: 1 }, { unique: true });
+MinimumWageSchema.index({ order: 1, state: 1 });
 
 const MinimumWage: Model<IMinimumWage> = mongoose.model<IMinimumWage>(
   "MinimumWage",

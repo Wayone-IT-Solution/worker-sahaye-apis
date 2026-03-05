@@ -18,6 +18,14 @@ export interface ILoanRequest extends Document {
   status: LoanRequestStatus;
   assignedTo?: Types.ObjectId;
   assignedBy?: Types.ObjectId;
+  actions?: Array<{
+    action: string;
+    status?: LoanRequestStatus;
+    message?: string;
+    timestamp: Date;
+    performedBy?: Types.ObjectId;
+    performedByRole?: string;
+  }>;
 
   history?: any;
   emailId?: string;
@@ -86,7 +94,7 @@ const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
 
     assignedTo: {
       type: Schema.Types.ObjectId,
-      ref: "VirtualHR",
+      ref: "Admin",
     },
     assignedBy: {
       type: Schema.Types.ObjectId,
@@ -98,6 +106,19 @@ const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
       default: LoanRequestStatus.PENDING,
       index: true,
     },
+    actions: [
+      {
+        action: { type: String, required: true, trim: true },
+        status: {
+          type: String,
+          enum: Object.values(LoanRequestStatus),
+        },
+        message: { type: String, trim: true, maxlength: 1000 },
+        timestamp: { type: Date, default: Date.now },
+        performedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+        performedByRole: { type: String, trim: true, lowercase: true },
+      },
+    ],
     cancellationReason: { type: String, maxlength: 1000 },
 
     loanNeedDate: {

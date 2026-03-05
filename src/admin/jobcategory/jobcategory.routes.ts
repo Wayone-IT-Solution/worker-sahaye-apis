@@ -1,6 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { JobcategoryController } from "./jobcategory.controller";
+import { authenticateTokenOptional } from "../../middlewares/authMiddleware";
 
 const {
   createJobcategory,
@@ -15,7 +16,7 @@ const router = express.Router();
 
 router
   .post("/", asyncHandler(createJobcategory))
-  .get("/", asyncHandler(getAllJobcategorys))
+  .get("/", authenticateTokenOptional, asyncHandler(getAllJobcategorys))
   .get("/:id", asyncHandler(getJobcategoryById))
   .post("/all", asyncHandler(createAllJobcategory))
   .put("/:id", asyncHandler(updateJobcategoryById))

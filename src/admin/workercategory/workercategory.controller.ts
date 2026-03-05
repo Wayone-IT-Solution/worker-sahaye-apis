@@ -32,7 +32,11 @@ export class WorkercategoryController {
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.getAll(req.query);
+      const query: any = { ...req.query };
+      if (!query.sortKey && !query.multiSort) {
+        query.multiSort = "order:asc,type:asc";
+      }
+      const result = await workerCategoryService.getAll(query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

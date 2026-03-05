@@ -7,7 +7,11 @@ import {
   updateServiceLocation,
   deleteServiceLocation,
 } from "./servicelocation.controller";
-import { isAdmin, authenticateToken } from "../../middlewares/authMiddleware";
+import {
+  isAdmin,
+  authenticateToken,
+  authenticateTokenOptional,
+} from "../../middlewares/authMiddleware";
 
 const router = express.Router();
 
@@ -16,8 +20,8 @@ router.get("/service/:serviceId", getLocationsByService);
 
 // Admin routes (protected)
 router.post("/", authenticateToken, isAdmin, createServiceLocation);
-router.get("/", getAllServiceLocations);
-router.get("/:id", getServiceLocationById);
+router.get("/", authenticateTokenOptional, getAllServiceLocations);
+router.get("/:id", authenticateTokenOptional, getServiceLocationById);
 router.put("/:id", authenticateToken, isAdmin, updateServiceLocation);
 router.delete("/:id", authenticateToken, isAdmin, deleteServiceLocation);
 

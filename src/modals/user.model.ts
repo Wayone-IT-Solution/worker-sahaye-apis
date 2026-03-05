@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import validator from "validator";
 import mongoose, { Schema, Document } from "mongoose";
+import { getNextYearlyUniqueCode } from "../utils/yearlyUniqueCode";
 
 export enum UserType {
   WORKER = "worker",
@@ -24,6 +25,7 @@ interface ILocation {
 }
 
 export interface IUser extends Document {
+  userKey?: string;
   mobile: string;
   email?: string;
   fullName: string;
@@ -310,6 +312,13 @@ const userSchema = new Schema<IUser>(
       default: {},
     },
     pointsEarned: { type: Number, default: 0 },
+    userKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+      trim: true,
+    },
     referralCode: { type: String, unique: true },
     referredCode: { type: String, unique: true },
     referredBy: { type: Schema.Types.ObjectId, ref: "User" },
@@ -525,6 +534,16 @@ userSchema.index({ referredBy: 1 }); // for analytics/referral queries
 userSchema.index({
   "primaryLocation.city": 1,
   "primaryLocation.state": 1,
+});
+
+userSchema.pre("validate", async function (next) {
+  try {
+    if (!this.isNew || this.userKey) return next();
+    this.userKey = await getNextYearlyUniqueCode("WSU", "user");
+    return next();
+  } catch (error) {
+    return next(error as any);
+  }
 });
 
 export const User = mongoose.model<IUser>("User", userSchema);

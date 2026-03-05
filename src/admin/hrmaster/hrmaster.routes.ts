@@ -1,7 +1,11 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HRMasterController } from "./hrmaster.controller";
-import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import {
+  authenticateToken,
+  authenticateTokenOptional,
+  isAdmin,
+} from "../../middlewares/authMiddleware";
 
 const {
   createHRMaster,
@@ -14,7 +18,7 @@ const {
 const router = express.Router();
 
 router
-  .get("/", asyncHandler(getAllHRMasters))
+  .get("/", authenticateTokenOptional, asyncHandler(getAllHRMasters))
   .post("/", authenticateToken, isAdmin, asyncHandler(createHRMaster))
   .get("/:id", authenticateToken, isAdmin, asyncHandler(getHRMasterById))
   .put("/:id", authenticateToken, isAdmin, asyncHandler(updateHRMasterById))

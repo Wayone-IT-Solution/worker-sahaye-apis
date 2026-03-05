@@ -20,6 +20,7 @@ export enum WorkNatureType {
 
 export interface INatureOfWork extends Document {
   name: string;
+  order: number;
   createdAt: Date;
   updatedAt: Date;
   type: WorkNatureType;
@@ -32,6 +33,7 @@ export interface INatureOfWork extends Document {
 const NatureOfWorkSchema: Schema<INatureOfWork> = new Schema(
   {
     name: { type: String, required: true, unique: true, trim: true },
+    order: { type: Number, default: 0, index: true },
     type: { type: String, enum: Object.values(WorkNatureType), required: true },
     description: { type: String, trim: true },
     status: {
@@ -48,6 +50,7 @@ const NatureOfWorkSchema: Schema<INatureOfWork> = new Schema(
 // Indexes
 NatureOfWorkSchema.index({ status: 1 });
 NatureOfWorkSchema.index({ type: 1 });
+NatureOfWorkSchema.index({ order: 1, name: 1 });
 
 const NatureOfWork: Model<INatureOfWork> = mongoose.model<INatureOfWork>(
   "NatureOfWork",

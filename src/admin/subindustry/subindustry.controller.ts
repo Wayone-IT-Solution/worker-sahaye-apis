@@ -167,7 +167,8 @@ export class SubIndustryController {
 
       const sortObj = buildSortObject(
         req.query.sortKey as string,
-        req.query.sortDir as string
+        req.query.sortDir as string,
+        { order: 1, name: 1 }
       );
 
       const total = await SubIndustry.countDocuments(matchStage);
@@ -270,6 +271,7 @@ export const getSubIndustriesByIndustry = async (req: Request, res: Response) =>
   try {
     const { industryId } = req.params;
     const status = req.query.status as string;
+    const effectiveStatus = status || "active";
 
     if (!industryId) {
       return res.status(400).json({
@@ -287,15 +289,12 @@ export const getSubIndustriesByIndustry = async (req: Request, res: Response) =>
       });
     }
 
-    const matchStage: any = { industryId };
-    if (status) {
-      matchStage.status = status;
-    }
+    const matchStage: any = { industryId, status: effectiveStatus };
 
     const subIndustries = await SubIndustry.find(matchStage)
       .populate("industryId", "name icon")
       .populate("createdBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ order: 1, name: 1 });
 
     return res.status(200).json({
       success: true,

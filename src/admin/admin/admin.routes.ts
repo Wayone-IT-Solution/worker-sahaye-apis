@@ -24,8 +24,13 @@ userRouter
   .post(asyncHandler(AdminController.resetPassword));
 
 userRouter
+  .route("/userengagement/:userId")
+  .get(asyncHandler(AdminController.getUserEngagementDetails));
+
+userRouter
   .route("/:id")
   .get(asyncHandler(AdminController.getAdminById)) // GET /:id
-  .put(asyncHandler(AdminController.updateAdmin)); // PUT /:id
+  .put(asyncHandler(AdminController.updateAdmin)) // PUT /:id
+  .delete(asyncHandler(AdminController.deleteAdmin)); // DELETE /:id
 
 export default userRouter;

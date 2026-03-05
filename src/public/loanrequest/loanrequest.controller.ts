@@ -10,11 +10,79 @@ import {
 } from "../../modals/enrollplan.model";
 import mongoose from "mongoose";
 import { User } from "../../modals/user.model";
-import { VirtualHR } from "../../modals/virtualhr.model";
 import { UserType } from "../../modals/notification.model";
 import { sendDualNotification, sendSingleNotification } from "../../services/notification.service";
+import Admin from "../../modals/admin.model";
+import Role from "../../modals/role.model";
 
 const loanRequestService = new CommonService(LoanRequestModel);
+
+const LOAN_SUPPORT_ROLE_NAMES = ["loan-support", "loan_support", "loansupport"];
+
+const normalizeRole = (role: unknown) =>
+  String(role || "")
+    .trim()
+    .toLowerCase();
+
+const isLoanSupportRole = (role: unknown) =>
+  LOAN_SUPPORT_ROLE_NAMES.includes(normalizeRole(role));
+
+const getLoanSupportAdminIds = async (): Promise<mongoose.Types.ObjectId[]> => {
+  const roleDoc = await Role.findOne({
+    name: { $in: LOAN_SUPPORT_ROLE_NAMES },
+  })
+    .select("_id")
+    .lean();
+
+  if (!roleDoc?._id) return [];
+
+  const loanSupportAdmins = await Admin.find({
+    role: roleDoc._id,
+    status: true,
+  })
+    .select("_id")
+    .lean();
+
+  return loanSupportAdmins.map((admin: any) => admin._id);
+};
+
+const getLeastLoadedLoanSupportAdminId = async () => {
+  const adminIds = await getLoanSupportAdminIds();
+  if (!adminIds.length) return null;
+
+  const loadStats = await LoanRequestModel.aggregate([
+    {
+      $match: {
+        assignedTo: { $in: adminIds },
+        status: { $in: [LoanRequestStatus.ASSIGNED, LoanRequestStatus.IN_PROGRESS] },
+      },
+    },
+    {
+      $group: {
+        _id: "$assignedTo",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const countMap = new Map<string, number>();
+  loadStats.forEach((item: any) => {
+    countMap.set(String(item._id), Number(item.count || 0));
+  });
+
+  let selected: mongoose.Types.ObjectId | null = null;
+  let selectedCount = Number.POSITIVE_INFINITY;
+
+  adminIds.forEach((adminId) => {
+    const c = countMap.get(String(adminId)) ?? 0;
+    if (c < selectedCount) {
+      selected = adminId;
+      selectedCount = c;
+    }
+  });
+
+  return selected;
+};
 
 export const createLoanRequest = async (req: Request, res: Response) => {
   try {
@@ -52,7 +120,29 @@ export const createLoanRequest = async (req: Request, res: Response) => {
       );
     }
 
-    const loan = await loanRequestService.create({ ...req.body, userId: user });
+    const autoAssignedTo = await getLeastLoadedLoanSupportAdminId();
+    const initialStatus = autoAssignedTo
+      ? LoanRequestStatus.ASSIGNED
+      : LoanRequestStatus.PENDING;
+
+    const loan = await loanRequestService.create({
+      ...req.body,
+      userId: user,
+      status: initialStatus,
+      assignedAt: autoAssignedTo ? new Date() : undefined,
+      assignedTo: autoAssignedTo || undefined,
+      actions: [
+        {
+          action: "request_created",
+          status: initialStatus,
+          message: autoAssignedTo
+            ? "Loan request created and auto-assigned to loan-support employee."
+            : "Loan request created.",
+          timestamp: new Date(),
+          performedByRole: "system",
+        },
+      ],
+    });
     if (!loan) {
       return res
         .status(400)
@@ -94,7 +184,25 @@ export const getAllRequests = async (
   next: NextFunction
 ) => {
   try {
+    const { id: adminId, role } = (req as any).user || {};
+    const roleName = normalizeRole(role);
+    const isAdminRole = roleName === "admin";
+    const isLoanSupport = isLoanSupportRole(roleName);
+
+    if (!isAdminRole && !isLoanSupport) {
+      return res.status(403).json(new ApiError(403, "Unauthorized access."));
+    }
+
+    const matchStage: any = {};
+    if (isLoanSupport) {
+      if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
+        return res.status(401).json(new ApiError(401, "Unauthorized"));
+      }
+      matchStage.assignedTo = new mongoose.Types.ObjectId(adminId);
+    }
+
     const pipeline = [
+      ...(Object.keys(matchStage).length ? [{ $match: matchStage }] : []),
       {
         $lookup: {
           from: "users",
@@ -106,7 +214,7 @@ export const getAllRequests = async (
       { $unwind: "$userDetails" },
       {
         $lookup: {
-          from: "virtualhrs",
+          from: "admins",
           localField: "assignedTo",
           foreignField: "_id",
           as: "assignedTo",
@@ -115,6 +223,20 @@ export const getAllRequests = async (
       {
         $unwind: {
           path: "$assignedTo",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "roles",
+          localField: "assignedTo.role",
+          foreignField: "_id",
+          as: "assignedToRole",
+        },
+      },
+      {
+        $unwind: {
+          path: "$assignedToRole",
           preserveNullAndEmptyArrays: true,
         },
       },
@@ -150,9 +272,11 @@ export const getAllRequests = async (
           mobileNumber: 1,
           loanNeedDate: 1,
           loanCategory: 1,
+          actions: 1,
           currentSalary: 1,
-          "assignedTo.name": 1,
+          "assignedTo.username": 1,
           "assignedTo.email": 1,
+          "assignedToRole.name": 1,
           "userDetails.email": 1,
           "userDetails.mobile": 1,
           "userDetails.fullName": 1,
@@ -217,7 +341,7 @@ export const assignVirtualHR = async (
 
     if (status === LoanRequestStatus.ASSIGNED && role === "admin") {
       const userDetails = await User.findById(request.userId);
-      const hrDetails = await VirtualHR.findById(assignedTo);
+      const hrDetails = await Admin.findById(assignedTo).select("username email");
       if (userDetails && hrDetails) {
         await sendSingleNotification({
           type: "task-status-update",
@@ -227,7 +351,7 @@ export const assignVirtualHR = async (
           context: {
             status: status,
             taskTitle: "Loan Services",
-            assigneeName: hrDetails?.name,
+            assigneeName: hrDetails?.username,
           },
         });
       }
@@ -237,6 +361,21 @@ export const assignVirtualHR = async (
     request.assignedAt = new Date();
     request.assignedTo = assignedTo;
     request.cancellationReason = status === LoanRequestStatus.CANCELLED ? note : "";
+    request.actions = [
+      ...(request.actions || []),
+      {
+        action: status === LoanRequestStatus.CANCELLED ? "request_cancelled" : "request_assigned",
+        status,
+        message:
+          note ||
+          (status === LoanRequestStatus.CANCELLED
+            ? "Loan request cancelled."
+            : "Loan request assigned to loan-support employee."),
+        timestamp: new Date(),
+        performedBy: adminId,
+        performedByRole: normalizeRole(role),
+      },
+    ];
 
     await request.save();
     return res
@@ -255,13 +394,25 @@ export const assignVirtualHR = async (
 
 export const updateStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status } = req.body;
+    const { status, message } = req.body;
     const requestId = req.params.id;
     const { id: updaterId, role } = (req as any).user;
 
     const request = await LoanRequestModel.findById(requestId);
     if (!request)
       return res.status(404).json(new ApiError(404, "Loan Request not found."));
+
+    const roleName = normalizeRole(role);
+    if (roleName !== "admin") {
+      if (!isLoanSupportRole(roleName)) {
+        return res.status(403).json(new ApiError(403, "Unauthorized to update status."));
+      }
+      if (!request.assignedTo || String(request.assignedTo) !== String(updaterId)) {
+        return res
+          .status(403)
+          .json(new ApiError(403, "You can only update status for requests assigned to you."));
+      }
+    }
 
     const currentStatus = request.status;
 
@@ -280,17 +431,29 @@ export const updateStatus = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json(new ApiError(400, "Invalid status update."));
     }
 
+    request.actions = [
+      ...(request.actions || []),
+      {
+        action: "status_updated",
+        status,
+        message: String(message || "").trim() || `Status updated to ${status}`,
+        timestamp: new Date(),
+        performedBy: updaterId,
+        performedByRole: roleName,
+      },
+    ];
+
     await request.save();
     // Send notification to user
     const user = await User.findById(request.userId);
-    const hrDetails = await VirtualHR.findById({ _id: request.assignedTo });
+    const hrDetails = await Admin.findById({ _id: request.assignedTo }).select("username");
     if (user && hrDetails) {
       await sendSingleNotification({
         type: "task-status-update",
         context: {
           status: status,
           taskTitle: "Loan Request",
-          assigneeName: hrDetails?.name,
+          assigneeName: hrDetails?.username,
         },
         toRole: user.userType,
         toUserId: (user._id as any),
@@ -325,6 +488,16 @@ export const addLoanRequestComment = async (req: Request, res: Response, next: N
       commentedBy: adminId,
       timestamp: new Date(),
     });
+    loanRequest.actions = [
+      ...(loanRequest.actions || []),
+      {
+        action: "comment_added",
+        message: comment,
+        timestamp: new Date(),
+        performedBy: adminId,
+        performedByRole: normalizeRole((req as any)?.user?.role),
+      },
+    ];
     await loanRequest.save();
 
     // Send notification to job poster
@@ -362,6 +535,7 @@ export const getLoanRequestWithHistory = async (
 
     const loanRequest = await LoanRequestModel.findById(loanRequestId)
       .populate("history.commentedBy", "username email")
+      .populate("actions.performedBy", "username email")
       .lean();
 
     if (!loanRequest)
@@ -371,7 +545,16 @@ export const getLoanRequestWithHistory = async (
     );
     return res
       .status(200)
-      .json(new ApiResponse(200, loanRequest.history, "Loan Request with history fetched"));
+      .json(
+        new ApiResponse(
+          200,
+          {
+            comments: loanRequest.history,
+            actions: (loanRequest as any).actions || [],
+          },
+          "Loan Request history fetched"
+        )
+      );
   } catch (err) {
     next(err);
   }

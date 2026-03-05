@@ -14,11 +14,11 @@ export class MinimumWageController {
     next: NextFunction
   ) {
     try {
-      // Get all unique states from the minimumwages collection
-      const cities = await MinimumWage.distinct("state");
-      
-      // Sort cities alphabetically
-      const sortedCities = cities.sort();
+      const wageStates = await MinimumWage.find(
+        {},
+        { state: 1, _id: 0 }
+      ).sort({ order: 1, state: 1 });
+      const sortedCities = wageStates.map((item) => item.state);
 
       return res
         .status(200)
@@ -35,7 +35,12 @@ export class MinimumWageController {
     next: NextFunction
   ) {
     try {
-      const result = await minimumWageService.getAll(req.query);
+      const query: any = { ...req.query };
+      if (!query.sortKey && !query.multiSort) {
+        query.multiSort = "order:asc,state:asc";
+      }
+
+      const result = await minimumWageService.getAll(query);
       
       // Handle both array and object responses
       let enrichedData: any;

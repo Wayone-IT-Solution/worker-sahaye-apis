@@ -12,6 +12,7 @@ export enum PlanEnrollmentStatus {
 export enum PlanPaymentGateway {
   FREE = "free",
   RAZORPAY = "razorpay",
+  ADMIN_ASSIGN = "admin_assign",
 }
 
 export enum PlanPaymentStatus {

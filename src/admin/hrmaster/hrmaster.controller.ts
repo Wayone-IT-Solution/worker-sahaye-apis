@@ -28,7 +28,17 @@ export class HRMasterController {
     next: NextFunction,
   ) {
     try {
-      const result = await hrMasterService.getAll(req.query);
+      const query: any = { ...req.query };
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+
+      if (!isAuthenticatedRequest && query.status === undefined) {
+        query.status = "active";
+      }
+      if (!query.sortKey && !query.multiSort) {
+        query.multiSort = "order:asc,name:asc";
+      }
+
+      const result = await hrMasterService.getAll(query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

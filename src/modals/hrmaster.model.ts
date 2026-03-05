@@ -27,6 +27,7 @@ export enum HRMasterStatus {
 
 export interface IHRMaster extends Document {
   name: string;
+  order: number;
   status: HRMasterStatus;
   type: HRMasterType;
 }
@@ -34,6 +35,7 @@ export interface IHRMaster extends Document {
 const HRMasterSchema: Schema<IHRMaster> = new Schema(
   {
     name: { type: String, required: true, trim: true },
+    order: { type: Number, default: 0, index: true },
     status: {
       type: String,
       enum: Object.values(HRMasterStatus),
@@ -51,6 +53,7 @@ const HRMasterSchema: Schema<IHRMaster> = new Schema(
 );
 
 HRMasterSchema.index({ type: 1, name: 1 }, { unique: true });
+HRMasterSchema.index({ type: 1, order: 1, name: 1 });
 
 const HRMaster: Model<IHRMaster> = mongoose.model<IHRMaster>(
   "HRMaster",

@@ -8,6 +8,7 @@ export enum TradeStatus {
 
 export interface ITrade extends Document {
   name: string;
+  order: number;
   description?: string;
   status: TradeStatus;
   createdBy?: mongoose.Types.ObjectId;
@@ -20,6 +21,7 @@ const TradeSchema: Schema<ITrade> = new Schema(
   {
     description: { type: String, trim: true },
     name: { type: String, required: true, unique: true, trim: true },
+    order: { type: Number, default: 0, index: true },
     status: {
       type: String,
       default: TradeStatus.ACTIVE,
@@ -32,6 +34,7 @@ const TradeSchema: Schema<ITrade> = new Schema(
 );
 
 TradeSchema.index({ status: 1 });
+TradeSchema.index({ order: 1, name: 1 });
 
 const Trade: Model<ITrade> = mongoose.model<ITrade>(
   "Trade",

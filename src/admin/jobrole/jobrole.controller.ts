@@ -77,13 +77,18 @@ export class JobRoleController {
     next: NextFunction
   ) {
     try {
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+      const effectiveStatus =
+        (req.query.status as string) ||
+        (!isAuthenticatedRequest ? "active" : undefined);
+
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
 
       const matchStage = buildMatchStage(
         {
-          status: req.query.status as string,
+          status: effectiveStatus,
           search: req.query.search as string,
           searchKey: req.query.searchKey as string,
           startDate: req.query.startDate as string,
@@ -299,8 +304,15 @@ export class JobRoleController {
           .json(new ApiError(400, "Search query is required"));
       }
 
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+      const searchFilter: any = { $text: { $search: query } };
+
+      if (!isAuthenticatedRequest) {
+        searchFilter.status = "active";
+      }
+
       const results = await JobRole.find(
-        { $text: { $search: query } },
+        searchFilter,
         { score: { $meta: "textScore" } }
       )
         .sort({ score: { $meta: "textScore" } })

@@ -8,6 +8,7 @@ export enum IndustryStatus {
 
 export interface IIndustry extends Document {
   name: string;
+  order: number;
   icon?: string;
   description?: string;
   status: IndustryStatus;
@@ -22,6 +23,7 @@ const IndustrySchema: Schema<IIndustry> = new Schema(
     icon: { type: String },
     description: { type: String, trim: true },
     name: { type: String, required: true, unique: true, trim: true },
+    order: { type: Number, default: 0, index: true },
     status: {
       type: String,
       default: IndustryStatus.ACTIVE,
@@ -34,6 +36,7 @@ const IndustrySchema: Schema<IIndustry> = new Schema(
 );
 
 IndustrySchema.index({ status: 1 });
+IndustrySchema.index({ order: 1, name: 1 });
 IndustrySchema.index({ keywords: 1 });
 
 const Industry: Model<IIndustry> = mongoose.model<IIndustry>(

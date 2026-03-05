@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { getNextYearlyUniqueCode } from "../utils/yearlyUniqueCode";
 
 // ADVANCED ENUMS
 export enum JobType {
@@ -158,6 +159,7 @@ const JobHistorySchema = new Schema<IJobHistory>(
 );
 
 export interface IJob extends Document {
+  jobKey?: string;
   // Basic Information
   title: string;
   nature: any;
@@ -441,6 +443,13 @@ const JobSchema = new Schema<IJob>(
     },
 
     // Job Management
+    jobKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+      trim: true,
+    },
     status: {
       index: true,
       type: String,
@@ -645,6 +654,16 @@ JobSchema.pre("save", function (next) {
   if (!this.expiresAt && this.status === JobStatus.OPEN)
     this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   next();
+});
+
+JobSchema.pre("validate", async function (next) {
+  try {
+    if (!this.isNew || this.jobKey) return next();
+    this.jobKey = await getNextYearlyUniqueCode("WSJ", "job");
+    return next();
+  } catch (error) {
+    return next(error as any);
+  }
 });
 
 // Static methods for common queries

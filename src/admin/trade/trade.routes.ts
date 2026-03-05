@@ -1,6 +1,7 @@
 import express from "express";
 import { TradeController } from "./trade.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { authenticateTokenOptional } from "../../middlewares/authMiddleware";
 
 const {
   createTrade,
@@ -15,7 +16,7 @@ const router = express.Router();
 
 router
   .post("/", asyncHandler(createTrade))
-  .get("/", asyncHandler(getAllTrades))
+  .get("/", authenticateTokenOptional, asyncHandler(getAllTrades))
   .get("/:id", asyncHandler(getTradeById))
   .post("/all", asyncHandler(createAllTrade))
   .put("/:id", asyncHandler(updateTradeById))

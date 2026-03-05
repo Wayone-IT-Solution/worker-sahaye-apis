@@ -52,7 +52,28 @@ export class JobcategoryController {
     next: NextFunction
   ) {
     try {
-      const result = await jobCategoryService.getAll(req.query);
+      const query: any = { ...req.query };
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+
+      if (query.status !== undefined && query.isActive === undefined) {
+        const normalizedStatus = String(query.status).trim().toLowerCase();
+        if (normalizedStatus === "active") query.isActive = true;
+        if (normalizedStatus === "inactive") query.isActive = false;
+        delete query.status;
+      }
+
+      if (
+        !isAuthenticatedRequest &&
+        query.isActive === undefined &&
+        query.status === undefined
+      ) {
+        query.isActive = true;
+      }
+      if (!query.sortKey && !query.multiSort) {
+        query.multiSort = "order:asc,name:asc";
+      }
+
+      const result = await jobCategoryService.getAll(query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { Job, JobStatus } from "../../modals/job.model";
-import { User } from "../../modals/user.model";
+import { User, UserType as AccountUserType } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { UserType } from "../../modals/notification.model";
@@ -19,6 +19,73 @@ import { UserSubscriptionService } from "../../services/userSubscription.service
 const JobService = new CommonService(Job);
 
 export class JobController {
+  private static normalizeJobPayload(rawPayload: any) {
+    const data = { ...(rawPayload || {}) };
+
+    // Handle benefits that come as JSON strings from FormData
+    if (data.benefits && Array.isArray(data.benefits)) {
+      data.benefits = data.benefits.map((benefit: any) => {
+        if (typeof benefit === "string") {
+          try {
+            return JSON.parse(benefit);
+          } catch {
+            return benefit;
+          }
+        }
+        return benefit;
+      });
+    }
+
+    // Handle skillsRequired - convert strings to objects with name field
+    if (data.skillsRequired && Array.isArray(data.skillsRequired)) {
+      data.skillsRequired = data.skillsRequired
+        .filter((skill: any) => {
+          if (typeof skill === "string") return skill.trim() !== "";
+          if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+          return false;
+        })
+        .map((skill: any) => {
+          if (typeof skill === "string") {
+            return {
+              name: skill.trim(),
+              level: "intermediate",
+              required: false,
+            };
+          }
+          return skill;
+        });
+    }
+
+    // Extract imageUrl from S3 middleware array if it's an array
+    if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
+      data.imageUrl = data.imageUrl[0].url;
+    }
+
+    // Reconstruct location object from flat location fields
+    const location: any = {};
+    if (data.locationAddress) location.address = data.locationAddress;
+    if (data.locationCity) location.city = data.locationCity;
+    if (data.locationState) location.state = data.locationState;
+    if (data.locationCountry) location.country = data.locationCountry;
+    if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
+    if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
+    if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+
+    if (Object.keys(location).length > 0) {
+      data.location = location;
+    }
+
+    delete data.locationAddress;
+    delete data.locationCity;
+    delete data.locationState;
+    delete data.locationCountry;
+    delete data.locationPostalCode;
+    delete data.locationRemoteFriendly;
+    delete data.locationAllowsRelocation;
+
+    return data;
+  }
+
   static async createJob(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = (req as any).user.id;
@@ -76,76 +143,11 @@ export class JobController {
       /* ----------------------------------------------------
        * CREATE JOB
        * ---------------------------------------------------- */
-      const data = {
+      const data = JobController.normalizeJobPayload({
         ...req.body,
         postedBy: userId,
         status: jobStatus,
-      };
-
-      // Handle benefits that come as JSON strings from FormData
-      if (data.benefits && Array.isArray(data.benefits)) {
-        data.benefits = data.benefits.map((benefit: any) => {
-          if (typeof benefit === "string") {
-            try {
-              return JSON.parse(benefit);
-            } catch {
-              return benefit;
-            }
-          }
-          return benefit;
-        });
-      }
-
-      // Handle skillsRequired - convert strings to objects with name field
-      if (data.skillsRequired && Array.isArray(data.skillsRequired)) {
-        data.skillsRequired = data.skillsRequired
-          .filter((skill: any) => {
-            // Filter out empty strings and null/undefined values
-            if (typeof skill === "string") return skill.trim() !== "";
-            if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
-            return false;
-          })
-          .map((skill: any) => {
-            // Convert strings to objects, keep existing objects
-            if (typeof skill === "string") {
-              return {
-                name: skill.trim(),
-                level: "intermediate",
-                required: false
-              };
-            }
-            return skill;
-          });
-      }
-
-      // Extract imageUrl from S3 middleware array if it's an array
-      if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
-        data.imageUrl = data.imageUrl[0].url;
-      }
-
-      // Reconstruct location object from flat location fields
-      const location: any = {};
-      if (data.locationAddress) location.address = data.locationAddress;
-      if (data.locationCity) location.city = data.locationCity;
-      if (data.locationState) location.state = data.locationState;
-      if (data.locationCountry) location.country = data.locationCountry;
-      if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
-      if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
-      if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
-
-      // Only update location if we have any location data
-      if (Object.keys(location).length > 0) {
-        data.location = location;
-      }
-
-      // Remove flat location fields from data
-      delete data.locationAddress;
-      delete data.locationCity;
-      delete data.locationState;
-      delete data.locationCountry;
-      delete data.locationPostalCode;
-      delete data.locationRemoteFriendly;
-      delete data.locationAllowsRelocation;
+      });
 
       const result = await JobService.create(data);
       if (!result) {
@@ -181,6 +183,103 @@ export class JobController {
     }
   }
 
+  static async createBulkJobsForOwner(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { ownerId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(ownerId)) {
+        return res.status(400).json(new ApiError(400, "Invalid owner id."));
+      }
+
+      const owner = await User.findById(ownerId).select("_id userType status").lean();
+      if (!owner) {
+        return res.status(404).json(new ApiError(404, "Owner user not found."));
+      }
+
+      const ownerType = String(owner.userType || "").toLowerCase();
+      if (![AccountUserType.EMPLOYER, AccountUserType.CONTRACTOR].includes(ownerType as AccountUserType)) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Bulk job upload is allowed only for employer or contractor users."));
+      }
+
+      if (!Array.isArray(req.body) || req.body.length === 0) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Request body must be a non-empty array."));
+      }
+
+      const createdJobs: any[] = [];
+      for (let index = 0; index < req.body.length; index += 1) {
+        const row = req.body[index] || {};
+        const rowNumber = index + 1;
+        const normalized = JobController.normalizeJobPayload(row);
+
+        const title = String(normalized?.title ?? "").trim();
+        const description = String(normalized?.description ?? "").trim();
+        if (!title || !description) {
+          return res.status(400).json(
+            new ApiError(400, `Row ${rowNumber}: title and description are required.`)
+          );
+        }
+
+        const requestedUserType = String(normalized?.userType ?? "").trim().toLowerCase();
+        let mappedJobUserType = requestedUserType === "contractor" ? "contractor" : "worker";
+
+        // Contractor owners can only post jobs for workers.
+        if (ownerType === AccountUserType.CONTRACTOR) {
+          mappedJobUserType = "worker";
+        }
+
+        // Employer can post for worker/contractor only.
+        if (
+          ownerType === AccountUserType.EMPLOYER &&
+          requestedUserType &&
+          !["worker", "contractor"].includes(requestedUserType)
+        ) {
+          return res.status(400).json(
+            new ApiError(400, `Row ${rowNumber}: userType must be worker or contractor.`)
+          );
+        }
+
+        const status =
+          normalized?.status === JobStatus.DRAFT
+            ? JobStatus.DRAFT
+            : JobStatus.PENDING_APPROVAL;
+
+        try {
+          const created = await JobService.create({
+            ...normalized,
+            title,
+            status,
+            description,
+            userType: mappedJobUserType,
+            postedBy: owner._id,
+          });
+          createdJobs.push(created);
+        } catch (error: any) {
+          const message = String(error?.message || "Failed to create job");
+          return res
+            .status(400)
+            .json(new ApiError(400, `Row ${rowNumber}: ${message}`));
+        }
+      }
+
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          createdJobs,
+          `${createdJobs.length} jobs created successfully for ${ownerType}.`
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
 
 
   static async uploadJobUpdated(
@@ -204,7 +303,24 @@ export class JobController {
 
   static async getAllJobs(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobRole, category, city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
+      const {
+        jobRole,
+        category,
+        city,
+        workMode,
+        jobType,
+        minSalary,
+        maxSalary,
+        experience,
+        search,
+        industryId,
+        subIndustryId,
+      } = req.query;
+
+      const normalizedQuery: any = { ...req.query };
+      if (normalizedQuery.userType === "agency") {
+        normalizedQuery.userType = "contractor";
+      }
 
       // If user is logged in and is a contractor, enforce plan check
       const currentUser = (req as any).user;
@@ -507,7 +623,13 @@ export class JobController {
             creatorName: "$userDetails.fullName",
             profilePicUrl: "$profilePicFile.url",
             creatorMobile: "$userDetails.mobile",
-            creatorUserType: "$userDetails.userType",
+            creatorUserType: {
+              $cond: [
+                { $eq: ["$userDetails.userType", "contractor"] },
+                "agency",
+                "$userDetails.userType",
+              ],
+            },
             creatorPlanType: "$userPlanDetails.planType",
             creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
             creatorHasPremium: "$userDetails.hasPremiumPlan",
@@ -616,7 +738,7 @@ export class JobController {
         },
       } as any);
 
-      const result = await JobService.getAll(req.query, pipeline);
+      const result = await JobService.getAll(normalizedQuery, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -1957,7 +2079,13 @@ export class JobController {
             creatorName: "$userDetails.fullName",
             profilePicUrl: "$profilePicFile.url",
             creatorMobile: "$userDetails.mobile",
-            creatorUserType: "$userDetails.userType",
+            creatorUserType: {
+              $cond: [
+                { $eq: ["$userDetails.userType", "contractor"] },
+                "agency",
+                "$userDetails.userType",
+              ],
+            },
             creatorPlanType: "$userPlanDetails.planType",
             creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
             creatorHasPremium: "$userDetails.hasPremiumPlan",

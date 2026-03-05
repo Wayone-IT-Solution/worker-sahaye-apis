@@ -19,6 +19,7 @@ import {
 import {
   EnrolledPlan,
   PlanEnrollmentStatus,
+  PlanPaymentGateway,
 } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import mongoose from "mongoose";
@@ -30,6 +31,10 @@ import {
 } from "../../modals/connection.model";
 import { Endorsement } from "../../modals/endorsement.model";
 import { UserPreference } from "../../modals/userpreference.model";
+import {
+  sanitizePayloadObject,
+  normalizePayloadToArray,
+} from "../../utils/payloadSanitizer";
 
 const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
@@ -120,16 +125,26 @@ export class UserController {
       : null;
   }
 
+  private static normalizeUserStatus(input: unknown): UserStatus | null {
+    const value = String(input ?? "").trim().toLowerCase();
+    return (Object.values(UserStatus) as string[]).includes(value)
+      ? (value as UserStatus)
+      : null;
+  }
+
   private static async createSingleUser(
     payload: any,
     rowNumber?: number
   ): Promise<any> {
     const prefix = rowNumber ? `Row ${rowNumber}: ` : "";
-    const email = String(payload?.email ?? "").trim();
-    const mobile = String(payload?.mobile ?? "").trim();
-    const fullName = String(payload?.fullName ?? "").trim();
-    const userType = UserController.normalizeUserType(payload?.userType);
-    const referralCode = String(payload?.referralCode ?? "").trim();
+    const normalizedPayload = sanitizePayloadObject(payload);
+    const email = String(normalizedPayload?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const mobile = String(normalizedPayload?.mobile ?? "").trim();
+    const fullName = String(normalizedPayload?.fullName ?? "").trim();
+    const userType = UserController.normalizeUserType(normalizedPayload?.userType);
+    const referralCode = String(normalizedPayload?.referralCode ?? "").trim();
 
     const missingFields: string[] = [];
     if (!mobile) missingFields.push("mobile");
@@ -151,16 +166,25 @@ export class UserController {
     }
 
     const userData: any = {
-      status: payload?.status,
-      profile: payload?.profile,
-      relocate: payload?.relocate,
+      status: normalizedPayload?.status,
+      profile: normalizedPayload?.profile,
+      relocate: normalizedPayload?.relocate,
       fullName,
       userType,
       mobile,
-      workerCategory: payload?.workerCategory,
-      primaryLocation: payload?.primaryLocation,
-      agreedToTerms: payload?.agreedToTerms,
-      privacyPolicyAccepted: payload?.privacyPolicyAccepted,
+      category: normalizedPayload?.category,
+      industry: normalizedPayload?.industry,
+      userPan: normalizedPayload?.userPan,
+      userAadhar: normalizedPayload?.userAadhar,
+      workerCategory: normalizedPayload?.workerCategory,
+      natureOfWork: normalizedPayload?.natureOfWork,
+      primaryLocation: normalizedPayload?.primaryLocation,
+      dateOfBirth: normalizedPayload?.dateOfBirth,
+      trade: normalizedPayload?.trade,
+      gender: normalizedPayload?.gender,
+      agreedToTerms: normalizedPayload?.agreedToTerms,
+      privacyPolicyAccepted: normalizedPayload?.privacyPolicyAccepted,
+      preferredJobCategories: normalizedPayload?.preferredJobCategories,
     };
 
     if (email) userData.email = email;
@@ -206,7 +230,8 @@ export class UserController {
   static async createUser(req: Request, res: Response, next: NextFunction) {
     try {
       if (Array.isArray(req.body)) {
-        if (!req.body.length) {
+        const rows = normalizePayloadToArray(req.body);
+        if (!rows.length) {
           return res
             .status(400)
             .json(new ApiError(400, "Missing required fields: mobile, fullName, userType"));
@@ -215,8 +240,8 @@ export class UserController {
         const seenMobiles = new Set<string>();
         const seenEmails = new Set<string>();
 
-        for (let index = 0; index < req.body.length; index += 1) {
-          const row = req.body[index] || {};
+        for (let index = 0; index < rows.length; index += 1) {
+          const row = rows[index] || {};
           const rowNumber = index + 1;
           const mobile = String(row?.mobile ?? "").trim();
           const email = String(row?.email ?? "").trim().toLowerCase();
@@ -241,9 +266,9 @@ export class UserController {
         }
 
         const createdUsers: any[] = [];
-        for (let index = 0; index < req.body.length; index += 1) {
+        for (let index = 0; index < rows.length; index += 1) {
           const created = await UserController.createSingleUser(
-            req.body[index],
+            rows[index],
             index + 1
           );
           createdUsers.push(created);
@@ -551,6 +576,79 @@ export class UserController {
             },
           ]
           : []),
+        {
+          $lookup: {
+            from: "enrolledplans",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$user", "$$userId"] },
+                },
+              },
+              { $sort: { enrolledAt: -1, createdAt: -1 } },
+              { $limit: 1 },
+              {
+                $lookup: {
+                  from: "admins",
+                  localField: "assignedBy",
+                  foreignField: "_id",
+                  as: "assignedByAdmin",
+                },
+              },
+              {
+                $unwind: {
+                  path: "$assignedByAdmin",
+                  preserveNullAndEmptyArrays: true,
+                },
+              },
+              {
+                $project: {
+                  _id: 1,
+                  status: 1,
+                  enrolledAt: 1,
+                  assignedBy: 1,
+                  gateway: "$paymentDetails.gateway",
+                  assignedByName: "$assignedByAdmin.username",
+                },
+              },
+            ],
+            as: "latestEnrollment",
+          },
+        },
+        {
+          $addFields: {
+            latestEnrollmentDetails: { $arrayElemAt: ["$latestEnrollment", 0] },
+          },
+        },
+        {
+          $addFields: {
+            latestPlanAllottedBy: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$latestEnrollmentDetails.assignedByName", null] },
+                    { $ne: ["$latestEnrollmentDetails.assignedByName", ""] },
+                  ],
+                },
+                "$latestEnrollmentDetails.assignedByName",
+                {
+                  $cond: [
+                    { $eq: ["$latestEnrollmentDetails.gateway", PlanPaymentGateway.ADMIN_ASSIGN] },
+                    "Admin",
+                    {
+                      $cond: [
+                        { $ne: ["$latestEnrollmentDetails._id", null] },
+                        "Self",
+                        "-",
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
         // Sort: Early Access Badge first, then Premium users, then by profile completion
         {
           $sort: {
@@ -579,6 +677,76 @@ export class UserController {
         .json(new ApiResponse(200, result, "Data fetched successfully"));
     } catch (err) {
       next(err);
+    }
+  }
+
+  static async updateUserStatusByAdmin(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const { id } = req.params;
+      const adminId = (req as any)?.user?.id;
+      const normalizedStatus = UserController.normalizeUserStatus(req.body?.status);
+      const reasonRaw = req.body?.reason;
+      const reason = String(reasonRaw ?? "").trim();
+
+      if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json(new ApiError(400, "Valid user ID is required"));
+      }
+
+      if (!normalizedStatus) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `Invalid status. Allowed values: ${Object.values(UserStatus).join(", ")}`
+          )
+        );
+      }
+
+      const user = await User.findById(id);
+      if (!user) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      if (adminId && id === adminId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "You cannot update your own user status from this API"));
+      }
+
+      user.status = normalizedStatus;
+      user.statusReason = reason || undefined;
+      user.statusUpdatedAt = new Date();
+      user.statusUpdatedBy = adminId || undefined;
+
+      const statusHistory = Array.isArray(user.statusHistory) ? user.statusHistory : [];
+      statusHistory.push({
+        status: normalizedStatus,
+        reason: reason || undefined,
+        changedAt: new Date(),
+        changedBy: adminId || undefined,
+      } as any);
+      user.statusHistory = statusHistory as any;
+
+      await user.save();
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            _id: user._id,
+            status: user.status,
+            statusReason: user.statusReason || "",
+            statusUpdatedAt: user.statusUpdatedAt,
+            statusUpdatedBy: user.statusUpdatedBy,
+          },
+          "User status updated successfully"
+        )
+      );
+    } catch (error) {
+      next(error);
     }
   }
 

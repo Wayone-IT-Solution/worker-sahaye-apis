@@ -75,8 +75,110 @@ const syncUserPremiumFlag = async (userId: string) => {
 };
 
 export class EnrollPlanController {
+  static async assignPlanToUser(args: {
+    adminId?: string;
+    userId: string;
+    planId: string;
+    planDetails?: any;
+    targetUser?: any;
+  }) {
+    const { adminId, userId, planId } = args;
+
+    const planDetails =
+      args.planDetails ?? (await SubscriptionPlan.findById(planId));
+    if (!planDetails) {
+      return {
+        success: false,
+        statusCode: 404,
+        message: "Plan not found",
+      };
+    }
+
+    if (planDetails.status !== PlanStatus.ACTIVE) {
+      return {
+        success: false,
+        statusCode: 400,
+        message: "Only active plans can be assigned",
+      };
+    }
+
+    const targetUser =
+      args.targetUser ?? (await User.findById(userId).select("_id userType"));
+    if (!targetUser) {
+      return {
+        success: false,
+        statusCode: 404,
+        message: "User not found",
+      };
+    }
+
+    if (String(planDetails.userType) !== String(targetUser.userType)) {
+      return {
+        success: false,
+        statusCode: 400,
+        message: `Plan userType (${planDetails.userType}) does not match userType (${targetUser.userType})`,
+      };
+    }
+
+    const existing = await EnrolledPlan.findOne({ user: userId, plan: planId });
+    if (existing?.status === PlanEnrollmentStatus.ACTIVE) {
+      return {
+        success: false,
+        statusCode: 409,
+        message: "User already has this active plan",
+        data: existing,
+      };
+    }
+
+    const enrolledAt = new Date();
+    const expiredAt = planDetails.billingCycle
+      ? calculateExpiryDate(enrolledAt, planDetails.billingCycle)
+      : undefined;
+
+    const payload: any = {
+      user: userId,
+      plan: planId,
+      assignedBy: adminId || null,
+      enrolledAt,
+      expiredAt,
+      totalAmount: Math.round(planDetails.basePrice ?? 0),
+      finalAmount: 0,
+      pointsRedeemed: 0,
+      pointsValue: 0,
+      pointsRefunded: false,
+      status: PlanEnrollmentStatus.ACTIVE,
+      paymentDetails: {
+        amount: 0,
+        currency: "INR",
+        paidAt: enrolledAt,
+        status: PlanPaymentStatus.SUCCESS,
+        gateway: PlanPaymentGateway.ADMIN_ASSIGN,
+        paymentId: `admin_${Date.now()}`,
+      },
+    };
+
+    let result;
+    if (existing) {
+      await refundPlanPointsIfNeeded(existing);
+      Object.assign(existing, payload);
+      result = await existing.save();
+    } else {
+      result = await enrollPlanService.create(payload);
+    }
+
+    await syncUserPremiumFlag(userId);
+
+    return {
+      success: true,
+      statusCode: existing ? 200 : 201,
+      message: "Plan assigned successfully",
+      data: result,
+    };
+  }
+
   static async adminAssignPlan(req: any, res: Response, next: NextFunction) {
     try {
+      const adminId = req?.user?.id;
       const { userId, planId } = req.body || {};
 
       if (!userId || !planId) {
@@ -85,83 +187,104 @@ export class EnrollPlanController {
           .json(new ApiError(400, "userId and planId are required"));
       }
 
-      const [targetUser, planDetails] = await Promise.all([
-        User.findById(userId).select("_id userType"),
-        SubscriptionPlan.findById(planId),
-      ]);
+      const result = await EnrollPlanController.assignPlanToUser({
+        adminId,
+        userId,
+        planId,
+      });
 
-      if (!targetUser) {
-        return res.status(404).json(new ApiError(404, "User not found"));
+      if (!result.success) {
+        return res
+          .status(result.statusCode || 400)
+          .json(new ApiError(result.statusCode || 400, result.message, result.data));
       }
+
+      return res.status(result.statusCode || 200).json(
+        new ApiResponse(200, result.data, result.message || "Plan assigned successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async adminAssignPlanBulk(req: any, res: Response, next: NextFunction) {
+    try {
+      const adminId = req?.user?.id;
+      const { userIds, planId } = req.body || {};
+
+      if (!Array.isArray(userIds) || userIds.length === 0 || !planId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "userIds (array) and planId are required"));
+      }
+
+      const uniqueUserIds = Array.from(
+        new Set(
+          userIds
+            .map((value: any) => String(value || "").trim())
+            .filter((value: string) => Boolean(value))
+        )
+      );
+
+      if (!uniqueUserIds.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "No valid userIds were provided"));
+      }
+
+      const [planDetails, users] = await Promise.all([
+        SubscriptionPlan.findById(planId),
+        User.find({ _id: { $in: uniqueUserIds } }).select("_id userType"),
+      ]);
 
       if (!planDetails) {
         return res.status(404).json(new ApiError(404, "Plan not found"));
       }
 
-      if (planDetails.status !== PlanStatus.ACTIVE) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Only active plans can be assigned"));
+      const userMap = new Map(
+        users.map((entry: any) => [String(entry._id), entry])
+      );
+
+      const successes: Array<{ userId: string; enrollmentId?: string }> = [];
+      const failed: Array<{ userId: string; message: string; statusCode?: number }> =
+        [];
+
+      for (const userId of uniqueUserIds) {
+        const assignment = await EnrollPlanController.assignPlanToUser({
+          adminId,
+          userId,
+          planId,
+          planDetails,
+          targetUser: userMap.get(userId),
+        });
+
+        if (!assignment.success) {
+          failed.push({
+            userId,
+            message: assignment.message || "Failed to assign plan",
+            statusCode: assignment.statusCode,
+          });
+          continue;
+        }
+
+        successes.push({
+          userId,
+          enrollmentId: assignment?.data?._id
+            ? String(assignment.data._id)
+            : undefined,
+        });
       }
 
-      if (String(planDetails.userType) !== String(targetUser.userType)) {
-        return res
-          .status(400)
-          .json(
-            new ApiError(
-              400,
-              `Plan userType (${planDetails.userType}) does not match userType (${targetUser.userType})`
-            )
-          );
-      }
-
-      const existing = await EnrolledPlan.findOne({ user: userId, plan: planId });
-      if (existing?.status === PlanEnrollmentStatus.ACTIVE) {
-        return res
-          .status(409)
-          .json(new ApiError(409, "User already has this active plan", existing));
-      }
-
-      const enrolledAt = new Date();
-      const expiredAt = planDetails.billingCycle
-        ? calculateExpiryDate(enrolledAt, planDetails.billingCycle)
-        : undefined;
-
-      const payload: any = {
-        user: userId,
-        plan: planId,
-        enrolledAt,
-        expiredAt,
-        totalAmount: Math.round(planDetails.basePrice ?? 0),
-        finalAmount: 0,
-        pointsRedeemed: 0,
-        pointsValue: 0,
-        pointsRefunded: false,
-        status: PlanEnrollmentStatus.ACTIVE,
-        paymentDetails: {
-          amount: 0,
-          currency: "INR",
-          paidAt: enrolledAt,
-          status: PlanPaymentStatus.SUCCESS,
-          gateway: PlanPaymentGateway.ADMIN_ASSIGN,
-          paymentId: `admin_${Date.now()}`,
-        },
-      };
-
-      let result;
-      if (existing) {
-        await refundPlanPointsIfNeeded(existing);
-        Object.assign(existing, payload);
-        result = await existing.save();
-      } else {
-        result = await enrollPlanService.create(payload);
-      }
-
-      await syncUserPremiumFlag(userId);
-
-      return res
-        .status(existing ? 200 : 201)
-        .json(new ApiResponse(200, result, "Plan assigned successfully"));
+      const responseStatus = failed.length > 0 ? 207 : 200;
+      return res.status(responseStatus).json(
+        new ApiResponse(responseStatus, {
+          requestedCount: uniqueUserIds.length,
+          successCount: successes.length,
+          failedCount: failed.length,
+          successes,
+          failed,
+        }, "Bulk plan assignment processed")
+      );
     } catch (err) {
       next(err);
     }

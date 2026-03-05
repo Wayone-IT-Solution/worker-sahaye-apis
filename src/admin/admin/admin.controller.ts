@@ -32,6 +32,7 @@ import { VirtualHRRequest } from "../../modals/virtualhrrequest.model";
 import { VirtualHrRecruiter } from "../../modals/virtualhrecruiter.model";
 import { UnifiedServiceRequest } from "../../modals/unifiedrequest.model";
 import { Promotion } from "../../modals/promotion.model";
+import { Endorsement } from "../../modals/endorsement.model";
 
 const secret = config.jwt.secret;
 const adminService = new CommonService(Admin);
@@ -419,6 +420,10 @@ export class AdminController {
         enrolledPlans,
         sentEngagements,
         receivedEngagements,
+        sentEndorsements,
+        receivedEndorsements,
+        sentEndorsementRequests,
+        receivedEndorsementRequests,
       ] = await Promise.all([
         FileUpload.findOne({ userId: userObjectId, tag: FileTag.PROFILE_PICTURE })
           .sort({ createdAt: -1 })
@@ -454,6 +459,42 @@ export class AdminController {
           .skip(skip)
           .limit(limit)
           .lean(),
+        Endorsement.find({
+          endorsedBy: userObjectId,
+          isRequest: false,
+          fulfilled: true,
+        })
+          .populate("endorsedTo", "fullName userType email mobile")
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .lean(),
+        Endorsement.find({
+          endorsedTo: userObjectId,
+          isRequest: false,
+          fulfilled: true,
+        })
+          .populate("endorsedBy", "fullName userType email mobile")
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .lean(),
+        Endorsement.find({
+          endorsedTo: userObjectId,
+          isRequest: true,
+          fulfilled: false,
+        })
+          .populate("endorsedBy", "fullName userType email mobile")
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .lean(),
+        Endorsement.find({
+          endorsedBy: userObjectId,
+          isRequest: true,
+          fulfilled: false,
+        })
+          .populate("endorsedTo", "fullName userType email mobile")
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .lean(),
       ]);
 
       const [totalSent, totalReceived, engagementTypeAgg] = await Promise.all([
@@ -466,6 +507,17 @@ export class AdminController {
           { $limit: 1 },
         ]),
       ]);
+
+      const averageReceivedEndorsementRating = receivedEndorsements.length
+        ? Number(
+            (
+              receivedEndorsements.reduce(
+                (sum: number, item: any) => sum + Number(item?.overallPerformance || 0),
+                0,
+              ) / receivedEndorsements.length
+            ).toFixed(2),
+          )
+        : 0;
 
       const enrollmentRevenue = enrollments.reduce(
         (sum: number, item: any) => sum + Number(item?.finalAmount || 0),
@@ -507,6 +559,19 @@ export class AdminController {
         engagement: {
           sent: sentEngagements,
           received: receivedEngagements,
+          endorsement: {
+            sent: sentEndorsements,
+            received: receivedEndorsements,
+            requestsSent: sentEndorsementRequests,
+            requestsReceived: receivedEndorsementRequests,
+            statistics: {
+              sent: sentEndorsements.length,
+              received: receivedEndorsements.length,
+              pendingSentRequests: sentEndorsementRequests.length,
+              pendingReceivedRequests: receivedEndorsementRequests.length,
+              averageReceivedRating: averageReceivedEndorsementRating,
+            },
+          },
           statistics: {
             totalSent,
             totalReceived,

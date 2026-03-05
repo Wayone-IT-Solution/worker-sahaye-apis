@@ -6,6 +6,7 @@ import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 const {
   getAllEnrolled,
   adminAssignPlan,
+  adminAssignPlanBulk,
   adminExpireEnrollPlan,
   createEnrollPlan,
   refundEnrollPlan,
@@ -19,6 +20,7 @@ const router = express.Router();
 router
   .post("/", authenticateToken, asyncHandler(createEnrollPlan)) // Enroll in plans
   .post("/admin/assign", authenticateToken, isAdmin, asyncHandler(adminAssignPlan))
+  .post("/admin/assign-bulk", authenticateToken, isAdmin, asyncHandler(adminAssignPlanBulk))
   .patch("/admin/expire/:id", authenticateToken, isAdmin, asyncHandler(adminExpireEnrollPlan))
   .get("/", authenticateToken, asyncHandler(getAllEnrollPlans)) // Get all enrollPlans
   .get("/all/plans", authenticateToken, isAdmin, asyncHandler(getAllEnrolled)) // Get all enrollPlans

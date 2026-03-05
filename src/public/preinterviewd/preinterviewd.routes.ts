@@ -1,7 +1,11 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { PreInterviewedController } from "./preinterviewd.controller";
-import { authenticateToken, isWorker } from "../../middlewares/authMiddleware";
+import {
+  authenticateToken,
+  isAdmin,
+  isWorker,
+} from "../../middlewares/authMiddleware";
 import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
@@ -10,13 +14,20 @@ const {
   getPreInterviewedById,
   updatePreInterviewedById,
   deletePreInterviewedById,
-  getPreInterviewedDetails
+  getPreInterviewedDetails,
+  adminMarkPreInterviewedBulk,
 } = PreInterviewedController;
 
 const router = express.Router();
 
 router
   .get("/", authenticateToken, asyncHandler(getAllPreIntervieweds))
+  .post(
+    "/admin/mark-bulk",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(adminMarkPreInterviewedBulk),
+  )
   .get("/:id", authenticateToken, asyncHandler(getPreInterviewedById))
   .put("/:id",
     authenticateToken,

@@ -26,6 +26,13 @@ export interface IEnrollment extends Document {
   enrolledAt: Date;
   refundedAt?: Date;
   progress?: number;
+  certificateIssuedAt?: Date;
+  certificateIssuedBy?: Types.ObjectId;
+  certificateIssuedFor?: Types.ObjectId;
+  certificateStatus?: "pending" | "issued";
+  adminRemark?: string;
+  adminRemarkUpdatedAt?: Date;
+  adminRemarkUpdatedBy?: Types.ObjectId;
   totalAmount: number;
   finalAmount: number;
   pointsRedeemed?: number;
@@ -66,6 +73,17 @@ const PaymentDetailsSchema = new Schema(
 const EnrollmentSchema = new Schema<IEnrollment>(
   {
     appliedCoupon: {},
+    adminRemark: { type: String, trim: true, maxlength: 2000 },
+    adminRemarkUpdatedAt: { type: Date },
+    adminRemarkUpdatedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    certificateIssuedAt: { type: Date },
+    certificateIssuedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    certificateIssuedFor: { type: Schema.Types.ObjectId, ref: "User" },
+    certificateStatus: {
+      type: String,
+      default: "pending",
+      enum: ["pending", "issued"],
+    },
     refundedAt: { type: Date },
     refundReason: { type: String },
     progress: { type: Number, default: 0 },

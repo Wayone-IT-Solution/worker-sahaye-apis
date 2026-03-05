@@ -14,6 +14,7 @@ export interface IWageRow {
 export interface IMinimumWage extends Document {
   state: string;
   order: number;
+  note?: string;
   columns: IColumnDefinition[];
   rows: IWageRow[];
   createdBy?: string;
@@ -38,6 +39,7 @@ const MinimumWageSchema: Schema<IMinimumWage> = new Schema(
   {
     state: { type: String, required: true, trim: true },
     order: { type: Number, default: 0, index: true },
+    note: { type: String, trim: true, default: "" },
     columns: [ColumnDefinitionSchema],
     rows: [WageRowSchema],
     createdBy: { type: String },

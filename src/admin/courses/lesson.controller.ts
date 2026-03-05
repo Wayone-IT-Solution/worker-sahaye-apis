@@ -3,9 +3,9 @@ import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { UserType } from "../../modals/user.model";
 import { NextFunction, Request, Response } from "express";
-import { Enrollment } from "../../modals/enrollment.model";
+import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
 import { CommonService } from "../../services/common.services";
-import { Lesson, TimeEntry, TimeEntryStatus } from "../../modals/courses.model";
+import { Course, Lesson, TimeEntry, TimeEntryStatus } from "../../modals/courses.model";
 
 const lessonService = new CommonService(Lesson);
 
@@ -167,6 +167,7 @@ export class LessonController {
       const enrollment = await Enrollment.findOne({
         user: userId,
         course: courseId,
+        status: { $in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
       });
       if (!enrollment)
         return res
@@ -245,11 +246,34 @@ export class LessonController {
       }
 
       enrollment.progress = progress;
+      if (progress >= 100) {
+        enrollment.status = EnrollmentStatus.COMPLETED;
+      } else if (enrollment.status === EnrollmentStatus.COMPLETED) {
+        enrollment.status = EnrollmentStatus.ACTIVE;
+      }
       await enrollment.save();
+
+      const courseInfo = await Course.findById(courseId).select("certificate");
+      const certificateEligible =
+        progress >= 100 &&
+        (enrollment.status === EnrollmentStatus.COMPLETED ||
+          enrollment.status === EnrollmentStatus.ACTIVE);
 
       return res
         .status(200)
-        .json(new ApiResponse(200, entry, "Lesson marked as completed."));
+        .json(
+          new ApiResponse(
+            200,
+            {
+              entry,
+              progress,
+              certificateEligible,
+              enrollmentStatus: enrollment.status,
+              certificateTemplate: courseInfo?.certificate || null,
+            },
+            "Lesson marked as completed."
+          )
+        );
     } catch (err) {
       next(err);
     }
@@ -286,6 +310,21 @@ export class LessonController {
         return res
           .status(404)
           .json(new ApiResponse(404, null, "Lesson not found."));
+      }
+
+      const enrollment = await Enrollment.findOne({
+        user: userId,
+        course: courseId,
+        status: { $in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+      });
+      if (!enrollment) {
+        return res.status(403).json(
+          new ApiResponse(
+            403,
+            null,
+            "You must have an active enrollment to access lessons."
+          )
+        );
       }
 
       const entry = await TimeEntry.findOneAndUpdate(

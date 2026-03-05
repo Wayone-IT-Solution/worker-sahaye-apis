@@ -9,6 +9,7 @@ import {
   buildPaginationResponse,
   SEARCH_FIELD_MAP,
 } from "../../utils/queryBuilder";
+import { sanitizePayloadObject } from "../../utils/payloadSanitizer";
 
 const jobRoleService = new CommonService(JobRole);
 const PUBLIC_JOB_ROLE_STATUSES = new Set(["active", "inactive"]);
@@ -48,7 +49,7 @@ export class JobRoleController {
         const bulkPayload: Array<Record<string, any>> = [];
 
         for (let index = 0; index < incomingPayload.length; index += 1) {
-          const item = incomingPayload[index];
+          const item = sanitizePayloadObject(incomingPayload[index]);
           const rowNumber = index + 1;
           const name = String(item?.name || "").trim();
 
@@ -72,6 +73,19 @@ export class JobRoleController {
           }
 
           seenSlugs.add(slug);
+
+          if (item?.categoryId && !item?.category) {
+            item.category = item.categoryId;
+          }
+          delete item.categoryId;
+
+          if (typeof item?.tags === "string") {
+            item.tags = item.tags
+              .split(",")
+              .map((tag: string) => tag.trim())
+              .filter(Boolean);
+          }
+
           bulkPayload.push({
             ...item,
             name,
@@ -109,7 +123,27 @@ export class JobRoleController {
       }
 
       // Generate slug from name
-      const slug = generateSlug(req.body.name);
+      const sanitizedBody = sanitizePayloadObject(req.body);
+      if (sanitizedBody?.categoryId && !sanitizedBody?.category) {
+        sanitizedBody.category = sanitizedBody.categoryId;
+      }
+      delete sanitizedBody.categoryId;
+
+      if (typeof sanitizedBody?.tags === "string") {
+        sanitizedBody.tags = sanitizedBody.tags
+          .split(",")
+          .map((tag: string) => tag.trim())
+          .filter(Boolean);
+      }
+
+      const name = String(sanitizedBody?.name || "").trim();
+      if (!name) {
+        return res
+          .status(400)
+          .json(new ApiError(400, `"name" is required`));
+      }
+
+      const slug = generateSlug(name);
 
       // Check if slug already exists
       const existingRole = await JobRole.findOne({ slug });
@@ -119,13 +153,14 @@ export class JobRoleController {
           .json(
             new ApiError(
               400,
-              `A job role with the name "${req.body.name}" already exists`
+              `A job role with the name "${name}" already exists`
             )
           );
       }
 
       const data = {
-        ...req.body,
+        ...sanitizedBody,
+        name,
         slug,
         createdBy: adminId,
       };

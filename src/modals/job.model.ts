@@ -47,6 +47,7 @@ export enum JobStatus {
   CLOSED = "closed",
   EXPIRED = "expired",
   REJECTED = "rejected",
+  UNDER_REVIEW = "under_review",
   PENDING_APPROVAL = "pending-approval",
 }
 
@@ -454,7 +455,7 @@ const JobSchema = new Schema<IJob>(
       index: true,
       type: String,
       enum: Object.values(JobStatus),
-      default: JobStatus.PENDING_APPROVAL,
+      default: JobStatus.UNDER_REVIEW,
     },
     imageUrl: { type: String },
     priority: {

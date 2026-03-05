@@ -9,6 +9,12 @@ router.get("/cities/list", MinimumWageController.getAllCities);
 // Get all wage structures with pagination
 router.get("/", MinimumWageController.getAllWages);
 
+// Advanced bulk upload (supports additional dynamic columns and row updates)
+router.post("/bulk/advanced", MinimumWageController.bulkUpsertAdvanced);
+
+// Update state/city note
+router.put("/:state/note", MinimumWageController.updateWageNote);
+
 // Get wage data by state
 router.get("/:state", MinimumWageController.getWageByState);
 

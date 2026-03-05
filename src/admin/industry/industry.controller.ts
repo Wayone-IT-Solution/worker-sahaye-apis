@@ -9,6 +9,7 @@ import {
   buildPaginationResponse,
   SEARCH_FIELD_MAP,
 } from "../../utils/queryBuilder";
+import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const IndustryService = new CommonService(Industry);
 
@@ -19,14 +20,44 @@ export class IndustryController {
     next: NextFunction
   ) {
     try {
-      const result = await IndustryService.create(req.body);
-      if (!result)
+      const isBulkPayload = Array.isArray(req.body);
+      const rows = normalizePayloadToArray(req.body);
+      if (!rows.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Request payload is empty"));
+      }
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const name = String(rows[index]?.name ?? "").trim();
+        if (!name) {
+          return res
+            .status(400)
+            .json(new ApiError(400, `Row ${index + 1}: "name" is required`));
+        }
+        rows[index].name = name;
+      }
+
+      const result = isBulkPayload
+        ? await Industry.insertMany(rows)
+        : await IndustryService.create(rows[0] as any);
+
+      if (!result || (Array.isArray(result) && result.length === 0)) {
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create industry"));
+      }
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            isBulkPayload
+              ? `${(result as any[])?.length || rows.length} industries created successfully`
+              : "Created successfully"
+          )
+        );
     } catch (err) {
       next(err);
     }

@@ -3,20 +3,56 @@ import ApiResponse from "../../utils/ApiResponse";
 import HRMaster from "../../modals/hrmaster.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
+import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const hrMasterService = new CommonService(HRMaster);
 
 export class HRMasterController {
   static async createHRMaster(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await hrMasterService.create(req.body);
-      if (!result)
+      const isBulkPayload = Array.isArray(req.body);
+      const rows = normalizePayloadToArray(req.body);
+
+      if (!rows.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Request payload is empty"));
+      }
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const name = String(rows[index]?.name ?? "").trim();
+        const type = String(rows[index]?.type ?? "").trim();
+        if (!name || !type) {
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Row ${index + 1}: "name" and "type" are required`
+            )
+          );
+        }
+        rows[index].name = name;
+        rows[index].type = type;
+      }
+
+      const result = isBulkPayload
+        ? await HRMaster.insertMany(rows)
+        : await hrMasterService.create(rows[0] as any);
+
+      if (!result || (Array.isArray(result) && result.length === 0))
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create HR master"));
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            isBulkPayload
+              ? `${(result as any[])?.length || rows.length} records created successfully`
+              : "Created successfully"
+          )
+        );
     } catch (err) {
       next(err);
     }

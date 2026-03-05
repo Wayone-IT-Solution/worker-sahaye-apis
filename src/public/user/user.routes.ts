@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { UserController } from "./user.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { authenticateToken } from "../../middlewares/authMiddleware";
+import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
 import {
   getAllNotifications,
   getNotificationStats,
@@ -40,6 +40,12 @@ userRouter.get(
   "/all/:id",
   authenticateToken,
   asyncHandler(UserController.getUserForAdminById)
+);
+userRouter.patch(
+  "/admin/status/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(UserController.updateUserStatusByAdmin)
 );
 userRouter.post(
   "/all/notifications",

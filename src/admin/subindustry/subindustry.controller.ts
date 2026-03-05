@@ -12,6 +12,7 @@ import {
   SEARCH_FIELD_MAP,
 } from "../../utils/queryBuilder";
 import { SubIndustryStatus } from "../../modals/subindustry.model";
+import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const SubIndustryService = new CommonService(SubIndustry);
 const VALID_SUB_INDUSTRY_STATUS = new Set(Object.values(SubIndustryStatus));
@@ -59,7 +60,7 @@ export class SubIndustryController {
     next: NextFunction
   ) {
     try {
-      const items = Array.isArray(req.body) ? req.body : [req.body];
+      const items = normalizePayloadToArray(req.body);
       if (!items.length) {
         return res.status(400).json({
           success: false,
@@ -115,11 +116,20 @@ export class SubIndustryController {
           ? (statusRaw as SubIndustryStatus)
           : SubIndustryStatus.ACTIVE;
 
+        const normalizedOrder =
+          row?.order !== undefined &&
+          row?.order !== null &&
+          String(row.order).trim() !== "" &&
+          Number.isFinite(Number(row.order))
+            ? Number(row.order)
+            : 0;
+
         normalizedPayload.push({
           name,
           status,
           industryId,
           createdBy,
+          order: normalizedOrder,
           icon: row?.icon ? String(row.icon).trim() : null,
           description: row?.description ? String(row.description).trim() : null,
         });

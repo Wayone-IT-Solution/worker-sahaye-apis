@@ -8,6 +8,7 @@ import {
   PreInterviewedContractor,
 } from "./../../modals/preinterviewedcontractor.model";
 import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
+import { User, UserType } from "../../modals/user.model";
 
 const PreInterviewedContractorService = new CommonService(
   PreInterviewedContractor,
@@ -55,6 +56,140 @@ export class PreInterviewedContractorController {
             "Pre Interviewed Contractor submitted successfully.",
           ),
         );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async adminMarkPreInterviewedContractorsBulk(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { userIds, interviewedAt } = req.body ?? {};
+
+      const uniqueUserIds = Array.from(
+        new Set(
+          Array.isArray(userIds)
+            ? userIds
+                .map((value: any) => String(value || "").trim())
+                .filter((value: string) => Boolean(value))
+            : [],
+        ),
+      );
+
+      if (!uniqueUserIds.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "No valid userIds were provided"));
+      }
+
+      const validObjectIds = uniqueUserIds.filter((value) =>
+        mongoose.Types.ObjectId.isValid(value),
+      );
+
+      if (!validObjectIds.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "No valid Mongo user ids were provided"));
+      }
+
+      const contractorUsers = await User.find({
+        _id: { $in: validObjectIds },
+        userType: UserType.CONTRACTOR,
+      }).select("_id");
+
+      const contractorUserObjectIds = contractorUsers.map(
+        (entry: any) => entry._id as mongoose.Types.ObjectId,
+      );
+      if (!contractorUserObjectIds.length) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "No agency users found for provided ids"));
+      }
+
+      const parseNumber = (value: any, fallback = 0) => {
+        const num = typeof value === "number" ? value : Number(value);
+        return Number.isFinite(num) ? num : fallback;
+      };
+
+      const parseBoolean = (value: any, fallback = false) => {
+        if (typeof value === "boolean") return value;
+        if (typeof value === "number") {
+          if (value === 1) return true;
+          if (value === 0) return false;
+          return fallback;
+        }
+        if (typeof value === "string") {
+          const normalized = value.trim().toLowerCase();
+          if (["true", "1", "yes"].includes(normalized)) return true;
+          if (["false", "0", "no"].includes(normalized)) return false;
+        }
+        return fallback;
+      };
+
+      const parsedInterviewDate = interviewedAt ? new Date(interviewedAt) : null;
+      if (parsedInterviewDate && Number.isNaN(parsedInterviewDate.getTime())) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid interviewedAt date value"));
+      }
+
+      const normalizedDefaults = {
+        interviewedAt: parsedInterviewDate || new Date(),
+        numberOfClients: parseNumber(req.body?.numberOfClients, 0),
+        numberOfEmployees: parseNumber(req.body?.numberOfEmployees, 0),
+        completedProjects: parseNumber(req.body?.completedProjects, 0),
+        financialTurnover: parseNumber(req.body?.financialTurnover, 0),
+        workplaceAccidents: parseNumber(req.body?.workplaceAccidents, 0),
+        noPaymentComplaints: parseBoolean(req.body?.noPaymentComplaints, false),
+        canMobilizeManpower: parseBoolean(req.body?.canMobilizeManpower, false),
+      };
+
+      const bulkResult = await PreInterviewedContractor.bulkWrite(
+        contractorUserObjectIds.map((contractorUserId) => ({
+          updateOne: {
+            filter: { user: contractorUserId },
+            update: {
+              $setOnInsert: {
+                user: contractorUserId,
+                status: VerificationStatus.PENDING,
+                ...normalizedDefaults,
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
+
+      const createdCount = bulkResult?.upsertedCount ?? 0;
+      const alreadyMarkedCount = contractorUserObjectIds.length - createdCount;
+      const contractorUserIdSet = new Set(
+        contractorUserObjectIds.map((contractorUserId) =>
+          String(contractorUserId),
+        ),
+      );
+      const skippedUserIds = uniqueUserIds.filter(
+        (id) => !contractorUserIdSet.has(id),
+      );
+
+      const responseStatus = skippedUserIds.length > 0 ? 207 : 200;
+      return res.status(responseStatus).json(
+        new ApiResponse(
+          responseStatus,
+          {
+            requestedCount: uniqueUserIds.length,
+            validAgencyCount: contractorUserObjectIds.length,
+            createdCount,
+            alreadyMarkedCount,
+            skippedCount: skippedUserIds.length,
+            skippedUserIds,
+          },
+          "Bulk pre-interview marking processed for agencies",
+        ),
+      );
     } catch (err) {
       next(err);
     }
@@ -228,6 +363,7 @@ export class PreInterviewedContractorController {
           createdAt: 1,
           updatedAt: 1,
           verifiedAt: 1,
+          interviewedAt: 1,
           userEmail: "$userDetails.email",
           userMobile: "$userDetails.mobile",
           userName: "$userDetails.fullName",
@@ -426,6 +562,7 @@ export class PreInterviewedContractorController {
           createdAt: 1,
           updatedAt: 1,
           verifiedAt: 1,
+          interviewedAt: 1,
           userEmail: "$userDetails.email",
           userMobile: "$userDetails.mobile",
           userName: "$userDetails.fullName",

@@ -25,6 +25,7 @@ export enum PlanPaymentStatus {
 export interface IEnrolledPlan extends Document {
   user: Types.ObjectId;
   plan: Types.ObjectId;
+  assignedBy?: Types.ObjectId;
   enrolledAt: Date;
   expiredAt?: Date;
   refundedAt?: Date;
@@ -71,6 +72,11 @@ const EnrolledPlanSchema = new Schema<IEnrolledPlan>(
       required: true,
       ref: "SubscriptionPlan",
       type: Schema.Types.ObjectId,
+    },
+    assignedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
     },
     enrolledAt: { type: Date, default: Date.now },
     expiredAt: { type: Date },

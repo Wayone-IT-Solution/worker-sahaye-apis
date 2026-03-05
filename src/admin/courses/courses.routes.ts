@@ -10,6 +10,7 @@ import {
 
 const {
   createCourse,
+  createCourseBulk,
   getAllCourses,
   getCourseById,
   updateCourseById,
@@ -32,6 +33,7 @@ const router = express.Router();
 
 // Get training and certification benefits based on subscription plan (Info only)
 router.get("/benefits/my", authenticateToken, asyncHandler(getTrainingBenefits));
+router.post("/bulk", authenticateToken, isAdmin, asyncHandler(createCourseBulk));
 
 router
   .post(

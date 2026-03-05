@@ -10,13 +10,20 @@ const {
   updatePreInterviewedContractorById,
   deletePreInterviewedContractorById,
   getPreInterviewedContractorDetails,
-  getAllPreInterviewedContractorsForUser
+  getAllPreInterviewedContractorsForUser,
+  adminMarkPreInterviewedContractorsBulk,
 } = PreInterviewedContractorController;
 
 const router = express.Router();
 
 router
   .get("/", authenticateToken, isAdmin, asyncHandler(getAllPreInterviewedContractors))
+  .post(
+    "/admin/mark-bulk",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(adminMarkPreInterviewedContractorsBulk),
+  )
   .get("/contractors", authenticateToken, (req, res, next) => {
     const userRole = (req as any).user?.role;
     if (userRole == "employer" || userRole == "Employer"||userRole == "contractor" || userRole === "admin") {

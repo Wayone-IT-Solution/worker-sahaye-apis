@@ -15,12 +15,34 @@ import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.mode
 import { getMonthKey } from "../../utils/date";
 import { JobView } from "../../modals/jobView.model";
 import { UserSubscriptionService } from "../../services/userSubscription.service";
+import { sanitizePayloadObject } from "../../utils/payloadSanitizer";
 
 const JobService = new CommonService(Job);
 
 export class JobController {
   private static normalizeJobPayload(rawPayload: any) {
     const data = { ...(rawPayload || {}) };
+
+    if (typeof data.tags === "string") {
+      data.tags = data.tags
+        .split(",")
+        .map((tag: string) => tag.trim())
+        .filter(Boolean);
+    }
+
+    if (typeof data.trades === "string") {
+      data.trades = data.trades
+        .split(",")
+        .map((trade: string) => trade.trim())
+        .filter(Boolean);
+    }
+
+    if (typeof data.skillsRequired === "string") {
+      data.skillsRequired = data.skillsRequired
+        .split(",")
+        .map((skill: string) => skill.trim())
+        .filter(Boolean);
+    }
 
     // Handle benefits that come as JSON strings from FormData
     if (data.benefits && Array.isArray(data.benefits)) {
@@ -105,7 +127,7 @@ export class JobController {
       const jobStatus =
         req.body.status === JobStatus.DRAFT
           ? JobStatus.DRAFT
-          : JobStatus.PENDING_APPROVAL;
+          : JobStatus.UNDER_REVIEW;
 
       /* ----------------------------------------------------
        * DRAFT JOB LIMIT CHECK
@@ -214,7 +236,7 @@ export class JobController {
 
       const createdJobs: any[] = [];
       for (let index = 0; index < req.body.length; index += 1) {
-        const row = req.body[index] || {};
+        const row = sanitizePayloadObject(req.body[index] || {});
         const rowNumber = index + 1;
         const normalized = JobController.normalizeJobPayload(row);
 
@@ -248,7 +270,7 @@ export class JobController {
         const status =
           normalized?.status === JobStatus.DRAFT
             ? JobStatus.DRAFT
-            : JobStatus.PENDING_APPROVAL;
+            : JobStatus.UNDER_REVIEW;
 
         try {
           const created = await JobService.create({
@@ -1650,34 +1672,79 @@ export class JobController {
     next: NextFunction
   ) {
     try {
-      const { id, role } = (req as any).user;
-      const { status } = req.body;
+      const { id } = (req as any).user;
+      const { status, remark } = req.body || {};
       if (!status)
         return res.status(400).json(new ApiError(400, "Status is required"));
 
-      const result = await JobService.updateById(req.params.id, { status });
+      const normalizedStatus =
+        status === JobStatus.PENDING_APPROVAL
+          ? JobStatus.UNDER_REVIEW
+          : status;
+
+      const allowedStatuses = new Set(Object.values(JobStatus));
+      if (!allowedStatuses.has(normalizedStatus)) {
+        return res.status(400).json(new ApiError(400, "Invalid status"));
+      }
+
+      const existingJob = await Job.findById(req.params.id).select(
+        "_id title status postedBy history approvedBy"
+      );
+      if (!existingJob) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to update job status"));
+      }
+
+      const previousStatus = existingJob.status;
+      const updatePayload: Record<string, any> = {
+        status: normalizedStatus,
+      };
+      if (normalizedStatus === JobStatus.OPEN) {
+        updatePayload.approvedBy = id;
+      }
+
+      const result = await JobService.updateById(req.params.id, updatePayload);
       if (!result)
         return res
           .status(404)
           .json(new ApiError(404, "Failed to update job status"));
 
-      if (result?.status !== status) {
+      const trimmedRemark = String(remark || "").trim();
+      if (previousStatus !== normalizedStatus || trimmedRemark) {
+        const historyComment = trimmedRemark
+          ? `Status changed: ${previousStatus} -> ${normalizedStatus}. Remark: ${trimmedRemark}`
+          : `Status changed: ${previousStatus} -> ${normalizedStatus}`;
+
+        await Job.findByIdAndUpdate(req.params.id, {
+          $push: {
+            history: {
+              comment: historyComment,
+              commentedBy: id,
+              timestamp: new Date(),
+            },
+          },
+        });
+
         const [jobDoc, userDoc]: any = await Promise.all([
           Job.findById(req.params.id).select("status title postedBy"),
-          User.findById(result.postedBy).select("fullName email mobile"),
+          User.findById(result.postedBy).select("fullName email mobile userType"),
         ]);
-        await sendDualNotification({
-          type: "job-status-update",
-          context: {
-            status: status,
-            jobTitle: jobDoc?.title,
-            userName: userDoc.fullName,
-          },
-          senderId: id,
-          receiverId: userDoc._id,
-          senderRole: UserType.ADMIN,
-          receiverRole: userDoc.userType,
-        });
+        if (userDoc) {
+          await sendDualNotification({
+            type: "job-status-update",
+            context: {
+              status: normalizedStatus,
+              ...(trimmedRemark ? { remark: trimmedRemark } : {}),
+              jobTitle: jobDoc?.title,
+              userName: userDoc.fullName,
+            },
+            senderId: id,
+            receiverId: userDoc._id,
+            senderRole: UserType.ADMIN,
+            receiverRole: userDoc.userType,
+          });
+        }
       }
       return res
         .status(200)

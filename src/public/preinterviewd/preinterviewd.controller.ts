@@ -10,6 +10,7 @@ import {
   VerificationStatus,
 } from "./../../modals/preinterviewd.model";
 import { checkAndAssignBadge } from "../candidatebrandingbadge/candidatebrandingbadge.controller";
+import { User, UserType } from "../../modals/user.model";
 
 const PreInterviewedService = new CommonService(PreInterviewed);
 
@@ -65,6 +66,115 @@ export class PreInterviewedController {
             "Pre Interviewed submitted successfully.",
           ),
         );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async adminMarkPreInterviewedBulk(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { userIds, remarks, interviewedAt } = req.body ?? {};
+
+      const uniqueUserIds = Array.from(
+        new Set(
+          Array.isArray(userIds)
+            ? userIds
+                .map((value: any) => String(value || "").trim())
+                .filter((value: string) => Boolean(value))
+            : [],
+        ),
+      );
+
+      if (!uniqueUserIds.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "No valid userIds were provided"));
+      }
+
+      const validObjectIds = uniqueUserIds.filter((value) =>
+        mongoose.Types.ObjectId.isValid(value),
+      );
+
+      if (!validObjectIds.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "No valid Mongo user ids were provided"));
+      }
+
+      const workerUsers = await User.find({
+        _id: { $in: validObjectIds },
+        userType: UserType.WORKER,
+      }).select("_id");
+
+      const workerUserObjectIds = workerUsers.map(
+        (entry: any) => entry._id as mongoose.Types.ObjectId,
+      );
+      if (!workerUserObjectIds.length) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "No worker users found for provided ids"));
+      }
+
+      const normalizedRemarks =
+        typeof remarks === "string" && remarks.trim().length > 0
+          ? remarks.trim()
+          : "Marked as pre-interviewed by admin in bulk.";
+
+      const parsedInterviewDate = interviewedAt ? new Date(interviewedAt) : null;
+      if (parsedInterviewDate && Number.isNaN(parsedInterviewDate.getTime())) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Invalid interviewedAt date value"));
+      }
+
+      const normalizedInterviewDate = parsedInterviewDate || new Date();
+
+      const bulkResult = await PreInterviewed.bulkWrite(
+        workerUserObjectIds.map((workerUserId) => ({
+          updateOne: {
+            filter: { user: workerUserId },
+            update: {
+              $setOnInsert: {
+                user: workerUserId,
+                remarks: normalizedRemarks,
+                interviewedAt: normalizedInterviewDate,
+                status: VerificationStatus.PENDING,
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
+
+      const createdCount = bulkResult?.upsertedCount ?? 0;
+      const alreadyMarkedCount = workerUserObjectIds.length - createdCount;
+      const workerUserIdSet = new Set(
+        workerUserObjectIds.map((workerUserId) => String(workerUserId)),
+      );
+      const skippedUserIds = uniqueUserIds.filter(
+        (id) => !workerUserIdSet.has(id),
+      );
+
+      const responseStatus = skippedUserIds.length > 0 ? 207 : 200;
+      return res.status(responseStatus).json(
+        new ApiResponse(
+          responseStatus,
+          {
+            requestedCount: uniqueUserIds.length,
+            validWorkerCount: workerUserObjectIds.length,
+            createdCount,
+            alreadyMarkedCount,
+            skippedCount: skippedUserIds.length,
+            skippedUserIds,
+          },
+          "Bulk pre-interview marking processed for workers",
+        ),
+      );
     } catch (err) {
       next(err);
     }

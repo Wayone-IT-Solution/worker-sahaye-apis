@@ -144,6 +144,15 @@ export interface IUser extends Document {
   isEmailVerified?: boolean;
   fastResponder?: number; // 0-100 scale: 0 = bad, 100 = good
   hasEarlyAccessBadge?: boolean; // Early Access badge - full premium access
+  statusReason?: string;
+  statusUpdatedAt?: Date;
+  statusUpdatedBy?: Schema.Types.ObjectId;
+  statusHistory?: Array<{
+    status: UserStatus;
+    reason?: string;
+    changedAt: Date;
+    changedBy?: Schema.Types.ObjectId;
+  }>;
 }
 
 // --- Custom Mobile Validator ---
@@ -242,6 +251,44 @@ const userSchema = new Schema<IUser>(
       enum: Object.values(UserStatus),
       default: UserStatus.PENDING_VERIFICATION,
     },
+    statusReason: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+    },
+    statusUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+    statusUpdatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+    statusHistory: [
+      {
+        _id: false,
+        status: {
+          type: String,
+          enum: Object.values(UserStatus),
+          required: true,
+        },
+        reason: {
+          type: String,
+          trim: true,
+          maxlength: 1000,
+        },
+        changedAt: {
+          type: Date,
+          default: Date.now,
+          required: true,
+        },
+        changedBy: {
+          type: Schema.Types.ObjectId,
+          ref: "Admin",
+        },
+      },
+    ],
     agreedToTerms: {
       type: Boolean,
       required: true,

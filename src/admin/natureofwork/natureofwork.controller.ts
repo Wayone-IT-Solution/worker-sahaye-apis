@@ -3,6 +3,7 @@ import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import NatureOfWork from "../../modals/natureofwork.model";
 import { CommonService } from "../../services/common.services";
+import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const NatureOfWorkService = new CommonService(NatureOfWork);
 
@@ -13,14 +14,47 @@ export class NatureOfWorkController {
     next: NextFunction
   ) {
     try {
-      const result = await NatureOfWorkService.create(req.body);
-      if (!result)
+      const isBulkPayload = Array.isArray(req.body);
+      const rows = normalizePayloadToArray(req.body);
+      if (!rows.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Request payload is empty"));
+      }
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const name = String(rows[index]?.name ?? "").trim();
+        const type = String(rows[index]?.type ?? "").trim();
+        if (!name || !type) {
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Row ${index + 1}: "name" and "type" are required`
+            )
+          );
+        }
+        rows[index].name = name;
+        rows[index].type = type;
+      }
+
+      const result = isBulkPayload
+        ? await NatureOfWork.insertMany(rows)
+        : await NatureOfWorkService.create(rows[0] as any);
+      if (!result || (Array.isArray(result) && result.length === 0))
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create NatureOfWork"));
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            isBulkPayload
+              ? `${(result as any[])?.length || rows.length} records created successfully`
+              : "Created successfully"
+          )
+        );
     } catch (err) {
       next(err);
     }
@@ -52,7 +86,17 @@ export class NatureOfWorkController {
     next: NextFunction
   ) {
     try {
-      const result = await NatureOfWorkService.getAll(req.query);
+      const query: any = { ...req.query };
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+
+      if (!isAuthenticatedRequest && query.status === undefined) {
+        query.status = "active";
+      }
+      if (!query.sortKey && !query.multiSort) {
+        query.multiSort = "order:asc,name:asc";
+      }
+
+      const result = await NatureOfWorkService.getAll(query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

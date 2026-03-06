@@ -3,6 +3,7 @@ import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import WorkerCategory from "../../modals/workercategory.model";
+import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const workerCategoryService = new CommonService(WorkerCategory);
 
@@ -13,14 +14,43 @@ export class WorkercategoryController {
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.create(req.body);
-      if (!result)
+      const isBulkPayload = Array.isArray(req.body);
+      const rows = normalizePayloadToArray(req.body);
+      if (!rows.length) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Request payload is empty"));
+      }
+
+      const normalizedRows = rows.map((row, index) => {
+        const type = String(row?.type ?? "").trim();
+        if (!type) {
+          throw new ApiError(400, `Row ${index + 1}: "type" is required`);
+        }
+        return {
+          ...row,
+          type,
+        };
+      });
+
+      const result = isBulkPayload
+        ? await WorkerCategory.insertMany(normalizedRows)
+        : await workerCategoryService.create(normalizedRows[0] as any);
+      if (!result || (Array.isArray(result) && result.length === 0))
         return res
           .status(400)
           .json(new ApiError(400, "Failed to create worker category"));
       return res
         .status(201)
-        .json(new ApiResponse(201, result, "Created successfully"));
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            isBulkPayload
+              ? `${(result as any[])?.length || normalizedRows.length} records created successfully`
+              : "Created successfully"
+          )
+        );
     } catch (err) {
       next(err);
     }
@@ -32,7 +62,11 @@ export class WorkercategoryController {
     next: NextFunction
   ) {
     try {
-      const result = await workerCategoryService.getAll(req.query);
+      const query: any = { ...req.query };
+      if (!query.sortKey && !query.multiSort) {
+        query.multiSort = "order:asc,type:asc";
+      }
+      const result = await workerCategoryService.getAll(query);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

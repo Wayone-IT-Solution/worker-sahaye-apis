@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import { Job, JobStatus } from "../../modals/job.model";
-import { User } from "../../modals/user.model";
+import { User, UserType as AccountUserType } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { UserType } from "../../modals/notification.model";
@@ -14,19 +14,106 @@ import { SubscriptionPlan, ISubscriptionPlan, PlanType } from "../../modals/subs
 import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { getMonthKey } from "../../utils/date";
 import { JobView } from "../../modals/jobView.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
+import { sanitizePayloadObject } from "../../utils/payloadSanitizer";
 
 const JobService = new CommonService(Job);
 
 export class JobController {
+  private static normalizeJobPayload(rawPayload: any) {
+    const data = { ...(rawPayload || {}) };
+
+    if (typeof data.tags === "string") {
+      data.tags = data.tags
+        .split(",")
+        .map((tag: string) => tag.trim())
+        .filter(Boolean);
+    }
+
+    if (typeof data.trades === "string") {
+      data.trades = data.trades
+        .split(",")
+        .map((trade: string) => trade.trim())
+        .filter(Boolean);
+    }
+
+    if (typeof data.skillsRequired === "string") {
+      data.skillsRequired = data.skillsRequired
+        .split(",")
+        .map((skill: string) => skill.trim())
+        .filter(Boolean);
+    }
+
+    // Handle benefits that come as JSON strings from FormData
+    if (data.benefits && Array.isArray(data.benefits)) {
+      data.benefits = data.benefits.map((benefit: any) => {
+        if (typeof benefit === "string") {
+          try {
+            return JSON.parse(benefit);
+          } catch {
+            return benefit;
+          }
+        }
+        return benefit;
+      });
+    }
+
+    // Handle skillsRequired - convert strings to objects with name field
+    if (data.skillsRequired && Array.isArray(data.skillsRequired)) {
+      data.skillsRequired = data.skillsRequired
+        .filter((skill: any) => {
+          if (typeof skill === "string") return skill.trim() !== "";
+          if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+          return false;
+        })
+        .map((skill: any) => {
+          if (typeof skill === "string") {
+            return {
+              name: skill.trim(),
+              level: "intermediate",
+              required: false,
+            };
+          }
+          return skill;
+        });
+    }
+
+    // Extract imageUrl from S3 middleware array if it's an array
+    if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
+      data.imageUrl = data.imageUrl[0].url;
+    }
+
+    // Reconstruct location object from flat location fields
+    const location: any = {};
+    if (data.locationAddress) location.address = data.locationAddress;
+    if (data.locationCity) location.city = data.locationCity;
+    if (data.locationState) location.state = data.locationState;
+    if (data.locationCountry) location.country = data.locationCountry;
+    if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
+    if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
+    if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+
+    if (Object.keys(location).length > 0) {
+      data.location = location;
+    }
+
+    delete data.locationAddress;
+    delete data.locationCity;
+    delete data.locationState;
+    delete data.locationCountry;
+    delete data.locationPostalCode;
+    delete data.locationRemoteFriendly;
+    delete data.locationAllowsRelocation;
+
+    return data;
+  }
+
   static async createJob(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = (req as any).user.id;
 
-      // Fetch user's active enrollment plan
-      const enrollment = await EnrolledPlan.findOne({
-        user: userId,
-        status: PlanEnrollmentStatus.ACTIVE,
-      }).populate<{ plan: ISubscriptionPlan }>("plan");
+      // Fetch user's highest priority active enrollment plan
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
       if (!enrollment) {
         throw new ApiError(403, "No active subscription plan found");
       }
@@ -40,7 +127,7 @@ export class JobController {
       const jobStatus =
         req.body.status === JobStatus.DRAFT
           ? JobStatus.DRAFT
-          : JobStatus.PENDING_APPROVAL;
+          : JobStatus.UNDER_REVIEW;
 
       /* ----------------------------------------------------
        * DRAFT JOB LIMIT CHECK
@@ -80,11 +167,11 @@ export class JobController {
       /* ----------------------------------------------------
        * CREATE JOB
        * ---------------------------------------------------- */
-      const data = {
+      const data = JobController.normalizeJobPayload({
         ...req.body,
         postedBy: userId,
         status: jobStatus,
-      };
+      });
 
       const result = await JobService.create(data);
       if (!result) {
@@ -120,6 +207,103 @@ export class JobController {
     }
   }
 
+  static async createBulkJobsForOwner(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { ownerId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(ownerId)) {
+        return res.status(400).json(new ApiError(400, "Invalid owner id."));
+      }
+
+      const owner = await User.findById(ownerId).select("_id userType status").lean();
+      if (!owner) {
+        return res.status(404).json(new ApiError(404, "Owner user not found."));
+      }
+
+      const ownerType = String(owner.userType || "").toLowerCase();
+      if (![AccountUserType.EMPLOYER, AccountUserType.CONTRACTOR].includes(ownerType as AccountUserType)) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Bulk job upload is allowed only for employer or contractor users."));
+      }
+
+      if (!Array.isArray(req.body) || req.body.length === 0) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Request body must be a non-empty array."));
+      }
+
+      const createdJobs: any[] = [];
+      for (let index = 0; index < req.body.length; index += 1) {
+        const row = sanitizePayloadObject(req.body[index] || {});
+        const rowNumber = index + 1;
+        const normalized = JobController.normalizeJobPayload(row);
+
+        const title = String(normalized?.title ?? "").trim();
+        const description = String(normalized?.description ?? "").trim();
+        if (!title || !description) {
+          return res.status(400).json(
+            new ApiError(400, `Row ${rowNumber}: title and description are required.`)
+          );
+        }
+
+        const requestedUserType = String(normalized?.userType ?? "").trim().toLowerCase();
+        let mappedJobUserType = requestedUserType === "contractor" ? "contractor" : "worker";
+
+        // Contractor owners can only post jobs for workers.
+        if (ownerType === AccountUserType.CONTRACTOR) {
+          mappedJobUserType = "worker";
+        }
+
+        // Employer can post for worker/contractor only.
+        if (
+          ownerType === AccountUserType.EMPLOYER &&
+          requestedUserType &&
+          !["worker", "contractor"].includes(requestedUserType)
+        ) {
+          return res.status(400).json(
+            new ApiError(400, `Row ${rowNumber}: userType must be worker or contractor.`)
+          );
+        }
+
+        const status =
+          normalized?.status === JobStatus.DRAFT
+            ? JobStatus.DRAFT
+            : JobStatus.UNDER_REVIEW;
+
+        try {
+          const created = await JobService.create({
+            ...normalized,
+            title,
+            status,
+            description,
+            userType: mappedJobUserType,
+            postedBy: owner._id,
+          });
+          createdJobs.push(created);
+        } catch (error: any) {
+          const message = String(error?.message || "Failed to create job");
+          return res
+            .status(400)
+            .json(new ApiError(400, `Row ${rowNumber}: ${message}`));
+        }
+      }
+
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          createdJobs,
+          `${createdJobs.length} jobs created successfully for ${ownerType}.`
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
 
 
   static async uploadJobUpdated(
@@ -128,7 +312,11 @@ export class JobController {
     next: NextFunction
   ) {
     try {
-      const imageUrl = req?.body?.imageUrl;
+      const imageUrlArray = req?.body?.imageUrl;
+      // Extract the URL from the first element if it's an array
+      const imageUrl = Array.isArray(imageUrlArray) && imageUrlArray.length > 0
+        ? imageUrlArray[0].url
+        : imageUrlArray;
       return res
         .status(201)
         .json(new ApiResponse(201, imageUrl, "Created successfully"));
@@ -139,15 +327,32 @@ export class JobController {
 
   static async getAllJobs(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobRole, category, city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
+      const {
+        jobRole,
+        category,
+        city,
+        workMode,
+        jobType,
+        minSalary,
+        maxSalary,
+        experience,
+        search,
+        industryId,
+        subIndustryId,
+      } = req.query;
+
+      const normalizedQuery: any = { ...req.query };
+      if (normalizedQuery.userType === "agency") {
+        normalizedQuery.userType = "contractor";
+      }
 
       // If user is logged in and is a contractor, enforce plan check
       const currentUser = (req as any).user;
       if (currentUser && currentUser.role === "contractor") {
-        const enrolled = await EnrolledPlan.findOne({ user: currentUser.id, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(currentUser.id);
         // If no enrollment or plan is Free/Basic, do not show data
-        const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-        if (!enrolled || planType === PlanType.FREE || planType === PlanType.BASIC) {
+        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
+        if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
           return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing job listings"));
         }
       }
@@ -360,6 +565,31 @@ export class JobController {
         },
         {
           $lookup: {
+            from: "workercategories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$categoryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: { path: "$natureDetails", preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
             from: "trades",
             localField: "trades",
             foreignField: "_id",
@@ -417,7 +647,13 @@ export class JobController {
             creatorName: "$userDetails.fullName",
             profilePicUrl: "$profilePicFile.url",
             creatorMobile: "$userDetails.mobile",
-            creatorUserType: "$userDetails.userType",
+            creatorUserType: {
+              $cond: [
+                { $eq: ["$userDetails.userType", "contractor"] },
+                "agency",
+                "$userDetails.userType",
+              ],
+            },
             creatorPlanType: "$userPlanDetails.planType",
             creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
             creatorHasPremium: "$userDetails.hasPremiumPlan",
@@ -526,7 +762,7 @@ export class JobController {
         },
       } as any);
 
-      const result = await JobService.getAll(req.query, pipeline);
+      const result = await JobService.getAll(normalizedQuery, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -745,6 +981,42 @@ export class JobController {
           },
         },
         {
+          $lookup: {
+            from: "workercategories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$categoryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$natureDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        {
           $project: {
             _id: 1,
             tags: 1,
@@ -778,6 +1050,11 @@ export class JobController {
             applicationProcess: 1,
             applicationDeadline: 1,
             userType: 1,
+            postedBy: 1,
+            approvedBy: 1,
+            imageUrl: 1,
+            history: 1,
+            attributes: 1,
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
             industryDetails: {
@@ -792,6 +1069,18 @@ export class JobController {
               _id: "$categoryDetails._id",
               type: "$categoryDetails.type",
               description: "$categoryDetails.description",
+            },
+            nature: {
+              _id: "$natureDetails._id",
+              name: "$natureDetails.name",
+              description: "$natureDetails.description",
+            },
+            trades: {
+              $map: {
+                input: "$tradesDetails",
+                as: "t",
+                in: { _id: "$$t._id", name: "$$t.name", description: "$$t.description" },
+              },
             },
           },
         },
@@ -1027,6 +1316,56 @@ export class JobController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$natureDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        {
+          $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
 
         {
           $project: {
@@ -1038,12 +1377,13 @@ export class JobController {
             metrics: 1,
             jobType: 1,
             priority: 1,
-            // category: 1,
+            userType: 1,
             teamSize: 1,
             location: 1,
             benefits: 1,
             workMode: 1,
             industry: 1,
+            imageUrl: 1,
             createdAt: 1,
             updatedAt: 1,
             expiresAt: 1,
@@ -1064,10 +1404,61 @@ export class JobController {
             profilePicUrl: "$profilePicFile.url",
             creatorName: "$userDetails.fullName",
             category: {
-              _id: "$categoryInfo._id",
-              type: "$categoryInfo.type",
-              description: "$categoryInfo.description",
-              isActive: "$categoryInfo.isActive",
+              _id: {
+                $ifNull: [
+                  "$categoryInfo._id",
+                  "$category"
+                ]
+              },
+              name: {
+                $ifNull: [
+                  "$categoryInfo.name",
+                  null
+                ]
+              },
+              type: {
+                $ifNull: [
+                  "$categoryInfo.type",
+                  null
+                ]
+              },
+              description: {
+                $ifNull: [
+                  "$categoryInfo.description",
+                  null
+                ]
+              }
+            },
+            nature: {
+              _id: "$natureDetails._id",
+              name: "$natureDetails.name",
+            },
+            trades: {
+              $cond: [
+                { $gt: [{ $size: "$tradesDetails" }, 0] },
+                {
+                  $map: {
+                    input: "$tradesDetails",
+                    as: "t",
+                    in: { _id: "$$t._id", name: "$$t.name" },
+                  }
+                },
+                {
+                  $map: {
+                    input: "$trades",
+                    as: "t",
+                    in: { _id: "$$t", name: null },
+                  }
+                }
+              ]
+            },
+            industryDetails: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+            },
+            subIndustryDetails: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
             },
           },
         },
@@ -1095,16 +1486,15 @@ export class JobController {
         const monthKey = getMonthKey();
 
         // Fetch active plan enrollment (contractor / employer only)
-        const enrolled = await EnrolledPlan.findOne({
-          user: currentUser.id,
-          status: PlanEnrollmentStatus.ACTIVE,
-        }).populate<{ plan: ISubscriptionPlan }>("plan");
+        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(
+          currentUser.id
+        );
 
-        if (!enrolled || !enrolled.plan) {
+        if (!enrollment || !enrollment.plan) {
           throw new ApiError(403, "No active subscription plan found");
         }
 
-        const limit: number | null = enrolled.plan.jobViewPerMonth ?? null;
+        const limit: number | null = enrollment.plan.jobViewPerMonth ?? null;
 
         const alreadyViewed = await JobView.exists({
           user: currentUser.id,
@@ -1162,7 +1552,6 @@ export class JobController {
     try {
       const id = req.params.id;
       const { role } = (req as any).user;
-      // const imageUrl = req?.body?.imageUrl?.[0]?.url;
 
       const record = await JobService.getById(id);
       if (!record) {
@@ -1172,9 +1561,84 @@ export class JobController {
       const data = req.body;
       if (role !== "admin") delete data.status;
 
-      // let image;
-      // if (req?.body?.imageUrl && record.imageUrl)
-      //   image = await extractImageUrl(req?.body?.image, record.imageUrl as string);
+      // Handle imageUrl if it was uploaded
+      if (data.imageUrl) {
+        if (Array.isArray(data.imageUrl) && data.imageUrl.length > 0 && data.imageUrl[0]?.url) {
+          // URL array from S3 middleware
+          data.imageUrl = data.imageUrl[0].url;
+        } else if (typeof data.imageUrl === "object" && data.imageUrl?.url) {
+          // Single object with url property
+          data.imageUrl = data.imageUrl.url;
+        } else if (typeof data.imageUrl === "string" && data.imageUrl && !data.imageUrl.startsWith("http") && !data.imageUrl.startsWith("/")) {
+          // If it's a non-URL string (like "img"), don't update it - keep the existing one
+          delete data.imageUrl;
+        } else if (typeof data.imageUrl === "string" && (data.imageUrl.startsWith("http") || data.imageUrl.startsWith("/"))) {
+          // Valid URL string, keep it
+        } else {
+          // Any other case, remove imageUrl from update
+          delete data.imageUrl;
+        }
+      }
+
+      // Handle benefits that come as JSON strings from FormData
+      if (data.benefits && Array.isArray(data.benefits)) {
+        data.benefits = data.benefits.map((benefit: any) => {
+          if (typeof benefit === "string") {
+            try {
+              return JSON.parse(benefit);
+            } catch {
+              return benefit;
+            }
+          }
+          return benefit;
+        });
+      }
+
+      // Handle skillsRequired - convert strings to objects with name field
+      if (data.skillsRequired && Array.isArray(data.skillsRequired)) {
+        data.skillsRequired = data.skillsRequired
+          .filter((skill: any) => {
+            // Filter out empty strings and null/undefined values
+            if (typeof skill === "string") return skill.trim() !== "";
+            if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+            return false;
+          })
+          .map((skill: any) => {
+            // Convert strings to objects, keep existing objects
+            if (typeof skill === "string") {
+              return {
+                name: skill.trim(),
+                level: "intermediate",
+                required: false
+              };
+            }
+            return skill;
+          });
+      }
+
+      // Reconstruct location object from flat location fields
+      const location: any = {};
+      if (data.locationAddress) location.address = data.locationAddress;
+      if (data.locationCity) location.city = data.locationCity;
+      if (data.locationState) location.state = data.locationState;
+      if (data.locationCountry) location.country = data.locationCountry;
+      if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
+      if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
+      if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+
+      // Only update location if we have any location data
+      if (Object.keys(location).length > 0) {
+        data.location = location;
+      }
+
+      // Remove flat location fields from data
+      delete data.locationAddress;
+      delete data.locationCity;
+      delete data.locationState;
+      delete data.locationCountry;
+      delete data.locationPostalCode;
+      delete data.locationRemoteFriendly;
+      delete data.locationAllowsRelocation;
 
       const result = await JobService.updateById(req.params.id, data);
       if (!result)
@@ -1210,34 +1674,79 @@ export class JobController {
     next: NextFunction
   ) {
     try {
-      const { id, role } = (req as any).user;
-      const { status } = req.body;
+      const { id } = (req as any).user;
+      const { status, remark } = req.body || {};
       if (!status)
         return res.status(400).json(new ApiError(400, "Status is required"));
 
-      const result = await JobService.updateById(req.params.id, { status });
+      const normalizedStatus =
+        status === JobStatus.PENDING_APPROVAL
+          ? JobStatus.UNDER_REVIEW
+          : status;
+
+      const allowedStatuses = new Set(Object.values(JobStatus));
+      if (!allowedStatuses.has(normalizedStatus)) {
+        return res.status(400).json(new ApiError(400, "Invalid status"));
+      }
+
+      const existingJob = await Job.findById(req.params.id).select(
+        "_id title status postedBy history approvedBy"
+      );
+      if (!existingJob) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to update job status"));
+      }
+
+      const previousStatus = existingJob.status;
+      const updatePayload: Record<string, any> = {
+        status: normalizedStatus,
+      };
+      if (normalizedStatus === JobStatus.OPEN) {
+        updatePayload.approvedBy = id;
+      }
+
+      const result = await JobService.updateById(req.params.id, updatePayload);
       if (!result)
         return res
           .status(404)
           .json(new ApiError(404, "Failed to update job status"));
 
-      if (result?.status !== status) {
+      const trimmedRemark = String(remark || "").trim();
+      if (previousStatus !== normalizedStatus || trimmedRemark) {
+        const historyComment = trimmedRemark
+          ? `Status changed: ${previousStatus} -> ${normalizedStatus}. Remark: ${trimmedRemark}`
+          : `Status changed: ${previousStatus} -> ${normalizedStatus}`;
+
+        await Job.findByIdAndUpdate(req.params.id, {
+          $push: {
+            history: {
+              comment: historyComment,
+              commentedBy: id,
+              timestamp: new Date(),
+            },
+          },
+        });
+
         const [jobDoc, userDoc]: any = await Promise.all([
           Job.findById(req.params.id).select("status title postedBy"),
-          User.findById(result.postedBy).select("fullName email mobile"),
+          User.findById(result.postedBy).select("fullName email mobile userType"),
         ]);
-        await sendDualNotification({
-          type: "job-status-update",
-          context: {
-            status: status,
-            jobTitle: jobDoc?.title,
-            userName: userDoc.fullName,
-          },
-          senderId: id,
-          receiverId: userDoc._id,
-          senderRole: UserType.ADMIN,
-          receiverRole: userDoc.userType,
-        });
+        if (userDoc) {
+          await sendDualNotification({
+            type: "job-status-update",
+            context: {
+              status: normalizedStatus,
+              ...(trimmedRemark ? { remark: trimmedRemark } : {}),
+              jobTitle: jobDoc?.title,
+              userName: userDoc.fullName,
+            },
+            senderId: id,
+            receiverId: userDoc._id,
+            senderRole: UserType.ADMIN,
+            receiverRole: userDoc.userType,
+          });
+        }
       }
       return res
         .status(200)
@@ -1403,6 +1912,342 @@ export class JobController {
             "Cities fetched successfully"
           )
         );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAllContractorJobs(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const currentUserId = (req as any).user?.id;
+      const { city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
+
+      // Build match stage for contractor jobs
+      const matchStage: any = {
+        status: "open",
+        userType: "contractor",
+        ...(currentUserId && { postedBy: { $ne: new mongoose.Types.ObjectId(currentUserId) } })
+      };
+
+      // Filter by city
+      if (city) {
+        matchStage["location.city"] = { $regex: city as string, $options: "i" };
+      }
+
+      // Filter by industry
+      if (industryId) {
+        matchStage.industryId = new mongoose.Types.ObjectId(industryId as string);
+      }
+
+      // Filter by sub-industry
+      if (subIndustryId) {
+        matchStage.subIndustryId = new mongoose.Types.ObjectId(subIndustryId as string);
+      }
+
+      // Filter by workMode
+      if (workMode) {
+        matchStage.workMode = workMode;
+      }
+
+      // Filter by jobType
+      if (jobType) {
+        matchStage.jobType = jobType;
+      }
+
+      // Filter by salary range
+      if (minSalary || maxSalary) {
+        matchStage["salary.min"] = {};
+        if (minSalary) {
+          matchStage["salary.min"]["$gte"] = parseInt(minSalary as string);
+        }
+        if (maxSalary) {
+          matchStage["salary.max"] = matchStage["salary.max"] || {};
+          matchStage["salary.max"]["$lte"] = parseInt(maxSalary as string);
+        }
+      }
+
+      // Filter by experience level
+      if (experience) {
+        matchStage.experienceLevel = experience;
+      }
+
+      const pipeline = [
+        {
+          $match: matchStage
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "postedBy",
+            foreignField: "_id",
+            as: "userDetails",
+          },
+        },
+        { $unwind: "$userDetails" },
+        {
+          $lookup: {
+            from: "enrolledplans",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$user", "$$userId"] },
+                      { $eq: ["$status", "active"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $lookup: {
+                  from: "subscriptionplans",
+                  localField: "plan",
+                  foreignField: "_id",
+                  as: "planDetails",
+                },
+              },
+              { $unwind: { path: "$planDetails", preserveNullAndEmptyArrays: true } },
+              { $project: { planType: "$planDetails.planType" } },
+              { $limit: 1 },
+            ],
+            as: "userPlanDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userPlanDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "fileuploads",
+            let: { userId: "$userDetails._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$userId"] },
+                      { $eq: ["$tag", "profilePic"] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "profilePicFile",
+          },
+        },
+        {
+          $unwind: {
+            path: "$profilePicFile",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "natureofworks",
+            localField: "nature",
+            foreignField: "_id",
+            as: "natureDetails",
+          },
+        },
+        {
+          $unwind: { path: "$natureDetails", preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: "industries",
+            localField: "industryId",
+            foreignField: "_id",
+            as: "industryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$industryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "subindustries",
+            localField: "subIndustryId",
+            foreignField: "_id",
+            as: "subIndustryDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$subIndustryDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "trades",
+            localField: "trades",
+            foreignField: "_id",
+            as: "tradesDetails",
+          },
+        },
+        // Full-text search on title and description if search param provided
+        ...(search ? [
+          {
+            $match: {
+              $or: [
+                { title: { $regex: search as string, $options: "i" } },
+                { description: { $regex: search as string, $options: "i" } },
+                { shortDescription: { $regex: search as string, $options: "i" } }
+              ]
+            }
+          }
+        ] : []),
+        {
+          $project: {
+            _id: 1,
+            tags: 1,
+            title: 1,
+            status: 1,
+            salary: 1,
+            metrics: 1,
+            jobType: 1,
+            priority: 1,
+            teamSize: 1,
+            location: 1,
+            benefits: 1,
+            workMode: 1,
+            industry: 1,
+            industryId: 1,
+            subIndustryId: 1,
+            userType: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            expiresAt: 1,
+            autoRepost: 1,
+            categories: 1,
+            publishedAt: 1,
+            description: 1,
+            workSchedule: 1,
+            lastBoostedAt: 1,
+            qualifications: 1,
+            skillsRequired: 1,
+            experienceLevel: 1,
+            maxApplications: 1,
+            shortDescription: 1,
+            applicationProcess: 1,
+            applicationDeadline: 1,
+            creatorEmail: "$userDetails.email",
+            creatorName: "$userDetails.fullName",
+            profilePicUrl: "$profilePicFile.url",
+            creatorMobile: "$userDetails.mobile",
+            creatorUserType: {
+              $cond: [
+                { $eq: ["$userDetails.userType", "contractor"] },
+                "agency",
+                "$userDetails.userType",
+              ],
+            },
+            creatorPlanType: "$userPlanDetails.planType",
+            creatorHasEarlyAccessBadge: "$userDetails.hasEarlyAccessBadge",
+            creatorHasPremium: "$userDetails.hasPremiumPlan",
+            nature: {
+              name: "$natureDetails.name",
+              description: "$natureDetails.description",
+            },
+            industryInfo: {
+              _id: "$industryDetails._id",
+              name: "$industryDetails.name",
+              icon: "$industryDetails.icon",
+              description: "$industryDetails.description",
+            },
+            subIndustryInfo: {
+              _id: "$subIndustryDetails._id",
+              name: "$subIndustryDetails.name",
+              icon: "$subIndustryDetails.icon",
+              description: "$subIndustryDetails.description",
+            },
+            trades: {
+              $map: {
+                input: "$tradesDetails",
+                as: "t",
+                in: { name: "$$t.name", description: "$$t.description" },
+              },
+            },
+          },
+        },
+      ];
+
+      // Add priority ranking and sorting
+      pipeline.push({
+        $addFields: {
+          priorityRank: {
+            $switch: {
+              branches: [
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "priority"] },
+                      { $eq: ["$creatorPlanType", "enterprise"] },
+                    ],
+                  },
+                  then: 1,
+                },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "priority"] },
+                      { $eq: ["$creatorPlanType", "growth"] },
+                    ],
+                  },
+                  then: 2,
+                },
+                { case: { $eq: ["$priority", "priority"] }, then: 3 },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "standard"] },
+                      { $eq: ["$creatorPlanType", "enterprise"] },
+                    ],
+                  },
+                  then: 4,
+                },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$priority", "standard"] },
+                      { $eq: ["$creatorPlanType", "growth"] },
+                    ],
+                  },
+                  then: 5,
+                },
+                { case: { $eq: ["$priority", "standard"] }, then: 6 },
+              ],
+              default: 7,
+            },
+          },
+        },
+      } as any);
+
+      pipeline.push({
+        $sort: {
+          priorityRank: 1,
+          creatorHasEarlyAccessBadge: -1,
+          createdAt: -1,
+        },
+      } as any);
+
+      const result = await JobService.getAll(req.query, pipeline);
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "Contractor jobs fetched successfully"));
     } catch (err) {
       next(err);
     }

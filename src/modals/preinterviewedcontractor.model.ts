@@ -10,6 +10,7 @@ export interface IPreInterviewedContractor extends Document {
   createdAt: Date;
   updatedAt: Date;
   verifiedAt?: Date;
+  interviewedAt?: Date;
   user: Types.ObjectId;
   numberOfClients: number;
   numberOfEmployees: number;
@@ -35,6 +36,7 @@ const PreInterviewedContractorSchema = new Schema<IPreInterviewedContractor>(
       enum: Object.values(VerificationStatus),
     },
     verifiedAt: { type: Date },
+    interviewedAt: { type: Date },
     numberOfClients: { type: Number, required: true },
     numberOfEmployees: { type: Number, required: true },
     completedProjects: { type: Number, required: true },

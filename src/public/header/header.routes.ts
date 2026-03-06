@@ -10,11 +10,14 @@ const {
   getHeaderById,
   updateHeaderById,
   deleteHeaderById,
+  getServicesByType,
 } = HeaderController;
 
 const router = express.Router();
 
 router
+  .get("/type/:serviceFor", getServicesByType)
+
   .get("/", asyncHandler(getAllHeaders))
   .post(
     "/",

@@ -58,7 +58,7 @@ export interface ICourse extends Document {
   updatedAt: Date;
   isFree: boolean;
   extras: string[];
-  type: CourseType;
+  type: string;
   startDate?: Date;
   imageUrl?: string;
   _id: Types.ObjectId;
@@ -68,11 +68,26 @@ export interface ICourse extends Document {
   priority: PriorityLevel;
   discountedAmount: number;
   category: Schema.Types.ObjectId;
+  classSchedule?: ICourseSession[];
   address?: string;
   locationName?: string;
   contactEmail?: string;
   contactPhone?: string;
   calculateProgress(): Promise<number>;
+}
+
+export interface ICourseSession {
+  date: Date;
+  hours: number;
+  mode: CourseType;
+  endTime?: string;
+  note?: string;
+  isActive?: boolean;
+  startTime?: string;
+  maxStudents?: number;
+  meetingLink?: string;
+  locationName?: string;
+  locationAddress?: string;
 }
 
 const TimeEntrySchema = new Schema<ITimeEntry>(
@@ -106,6 +121,27 @@ const LessonSchema = new Schema<ILesson>(
 );
 
 // Course Schema
+const CourseSessionSchema = new Schema<ICourseSession>(
+  {
+    date: { type: Date, required: true },
+    startTime: { type: String, trim: true },
+    endTime: { type: String, trim: true },
+    hours: { type: Number, required: true, min: 1 },
+    maxStudents: { type: Number, min: 1 },
+    mode: {
+      type: String,
+      default: CourseType.ONLINE,
+      enum: Object.values(CourseType),
+    },
+    meetingLink: { type: String, trim: true },
+    locationName: { type: String, trim: true },
+    locationAddress: { type: String, trim: true },
+    note: { type: String, trim: true, maxlength: 1000 },
+    isActive: { type: Boolean, default: true },
+  },
+  { _id: true }
+);
+
 const CourseSchema = new Schema<ICourse>(
   {
     imageUrl: String,
@@ -124,13 +160,31 @@ const CourseSchema = new Schema<ICourse>(
     },
     type: {
       type: String,
-      defualt: CourseType.ONLINE,
-      enum: Object.values(CourseType),
+      default: CourseType.ONLINE,
+      required: true,
+      validate: {
+        validator: (value: string) => {
+          const normalized = String(value || "")
+            .split(",")
+            .map((entry) => entry.trim().toLowerCase())
+            .filter(Boolean);
+          if (!normalized.length) return false;
+          return normalized.every((entry) =>
+            Object.values(CourseType).includes(entry as CourseType),
+          );
+        },
+        message:
+          "Course type must contain valid values: online/offline (comma separated).",
+      },
     },
     endDate: Date,
     tags: [String],
     extras: [String],
     startDate: Date,
+    classSchedule: {
+      type: [CourseSessionSchema],
+      default: [],
+    },
     category: {
       type: Schema.Types.ObjectId,
       ref: "WorkerCategory",
@@ -167,10 +221,91 @@ CourseSchema.virtual("lessons", {
 });
 
 CourseSchema.pre("validate", function (next) {
-  if (
-    this.type === CourseType.OFFLINE &&
-    (!this.address)
-  ) {
+  if (typeof this.type === "string") {
+    const normalizedType = this.type
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => Object.values(CourseType).includes(entry as CourseType));
+    const uniqueType = Array.from(new Set(normalizedType));
+    if (!uniqueType.length) {
+      return next(new Error("Course type is required"));
+    }
+    this.type = uniqueType.join(",");
+  }
+
+  const normalizedSchedule = Array.isArray(this.classSchedule)
+    ? this.classSchedule.filter((session: any) => session && session.date)
+    : [];
+
+  this.classSchedule = normalizedSchedule as any;
+
+  if (normalizedSchedule.length > 0) {
+    const sessionDates: Date[] = [];
+
+    for (const session of normalizedSchedule as any[]) {
+      const sessionDate = new Date(session.date);
+      if (Number.isNaN(sessionDate.getTime())) {
+        return next(new Error("Invalid class schedule date provided."));
+      }
+      sessionDates.push(sessionDate);
+
+      const mode = String(session.mode || "")
+        .trim()
+        .toLowerCase();
+
+      if (mode === CourseType.ONLINE) {
+        if (!String(session.meetingLink || "").trim()) {
+          return next(
+            new Error("Online class schedule requires meetingLink.")
+          );
+        }
+      }
+
+      if (mode === CourseType.OFFLINE) {
+        const hasOfflineLocation =
+          String(session.locationAddress || "").trim() ||
+          String(session.locationName || "").trim();
+        if (!hasOfflineLocation) {
+          return next(
+            new Error(
+              "Offline class schedule requires locationName or locationAddress."
+            )
+          );
+        }
+      }
+    }
+
+    const startTime = Math.min(...sessionDates.map((date) => date.getTime()));
+    const endTime = Math.max(...sessionDates.map((date) => date.getTime()));
+    this.startDate = new Date(startTime);
+    this.endDate = new Date(endTime);
+  }
+
+  if (this.startDate && this.endDate) {
+    const startTime = new Date(this.startDate).getTime();
+    const endTime = new Date(this.endDate).getTime();
+    if (startTime > endTime) {
+      return next(new Error("Course endDate must be after startDate."));
+    }
+  }
+
+  const hasOfflineType = this.type
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .includes(CourseType.OFFLINE);
+
+  const hasOfflineScheduleLocation = normalizedSchedule.some((session: any) => {
+    const mode = String(session?.mode || "")
+      .trim()
+      .toLowerCase();
+    if (mode !== CourseType.OFFLINE) return false;
+    return (
+      String(session?.locationAddress || "").trim() ||
+      String(session?.locationName || "").trim()
+    );
+  });
+
+  if (hasOfflineType && !this.address && !hasOfflineScheduleLocation) {
     return next(
       new Error("Offline courses must include location details with address.")
     );

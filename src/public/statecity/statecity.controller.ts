@@ -10,11 +10,29 @@ const cityService = new CommonService(City);
 const stateService = new CommonService(State);
 const countryService = new CommonService(Country);
 
+const LOCATION_CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
+let locationCache: {
+  expiresAt: number;
+  data: {
+    country: Array<{ _idf: string; country: string }>;
+    state: Array<{ _idf: string; country: string; state: string }>;
+    city: Array<{ _idf: string; state: string; city: string }>;
+  } | null;
+  inflight: Promise<
+    | {
+        country: Array<{ _idf: string; country: string }>;
+        state: Array<{ _idf: string; country: string; state: string }>;
+        city: Array<{ _idf: string; state: string; city: string }>;
+      }
+    | null
+  > | null;
+} = { expiresAt: 0, data: null, inflight: null };
+
 export class StateCityController {
   static async createStateCity(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { state, city, country } = req.query;
@@ -28,7 +46,11 @@ export class StateCityController {
       const insertedCities: any[] = [];
 
       // ================== INSERT COUNTRIES ==================
-      if (insertCountries && Array.isArray(indianCountries) && indianCountries.length) {
+      if (
+        insertCountries &&
+        Array.isArray(indianCountries) &&
+        indianCountries.length
+      ) {
         const countryResult = await Country.insertMany(indianCountries, {
           ordered: false,
         });
@@ -36,14 +58,23 @@ export class StateCityController {
       }
 
       if (countries.length) {
-        const countryResult = await Country.insertMany(countries, { ordered: false });
+        const countryResult = await Country.insertMany(countries, {
+          ordered: false,
+        });
         insertedCountries.push(...countryResult);
       }
 
       // ================== INSERT STATES ==================
-      if (insertStates && indianStates?.India && Array.isArray(indianStates.India)) {
+      if (
+        insertStates &&
+        indianStates?.India &&
+        Array.isArray(indianStates.India)
+      ) {
         for (const state of indianStates.India) {
-          const countryDoc = await Country.findOne({ name: "India" }, { _id: 1 });
+          const countryDoc = await Country.findOne(
+            { name: "India" },
+            { _id: 1 },
+          );
           if (!countryDoc) continue;
 
           insertedStates.push({
@@ -66,7 +97,10 @@ export class StateCityController {
         const preparedStates = [];
 
         for (const state of states) {
-          const countryDoc = await Country.findOne({ name: state.countryName }, { _id: 1 });
+          const countryDoc = await Country.findOne(
+            { name: state.countryName },
+            { _id: 1 },
+          );
           if (!countryDoc) continue;
 
           preparedStates.push({
@@ -87,7 +121,10 @@ export class StateCityController {
       // ================== INSERT CITIES ==================
       if (insertCities && indianStates?.India) {
         for (const state of indianStates.India) {
-          const stateDoc = await State.findOne({ name: state.name }, { _id: 1 });
+          const stateDoc = await State.findOne(
+            { name: state.name },
+            { _id: 1 },
+          );
           if (!stateDoc || !region[state.name]) continue;
 
           const cityPayload = region[state.name].map((cityName: string) => ({
@@ -107,7 +144,10 @@ export class StateCityController {
         const preparedCities = [];
 
         for (const city of cities) {
-          const stateDoc = await State.findOne({ name: city.stateName }, { _id: 1 });
+          const stateDoc = await State.findOne(
+            { name: city.stateName },
+            { _id: 1 },
+          );
           if (!stateDoc) continue;
 
           preparedCities.push({
@@ -133,8 +173,8 @@ export class StateCityController {
             insertedStates: insertedStates.length,
             insertedCities: insertedCities.length,
           },
-          "Data inserted successfully"
-        )
+          "Data inserted successfully",
+        ),
       );
     } catch (err) {
       next(err);
@@ -144,7 +184,7 @@ export class StateCityController {
   static async getAllStateCitys(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { city, stateId, countryId } = req.query;
@@ -202,11 +242,105 @@ export class StateCityController {
     }
   }
 
-  static async createState(
+  static async getPublicLocationData(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
+    try {
+      const now = Date.now();
+      if (locationCache.data && locationCache.expiresAt > now) {
+        return res
+          .status(200)
+          .json(
+            new ApiResponse(
+              200,
+              locationCache.data,
+              "Location data fetched successfully",
+            ),
+          );
+      }
+
+      if (!locationCache.inflight) {
+        locationCache.inflight = (async () => {
+          const [countries, states, cities] = await Promise.all([
+            Country.find({}, { _id: 1, name: 1 }).sort({ name: 1 }).lean(),
+            State.aggregate([
+              {
+                $lookup: {
+                  from: "countries",
+                  localField: "countryId",
+                  foreignField: "_id",
+                  as: "country",
+                },
+              },
+              { $unwind: "$country" },
+              {
+                $project: {
+                  _id: 1,
+                  state: "$name",
+                  country: "$country.name",
+                },
+              },
+              { $sort: { country: 1, state: 1 } },
+            ]),
+            City.aggregate([
+              {
+                $lookup: {
+                  from: "states",
+                  localField: "stateId",
+                  foreignField: "_id",
+                  as: "state",
+                },
+              },
+              { $unwind: "$state" },
+              {
+                $project: {
+                  _id: 1,
+                  city: "$name",
+                  state: "$state.name",
+                },
+              },
+              { $sort: { state: 1, city: 1 } },
+            ]),
+          ]);
+
+          return {
+            country: countries.map((country) => ({
+              _idf: String(country._id),
+              country: country.name,
+            })),
+            state: states.map((state) => ({
+              _idf: String(state._id),
+              country: state.country,
+              state: state.state,
+            })),
+            city: cities.map((city) => ({
+              _idf: String(city._id),
+              state: city.state,
+              city: city.city,
+            })),
+          };
+        })();
+      }
+
+      const payload = await locationCache.inflight;
+      locationCache.inflight = null;
+      if (payload) {
+        locationCache.data = payload;
+        locationCache.expiresAt = Date.now() + LOCATION_CACHE_TTL_MS;
+      }
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, payload, "Location data fetched successfully"));
+    } catch (err) {
+      locationCache.inflight = null;
+      next(err);
+    }
+  }
+
+  static async createState(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await stateService.create(req.body);
       if (!result)
@@ -221,33 +355,31 @@ export class StateCityController {
     }
   }
 
-  static async getAllStates(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getAllStates(req: Request, res: Response, next: NextFunction) {
     try {
-      const pipeline = [{
-        $lookup: {
-          from: "countries",
-          localField: "countryId",
-          foreignField: "_id",
-          as: "countryData",
+      const pipeline = [
+        {
+          $lookup: {
+            from: "countries",
+            localField: "countryId",
+            foreignField: "_id",
+            as: "countryData",
+          },
         },
-      },
-      { $unwind: "$countryData" },
-      {
-        $project: {
-          _id: 1,
-          code: 1,
-          name: 1,
-          countryId: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          countryName: "$countryData.name",
-          countryCode: "$countryData.code",
+        { $unwind: "$countryData" },
+        {
+          $project: {
+            _id: 1,
+            code: 1,
+            name: 1,
+            countryId: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            countryName: "$countryData.name",
+            countryCode: "$countryData.code",
+          },
         },
-      }];
+      ];
       const states = await stateService.getAll(req.query, pipeline);
       return res
         .status(200)
@@ -257,18 +389,15 @@ export class StateCityController {
     }
   }
 
-  static async getStateById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getStateById(req: Request, res: Response, next: NextFunction) {
     try {
       const { role } = (req as any).user;
-      const result = await stateService.getById(req.params.id, role !== "admin");
+      const result = await stateService.getById(
+        req.params.id,
+        role !== "admin",
+      );
       if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "state not found"));
+        return res.status(404).json(new ApiError(404, "state not found"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -280,13 +409,10 @@ export class StateCityController {
   static async updateStateById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
-      const result = await stateService.updateById(
-        req.params.id,
-        req.body
-      );
+      const result = await stateService.updateById(req.params.id, req.body);
       if (!result)
         return res
           .status(404)
@@ -302,7 +428,7 @@ export class StateCityController {
   static async deleteStateById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await stateService.deleteById(req.params.id);
@@ -318,11 +444,7 @@ export class StateCityController {
     }
   }
 
-  static async getAllCity(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getAllCity(req: Request, res: Response, next: NextFunction) {
     try {
       const pipeline = [
         {
@@ -367,17 +489,11 @@ export class StateCityController {
     }
   }
 
-  static async createCity(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async createCity(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await cityService.create(req.body);
       if (!result)
-        return res
-          .status(400)
-          .json(new ApiError(400, "Failed to create city"));
+        return res.status(400).json(new ApiError(400, "Failed to create city"));
       return res
         .status(201)
         .json(new ApiResponse(201, result, "Created successfully"));
@@ -386,18 +502,12 @@ export class StateCityController {
     }
   }
 
-  static async getCityById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getCityById(req: Request, res: Response, next: NextFunction) {
     try {
       const { role } = (req as any).user;
       const result = await cityService.getById(req.params.id, role !== "admin");
       if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "city not found"));
+        return res.status(404).json(new ApiError(404, "city not found"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -406,20 +516,11 @@ export class StateCityController {
     }
   }
 
-  static async updateCityById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async updateCityById(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await cityService.updateById(
-        req.params.id,
-        req.body
-      );
+      const result = await cityService.updateById(req.params.id, req.body);
       if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Failed to update city"));
+        return res.status(404).json(new ApiError(404, "Failed to update city"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Updated successfully"));
@@ -428,17 +529,11 @@ export class StateCityController {
     }
   }
 
-  static async deleteCityById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async deleteCityById(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await cityService.deleteById(req.params.id);
       if (!result)
-        return res
-          .status(404)
-          .json(new ApiError(404, "Failed to delete city"));
+        return res.status(404).json(new ApiError(404, "Failed to delete city"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));
@@ -447,11 +542,7 @@ export class StateCityController {
     }
   }
 
-  static async createCountry(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async createCountry(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await countryService.create(req.body);
       if (!result)
@@ -469,23 +560,21 @@ export class StateCityController {
   static async getAllCountries(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const countries = await countryService.getAll(req.query);
       return res
         .status(200)
-        .json(new ApiResponse(200, countries, "Countries fetched successfully"));
+        .json(
+          new ApiResponse(200, countries, "Countries fetched successfully"),
+        );
     } catch (err) {
       next(err);
     }
   }
 
-  static async getCountryById(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getCountryById(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await countryService.getById(req.params.id);
       if (!result)
@@ -501,12 +590,14 @@ export class StateCityController {
   static async updateCountryById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await countryService.updateById(req.params.id, req.body);
       if (!result)
-        return res.status(404).json(new ApiError(404, "Failed to update country"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to update country"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Updated successfully"));
@@ -518,12 +609,14 @@ export class StateCityController {
   static async deleteCountryById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await countryService.deleteById(req.params.id);
       if (!result)
-        return res.status(404).json(new ApiError(404, "Failed to delete country"));
+        return res
+          .status(404)
+          .json(new ApiError(404, "Failed to delete country"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));

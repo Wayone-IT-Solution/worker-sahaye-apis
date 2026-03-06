@@ -12,6 +12,7 @@ export enum PlanEnrollmentStatus {
 export enum PlanPaymentGateway {
   FREE = "free",
   RAZORPAY = "razorpay",
+  ADMIN_ASSIGN = "admin_assign",
 }
 
 export enum PlanPaymentStatus {
@@ -24,12 +25,16 @@ export enum PlanPaymentStatus {
 export interface IEnrolledPlan extends Document {
   user: Types.ObjectId;
   plan: Types.ObjectId;
+  assignedBy?: Types.ObjectId;
   enrolledAt: Date;
   expiredAt?: Date;
   refundedAt?: Date;
   refundReason?: string;
   totalAmount: number;
   finalAmount: number;
+  pointsRedeemed?: number;
+  pointsValue?: number;
+  pointsRefunded?: boolean;
   paymentDetails?: {
     paidAt?: Date;
     amount: number;
@@ -68,12 +73,20 @@ const EnrolledPlanSchema = new Schema<IEnrolledPlan>(
       ref: "SubscriptionPlan",
       type: Schema.Types.ObjectId,
     },
+    assignedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
     enrolledAt: { type: Date, default: Date.now },
     expiredAt: { type: Date },
     refundedAt: { type: Date },
     refundReason: { type: String },
     totalAmount: { type: Number, required: true },
     finalAmount: { type: Number, required: true },
+    pointsRedeemed: { type: Number, default: 0 },
+    pointsValue: { type: Number, default: 0 },
+    pointsRefunded: { type: Boolean, default: false },
     paymentDetails: { type: PlanPaymentDetailsSchema },
     status: {
       type: String,

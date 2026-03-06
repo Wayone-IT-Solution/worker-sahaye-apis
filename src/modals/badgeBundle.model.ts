@@ -14,6 +14,7 @@ export interface IBadgeBundle extends Document {
     badges: Types.ObjectId[]; // References to Badge documents
     fee?: number; // Price or fee for the bundle
     isActive: boolean;
+    order?: number;
     userTypes: UserType[];
     createdAt: Date;
     updatedAt: Date;
@@ -60,6 +61,11 @@ const BadgeBundleSchema = new Schema<IBadgeBundle>(
             type: Boolean,
             default: true,
             index: true,
+        },
+        order: {
+            type: Number,
+            default: 0,
+            required: false
         },
     },
     { timestamps: true }

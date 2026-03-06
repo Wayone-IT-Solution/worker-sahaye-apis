@@ -75,13 +75,17 @@ export interface ISubscriptionPlan extends Document {
   currency: Currency;
   planType: PlanType;
   userType: UserType;
+  paymentTagline:string;
   status: PlanStatus;
   isPopular: boolean;
   displayName: string;
   description: string;
   isRecommended: boolean;
   billingCycle: BillingCycle;
-
+  whatYouGet?: string[]; // Array of features/benefits user gets in this plan
+  whatYouMiss?: string[]; // Array of features/benefits user is missing compared to higher plans
+  monthlyJobListingLimit?: number | null;
+  // Job Post Limits
   agencyJobPostLimits?: {
     customer?: number | null;
     agency?: number | null;
@@ -90,13 +94,11 @@ export interface ISubscriptionPlan extends Document {
     agency?: number | null;
     candidate?: number | null;
   };
-  // Save limits (for profile, job, draft saving) - Currently disabled, may use further
-  /*
+  // Save limits (for profile, job, draft saving)
   totalSavesLimit?: number; // Overall monthly save limit
   saveProfilesLimit?: number; // Monthly limit for saving profiles
   saveJobsLimit?: number; // Monthly limit for saving jobs
   saveDraftsLimit?: number; // Monthly limit for saving drafts
-  */
   // Engagement limits - per recipient type
   inviteSendLimit?:
   | {
@@ -130,6 +132,7 @@ export interface ISubscriptionPlan extends Document {
   jobViewPerMonth?: number | null;
   // number = monthly limit
   // null = unlimited
+  planImage?: string; // Image URL/path for this plan type (one image per plan type, not per duration)
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -154,6 +157,10 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       maxlength: 2000,
     },
     tagline: {
+      type: String,
+      maxlength: 200,
+    },
+    paymentTagline: {
       type: String,
       maxlength: 200,
     },
@@ -185,7 +192,11 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       enum: Object.values(BillingCycle),
     },
     features: [{ type: Schema.Types.ObjectId, ref: "Feature" }],
-
+    monthlyJobListingLimit: {
+      type: Number,
+      min: 0,
+      // Represents the allowed number of job listings per month for employer/contractor plans.
+    },
     agencyJobPostLimits: {
       customer: { type: Number, default: 0 },
       agency: { type: Number, default: 0 },
@@ -194,8 +205,7 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       agency: { type: Number, default: 0 },
       candidate: { type: Number, default: 0 },
     },
-    // Save limits for profiles, jobs, and drafts - Currently disabled, may use further
-    /*
+    // Save limits for profiles, jobs, and drafts
     totalSavesLimit: {
       type: Number,
       min: 0,
@@ -221,7 +231,6 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       default: null,
       // Monthly limit for saving drafts
     },
-    */
     inviteSendLimit: {
       type: Schema.Types.Mixed,
       default: 0,
@@ -270,6 +279,22 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       type: Number,
       min: 0,
       default: 20,
+    },
+    planImage: {
+      type: String,
+      default: null,
+      // Image URL/path specific to plan type (not duration)
+      // e.g., basic.jpg, premium.jpg, etc.
+    },
+    whatYouGet: {
+      type: [String],
+      default: [],
+      // Array of features/benefits user gets in this plan
+    },
+    whatYouMiss: {
+      type: [String],
+      default: [],
+      // Array of features/benefits user is missing compared to higher plans
     },
   },
   { timestamps: true },

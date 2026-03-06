@@ -6,6 +6,8 @@ import { Request, Response, NextFunction } from "express";
 import { CommonService } from "../../services/common.services";
 import { Enrollment, EnrollmentStatus } from "../../modals/enrollment.model";
 import { sendEmail } from "../../utils/emailService";
+import { sendMsg91Otp } from "../../utils/msg91";
+
 import crypto from "crypto";
 import {
   User,
@@ -17,6 +19,7 @@ import {
 import {
   EnrolledPlan,
   PlanEnrollmentStatus,
+  PlanPaymentGateway,
 } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import mongoose from "mongoose";
@@ -28,6 +31,10 @@ import {
 } from "../../modals/connection.model";
 import { Endorsement } from "../../modals/endorsement.model";
 import { UserPreference } from "../../modals/userpreference.model";
+import {
+  sanitizePayloadObject,
+  normalizePayloadToArray,
+} from "../../utils/payloadSanitizer";
 
 const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
@@ -50,18 +57,16 @@ const getCandidateBrandingEligibility = async (userId: string | null) => {
     return defaultEligibility;
   }
 
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const { UserSubscriptionService } = require("../../services/userSubscription.service");
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, return FREE plan eligibility
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return defaultEligibility;
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   // Define branding eligibility based on plan type
   const eligibilityMap: Record<
@@ -113,110 +118,182 @@ const getCandidateBrandingEligibility = async (userId: string | null) => {
 };
 
 export class UserController {
+  private static normalizeUserType(input: unknown): UserType | null {
+    const value = String(input ?? "").trim().toLowerCase();
+    return (Object.values(UserType) as string[]).includes(value)
+      ? (value as UserType)
+      : null;
+  }
+
+  private static normalizeUserStatus(input: unknown): UserStatus | null {
+    const value = String(input ?? "").trim().toLowerCase();
+    return (Object.values(UserStatus) as string[]).includes(value)
+      ? (value as UserStatus)
+      : null;
+  }
+
+  private static async createSingleUser(
+    payload: any,
+    rowNumber?: number
+  ): Promise<any> {
+    const prefix = rowNumber ? `Row ${rowNumber}: ` : "";
+    const normalizedPayload = sanitizePayloadObject(payload);
+    const email = String(normalizedPayload?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const mobile = String(normalizedPayload?.mobile ?? "").trim();
+    const fullName = String(normalizedPayload?.fullName ?? "").trim();
+    const userType = UserController.normalizeUserType(normalizedPayload?.userType);
+    const referralCode = String(normalizedPayload?.referralCode ?? "").trim();
+
+    const missingFields: string[] = [];
+    if (!mobile) missingFields.push("mobile");
+    if (!fullName) missingFields.push("fullName");
+    if (!userType) missingFields.push("userType");
+
+    if (missingFields.length) {
+      throw new ApiError(
+        400,
+        `${prefix}Missing required fields: ${missingFields.join(", ")}`
+      );
+    }
+
+    if (
+      (userType === UserType.EMPLOYER || userType === UserType.CONTRACTOR) &&
+      !email
+    ) {
+      throw new ApiError(400, `${prefix}Email is required for this user type`);
+    }
+
+    const userData: any = {
+      status: normalizedPayload?.status,
+      profile: normalizedPayload?.profile,
+      relocate: normalizedPayload?.relocate,
+      fullName,
+      userType,
+      mobile,
+      category: normalizedPayload?.category,
+      industry: normalizedPayload?.industry,
+      userPan: normalizedPayload?.userPan,
+      userAadhar: normalizedPayload?.userAadhar,
+      workerCategory: normalizedPayload?.workerCategory,
+      natureOfWork: normalizedPayload?.natureOfWork,
+      primaryLocation: normalizedPayload?.primaryLocation,
+      dateOfBirth: normalizedPayload?.dateOfBirth,
+      trade: normalizedPayload?.trade,
+      gender: normalizedPayload?.gender,
+      agreedToTerms: normalizedPayload?.agreedToTerms,
+      privacyPolicyAccepted: normalizedPayload?.privacyPolicyAccepted,
+      preferredJobCategories: normalizedPayload?.preferredJobCategories,
+    };
+
+    if (email) userData.email = email;
+
+    if (userType === UserType.EMPLOYER || userType === UserType.CONTRACTOR) {
+      userData.isEmailVerified = false;
+    }
+
+    const mobileExist = await User.findOne({ mobile });
+    if (mobileExist) {
+      throw new ApiError(
+        400,
+        `${prefix}A ${mobileExist.userType} account with this phone number already exists.`
+      );
+    }
+
+    if (email) {
+      const emailExist = await User.findOne({ email });
+      if (emailExist) {
+        throw new ApiError(
+          400,
+          `${prefix}A ${emailExist.userType} account with this email address already exists.`
+        );
+      }
+    }
+
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+      if (!referrer) throw new ApiError(400, `${prefix}Invalid referral code`);
+
+      userData.referredBy = referrer._id;
+      userData.referredCode = referralCode;
+      await referrer.updateOne({ $inc: { pointsEarned: 50 } });
+    }
+
+    const newUser: any = await userService.create(userData);
+    newUser.referralCode = generateReferralCode(newUser._id);
+    newUser.profileCompletion = calculateProfileCompletion(newUser);
+    await newUser.save();
+    return newUser;
+  }
+
   static async createUser(req: Request, res: Response, next: NextFunction) {
     try {
-      const {
-        email,
-        mobile,
-        fullName,
-        userType,
-        referralCode,
-        agreedToTerms,
-        privacyPolicyAccepted,
-        relocate,
-        workerCategory,
-      } = req.body;
-
-      // 1. Validation (basic example)
-      if (!mobile || !fullName || !userType) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Missing required fields"));
-      }
-
-      if (
-        (userType === UserType.EMPLOYER ||
-          userType === UserType.CONTRACTOR) &&
-        !email
-      ) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "Email is required for this user type"));
-      }
-
-      const userData: any = {
-        email,
-        mobile,
-        fullName,
-        userType,
-        agreedToTerms,
-        privacyPolicyAccepted,
-        relocate,
-        workerCategory,
-      };
-
-      // Email is optional for WORKER
-      if (email) {
-        userData.email = email;
-      }
-
-      if (
-        userType === UserType.EMPLOYER ||
-        userType === UserType.CONTRACTOR
-      ) {
-        userData.isEmailVerified = false;
-      }
-
-      const mobileExist = await User.findOne({ mobile });
-      if (mobileExist) {
-        return res.status(400).json(
-          new ApiError(
-            400,
-            `A ${mobileExist.userType} account with this phone number already exists.`
-          )
-        );
-      }
-
-      if (email) {
-        const emailExist = await User.findOne({ email });
-        if (emailExist) {
-          return res.status(400).json(
-            new ApiError(
-              400,
-              `A ${emailExist.userType} account with this email address already exists.`
-            )
-          );
-        }
-      }
-
-      // 2. Handle referral (if any) before creating referralCode
-      if (referralCode) {
-        const referrer = await User.findOne({ referralCode });
-        if (!referrer)
+      if (Array.isArray(req.body)) {
+        const rows = normalizePayloadToArray(req.body);
+        if (!rows.length) {
           return res
             .status(400)
-            .json(new ApiError(400, "Invalid referral code"));
-        userData.referredBy = referrer._id;
-        userData.referredCode = referralCode;
-        await referrer.updateOne({ $inc: { pointsEarned: 50 } });
+            .json(new ApiError(400, "Missing required fields: mobile, fullName, userType"));
+        }
+
+        const seenMobiles = new Set<string>();
+        const seenEmails = new Set<string>();
+
+        for (let index = 0; index < rows.length; index += 1) {
+          const row = rows[index] || {};
+          const rowNumber = index + 1;
+          const mobile = String(row?.mobile ?? "").trim();
+          const email = String(row?.email ?? "").trim().toLowerCase();
+
+          if (mobile) {
+            if (seenMobiles.has(mobile)) {
+              return res
+                .status(400)
+                .json(new ApiError(400, `Row ${rowNumber}: Duplicate mobile in upload payload`));
+            }
+            seenMobiles.add(mobile);
+          }
+
+          if (email) {
+            if (seenEmails.has(email)) {
+              return res
+                .status(400)
+                .json(new ApiError(400, `Row ${rowNumber}: Duplicate email in upload payload`));
+            }
+            seenEmails.add(email);
+          }
+        }
+
+        const createdUsers: any[] = [];
+        for (let index = 0; index < rows.length; index += 1) {
+          const created = await UserController.createSingleUser(
+            rows[index],
+            index + 1
+          );
+          createdUsers.push(created);
+        }
+
+        return res
+          .status(201)
+          .json(
+            new ApiResponse(
+              201,
+              createdUsers,
+              `${createdUsers.length} users created successfully`
+            )
+          );
       }
-      console.log("userData", userData);
-      const newUser: any = await userService.create(userData);
-      newUser.referralCode = generateReferralCode(newUser._id);
-      newUser.profileCompletion = calculateProfileCompletion(newUser);
 
-      await newUser.save();
-
-      return res
-        .status(201)
-        .json(
-          new ApiResponse(
-            201,
-            newUser,
-            `${userType.charAt(0).toUpperCase() + userType.slice(1)
-            } created successfully`
-          )
-        );
+      const newUser = await UserController.createSingleUser(req.body);
+      const createdUserType = String(newUser?.userType || req.body?.userType || "user");
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          newUser,
+          `${createdUserType.charAt(0).toUpperCase() + createdUserType.slice(1)} created successfully`
+        )
+      );
     } catch (error) {
       next(error);
     }
@@ -224,13 +301,23 @@ export class UserController {
 
   static async deleteUserById(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id: user, role } = (req as any).user;
-      if (role === "admin")
+      const authUser: any = (req as any).user || null;
+      const targetUserId = req.params.id || authUser?.id;
+
+      if (!targetUserId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "User ID is required"));
+      }
+
+      // Prevent admin token from deleting itself using generic self-delete route.
+      if (!req.params.id && authUser?.role === "admin") {
         return res
           .status(403)
           .json(new ApiError(403, "Cannot delete admin users"));
+      }
 
-      const result = await userService.deleteById(req.params.id || user);
+      const result = await userService.deleteById(targetUserId);
       if (!result)
         return res.status(404).json(new ApiError(404, "Failed to delete city"));
       return res
@@ -298,13 +385,13 @@ export class UserController {
 
       const result = await userService.updateById(id, data);
       result.profileCompletion = calculateProfileCompletion(result);
-      
+
       // Update fast responder score if it's a worker
       if (result.userType === UserType.WORKER) {
         const { updateFastResponderScore } = await import("../../services/fastResponder.service");
         await updateFastResponderScore(result._id);
       }
-      
+
       await result.save();
 
       const { userType } = result;
@@ -329,6 +416,10 @@ export class UserController {
     next: NextFunction
   ): Promise<any> {
     try {
+      const currentUserId = new mongoose.Types.ObjectId((req as any).user?.id);
+      const { engagementType: rawEngagementType, ...restQuery } = req.query;
+      const engagementType = (rawEngagementType as string)?.toLowerCase();
+
       const pipeline: any[] = [
         {
           $lookup: {
@@ -357,6 +448,94 @@ export class UserController {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // Check if invite engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "invite"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "inviteEngagement",
+          },
+        },
+        // Check if viewProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "viewProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "viewProfileEngagement",
+          },
+        },
+        // Check if contactUnlock engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "contactUnlock"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "contactUnlockEngagement",
+          },
+        },
+        // Check if saveProfile engagement exists
+        {
+          $lookup: {
+            from: "engagements",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$initiator", currentUserId] },
+                      { $eq: ["$recipient", "$$userId"] },
+                      { $eq: ["$engagementType", "saveProfile"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "saveProfileEngagement",
+          },
+        },
         {
           $replaceRoot: {
             newRoot: {
@@ -364,6 +543,107 @@ export class UserController {
                 "$$ROOT",
                 {
                   profilePic: "$profilePic.url",
+                  hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
+                  hasViewProfileSent: {
+                    $gt: [{ $size: "$viewProfileEngagement" }, 0],
+                  },
+                  hasContactUnlockSent: {
+                    $gt: [{ $size: "$contactUnlockEngagement" }, 0],
+                  },
+                  hasSaveProfileSent: {
+                    $gt: [{ $size: "$saveProfileEngagement" }, 0],
+                  },
+                },
+              ],
+            },
+          },
+        },
+        // Add filter stage based on engagementType query parameter
+        ...(engagementType
+          ? [
+            {
+              $match:
+                engagementType === "invite"
+                  ? { inviteEngagement: { $ne: [] } }
+                  : engagementType === "viewprofile"
+                    ? { viewProfileEngagement: { $ne: [] } }
+                    : engagementType === "contactunlock"
+                      ? { contactUnlockEngagement: { $ne: [] } }
+                      : engagementType === "saveprofile" ||
+                        engagementType === "saved"
+                        ? { saveProfileEngagement: { $ne: [] } }
+                        : {},
+            },
+          ]
+          : []),
+        {
+          $lookup: {
+            from: "enrolledplans",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$user", "$$userId"] },
+                },
+              },
+              { $sort: { enrolledAt: -1, createdAt: -1 } },
+              { $limit: 1 },
+              {
+                $lookup: {
+                  from: "admins",
+                  localField: "assignedBy",
+                  foreignField: "_id",
+                  as: "assignedByAdmin",
+                },
+              },
+              {
+                $unwind: {
+                  path: "$assignedByAdmin",
+                  preserveNullAndEmptyArrays: true,
+                },
+              },
+              {
+                $project: {
+                  _id: 1,
+                  status: 1,
+                  enrolledAt: 1,
+                  assignedBy: 1,
+                  gateway: "$paymentDetails.gateway",
+                  assignedByName: "$assignedByAdmin.username",
+                },
+              },
+            ],
+            as: "latestEnrollment",
+          },
+        },
+        {
+          $addFields: {
+            latestEnrollmentDetails: { $arrayElemAt: ["$latestEnrollment", 0] },
+          },
+        },
+        {
+          $addFields: {
+            latestPlanAllottedBy: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$latestEnrollmentDetails.assignedByName", null] },
+                    { $ne: ["$latestEnrollmentDetails.assignedByName", ""] },
+                  ],
+                },
+                "$latestEnrollmentDetails.assignedByName",
+                {
+                  $cond: [
+                    { $eq: ["$latestEnrollmentDetails.gateway", PlanPaymentGateway.ADMIN_ASSIGN] },
+                    "Admin",
+                    {
+                      $cond: [
+                        { $ne: ["$latestEnrollmentDetails._id", null] },
+                        "Self",
+                        "-",
+                      ],
+                    },
+                  ],
                 },
               ],
             },
@@ -380,7 +660,7 @@ export class UserController {
         }
       ];
 
-      const result = await userService.getAll(req.query, pipeline);
+      const result = await userService.getAll(restQuery, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Users fetched successfully"));
@@ -400,6 +680,76 @@ export class UserController {
     }
   }
 
+  static async updateUserStatusByAdmin(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<any> {
+    try {
+      const { id } = req.params;
+      const adminId = (req as any)?.user?.id;
+      const normalizedStatus = UserController.normalizeUserStatus(req.body?.status);
+      const reasonRaw = req.body?.reason;
+      const reason = String(reasonRaw ?? "").trim();
+
+      if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json(new ApiError(400, "Valid user ID is required"));
+      }
+
+      if (!normalizedStatus) {
+        return res.status(400).json(
+          new ApiError(
+            400,
+            `Invalid status. Allowed values: ${Object.values(UserStatus).join(", ")}`
+          )
+        );
+      }
+
+      const user = await User.findById(id);
+      if (!user) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      if (adminId && id === adminId) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "You cannot update your own user status from this API"));
+      }
+
+      user.status = normalizedStatus;
+      user.statusReason = reason || undefined;
+      user.statusUpdatedAt = new Date();
+      user.statusUpdatedBy = adminId || undefined;
+
+      const statusHistory = Array.isArray(user.statusHistory) ? user.statusHistory : [];
+      statusHistory.push({
+        status: normalizedStatus,
+        reason: reason || undefined,
+        changedAt: new Date(),
+        changedBy: adminId || undefined,
+      } as any);
+      user.statusHistory = statusHistory as any;
+
+      await user.save();
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            _id: user._id,
+            status: user.status,
+            statusReason: user.statusReason || "",
+            statusUpdatedAt: user.statusUpdatedAt,
+            statusUpdatedBy: user.statusUpdatedBy,
+          },
+          "User status updated successfully"
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async generateOtp(req: Request, res: Response, next: NextFunction) {
     try {
       const { mobile, email, userType } = req.body;
@@ -410,17 +760,30 @@ export class UserController {
           message: "Mobile number or email is required",
         });
       }
-
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const user = await User.findOne(
+        mobile ? { mobile, userType } : { email, userType }
+      );
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
+        });
+      }
+      // Check if mobile is one of the test numbers
+      let otpCode: string;
+      if (mobile && (mobile == "9354697528" || mobile == "9999999999" || mobile == "8958600187" || mobile == "7848465648")) {
+        otpCode = "123456";
+      } else {
+        otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      }
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
 
       // Save or update OTP in DB
-      await Otp.findOneAndUpdate(
+      const savedOtp = await Otp.findOneAndUpdate(
         mobile ? { mobile } : { email },
         { otp: otpCode, expiresAt, verified: false, mobile, email },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-
       if (email) {
         // Send OTP via email
         await sendEmail({
@@ -429,77 +792,26 @@ export class UserController {
           subject: "Your OTP Code",
           text: `Your OTP is ${otpCode}`,
         });
-        console.log(`OTP sent to email: ${email}`);
       } else if (mobile) {
-        // Send OTP via SMS (integrate your SMS provider)
-        console.log(`OTP sent to mobile: ${mobile} -> ${otpCode}`);
-        // Example: await smsService.sendOtp(mobile, otpCode);
+
+        const msg91Response: any = await sendMsg91Otp(mobile, otpCode);
+
+        if (msg91Response?.type === "error" || msg91Response?.message?.includes("error")) {
+          return res.status(500).json({
+            success: false,
+            message: `Failed to send OTP: ${msg91Response?.message}`,
+          });
+        }
       }
 
       return res.status(200).json({
         success: true,
         message: "OTP has been sent successfully",
-        otp: otpCode, // Remove this in production for security
       });
     } catch (error) {
       next(error);
     }
   }
-
-
-  // static async generateOtp(
-  //   req: Request,
-  //   res: Response,
-  //   next: NextFunction
-  // ): Promise<any> {
-  //   try {
-  //     const { mobile, userType } = req.body;
-
-  //     if (!mobile) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "Phone number is required",
-  //       });
-  //     }
-
-  //     const user = await User.findOne({ mobile, userType });
-  //     if (!user) {
-  //       return res.status(404).json({
-  //         success: false,
-  //         message: "No user found with this phone number",
-  //       });
-  //     }
-
-  //     const otpCode =
-  //       mobile.toString() === "6397228522"
-  //         ? "123456"
-  //         : Math.floor(100000 + Math.random() * 900000).toString();
-  //     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
-
-  //     // Save or update OTP
-  //     await Otp.findOneAndUpdate(
-  //       { mobile },
-  //       {
-  //         expiresAt,
-  //         mobile,
-  //         otp: otpCode,
-  //         verified: false,
-  //       },
-  //       { upsert: true, new: true, setDefaultsOnInsert: true }
-  //     );
-
-  //     // TODO: Integrate real SMS service like Twilio or Fast2SMS
-  //     console.log(`OTP sent to ${mobile}: ${otpCode}`);
-
-  //     return res.status(200).json({
-  //       otp: otpCode,
-  //       success: true,
-  //       message: "OTP has been sent successfully",
-  //     });
-  //   } catch (error) {
-  //     next(error);
-  //   }
-  // }
 
   static async generateAdminOtp(
     req: Request,
@@ -520,7 +832,7 @@ export class UserController {
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "No user found with this phone number",
+          message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
 
@@ -546,13 +858,11 @@ export class UserController {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      // TODO: Integrate real SMS service like Twilio or Fast2SMS
-      console.log(`OTP sent to ${mobile}: ${otpCode}`);
+      await sendMsg91Otp(mobile, otpCode);
 
       return res.status(200).json({
-        otp: otpCode,
         success: true,
-        message: `OTP has been sent successfully! OTP: ${otpCode}`,
+        message: `OTP has been sent successfully`,
       });
     } catch (error) {
       next(error);
@@ -971,14 +1281,18 @@ export class UserController {
       // Check if user has active plan
       const hasActivePlan = enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
 
-      // Get subscription plan type for flags
+      // Get subscription plan type for flags using highest priority plan
       let subscriptionPlanType = PlanType.FREE;
       let subscriptionInfo: any = {
         planType: subscriptionPlanType,
       };
 
-      if (hasActivePlan && enrollSubscriptionPlans[0]) {
-        subscriptionPlanType = (enrollSubscriptionPlans[0].plan as any).planType;
+      // Get the highest priority plan
+      const { UserSubscriptionService } = require("../../services/userSubscription.service");
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+
+      if (enrollment && enrollment.plan) {
+        subscriptionPlanType = (enrollment.plan as any).planType;
         subscriptionInfo.planType = subscriptionPlanType;
 
         const userType = result?.userType;
@@ -994,17 +1308,17 @@ export class UserController {
           subscriptionInfo.isBasicPlan = subscriptionPlanType === PlanType.BASIC;
           subscriptionInfo.isGrowthPlan = subscriptionPlanType === PlanType.GROWTH;
           subscriptionInfo.isEnterprisePlan = subscriptionPlanType === PlanType.ENTERPRISE;
-          
+
           // Convenience flags for checking tier thresholds
-          subscriptionInfo.hasBasicOrAbove = 
-            subscriptionPlanType === PlanType.BASIC || 
-            subscriptionPlanType === PlanType.GROWTH || 
+          subscriptionInfo.hasBasicOrAbove =
+            subscriptionPlanType === PlanType.BASIC ||
+            subscriptionPlanType === PlanType.GROWTH ||
             subscriptionPlanType === PlanType.ENTERPRISE;
-          
-          subscriptionInfo.hasGrowthOrAbove = 
-            subscriptionPlanType === PlanType.GROWTH || 
+
+          subscriptionInfo.hasGrowthOrAbove =
+            subscriptionPlanType === PlanType.GROWTH ||
             subscriptionPlanType === PlanType.ENTERPRISE;
-          
+
           subscriptionInfo.hasEnterprise = subscriptionPlanType === PlanType.ENTERPRISE;
         }
       } else {
@@ -1177,7 +1491,7 @@ export class UserController {
       // Only allow for EMPLOYER, CONTRACTOR, or AGENT
       if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(user.userType as UserType)) {
         return res.status(400).json(
-          new ApiError(400, `Early Access Badge is only for Employers and Contractors. User type is: ${user.userType}`)
+          new ApiError(400, `Early Access Badge is only for Employers and Contractors.User type is: ${user.userType} `)
         );
       }
 
@@ -1188,7 +1502,7 @@ export class UserController {
         new ApiResponse(
           200,
           user,
-          `Early Access Badge granted to ${user.fullName}`
+          `Early Access Badge granted to ${user.fullName} `
         )
       );
     } catch (error) {
@@ -1225,7 +1539,7 @@ export class UserController {
         new ApiResponse(
           200,
           user,
-          `Early Access Badge revoked from ${user.fullName}`
+          `Early Access Badge revoked from ${user.fullName} `
         )
       );
     } catch (error) {
@@ -1314,4 +1628,3 @@ export class UserController {
     }
   }
 }
-

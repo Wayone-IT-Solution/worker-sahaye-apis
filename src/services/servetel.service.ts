@@ -43,7 +43,7 @@ class ServetelService {
   private tokenExpiresAt: number | null = null;
 
   private get authPath() {
-    return config.servetel.authPath || "/v1/auth/login";
+    return config.servetel.authPath || "/v1/login";
   }
   private get clickToCallPath() {
     return config.servetel.clickToCallPath || "/v1/click-to-call";
@@ -77,7 +77,7 @@ class ServetelService {
     if (!config.servetel.clientId || !config.servetel.clientSecret) {
       throw new ApiError(
         500,
-        "Servetel credentials missing. Please set SERVETEL_CLIENT_ID and SERVETEL_CLIENT_SECRET."
+        "Servetel credentials missing. Please set SERVETEL_CLIENT_ID and SERVETEL_CLIENT_SECRET.",
       );
     }
 
@@ -97,7 +97,7 @@ class ServetelService {
     if (!accessToken) {
       throw new ApiError(
         500,
-        "Failed to retrieve Servetel access token. Check credentials and auth path."
+        "Failed to retrieve Servetel access token. Check credentials and auth path.",
       );
     }
 
@@ -113,13 +113,13 @@ class ServetelService {
 
   private async getWithAuth<T>(
     path: string,
-    params?: Record<string, any>
+    params?: Record<string, any>,
   ): Promise<T> {
     const headers = await this.getAuthHeader();
     const filteredParams = Object.fromEntries(
       Object.entries(params || {}).filter(
-        ([, value]) => value !== undefined && value !== null && value !== ""
-      )
+        ([, value]) => value !== undefined && value !== null && value !== "",
+      ),
     );
 
     const response = await this.client.get<T>(path, {
@@ -131,7 +131,7 @@ class ServetelService {
 
   private buildPaginatedResponse<T = any>(
     payload: any,
-    defaults: { page?: number; limit?: number }
+    defaults: { page?: number; limit?: number },
   ): PaginatedServetelResponse<T> {
     const listCandidate =
       payload?.data?.result ||
@@ -149,7 +149,7 @@ class ServetelService {
       payload?.pagination || payload?.meta || payload?.data?.pagination || {};
 
     const totalItems = Number(
-      meta.totalItems || meta.total || meta.count || result.length || 0
+      meta.totalItems || meta.total || meta.count || result.length || 0,
     );
     const itemsPerPageRaw =
       meta.itemsPerPage ||
@@ -205,7 +205,7 @@ class ServetelService {
   }
 
   async getCallRecordings(
-    params: ServetelListParams = {}
+    params: ServetelListParams = {},
   ): Promise<PaginatedServetelResponse> {
     const response = await this.getWithAuth(this.recordingsPath, {
       page: params.page,
@@ -225,7 +225,7 @@ class ServetelService {
   }
 
   async getCallForwardingRules(
-    params: ServetelListParams = {}
+    params: ServetelListParams = {},
   ): Promise<PaginatedServetelResponse> {
     const response = await this.getWithAuth(this.forwardingPath, {
       page: params.page,

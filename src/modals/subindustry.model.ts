@@ -8,6 +8,7 @@ export enum SubIndustryStatus {
 
 export interface ISubIndustry extends Document {
   name: string;
+  order: number;
   icon?: string;
   description?: string;
   industryId: mongoose.Types.ObjectId;
@@ -25,6 +26,11 @@ const SubIndustrySchema: Schema<ISubIndustry> = new Schema(
       required: [true, "SubIndustry name is required"],
       trim: true,
       maxlength: [100, "Name cannot exceed 100 characters"],
+    },
+    order: {
+      type: Number,
+      default: 0,
+      index: true,
     },
     icon: {
       type: String,
@@ -61,6 +67,7 @@ const SubIndustrySchema: Schema<ISubIndustry> = new Schema(
 
 // Compound index for efficient querying
 SubIndustrySchema.index({ industryId: 1, status: 1 });
+SubIndustrySchema.index({ industryId: 1, order: 1, name: 1 });
 
 // Unique constraint on name per industry
 SubIndustrySchema.index({ industryId: 1, name: 1 }, { unique: true });

@@ -7,9 +7,11 @@ export enum WorkerCategoryType {
   SEMISKILLED = "Semiskilled",
   SUPERVISORY = "Supervisory",
   MANAGERIAL = "Managerial and above",
+  FRESHERS = "Freshers"
 }
 
 export interface IWorkerCategory extends Document {
+  order: number;
   isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -25,6 +27,11 @@ const WorkerCategorySchema: Schema<IWorkerCategory> = new Schema(
       required: true,
       unique: true,
     },
+    order: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
     description: {
       trim: true,
       type: String,
@@ -39,6 +46,7 @@ const WorkerCategorySchema: Schema<IWorkerCategory> = new Schema(
 
 // Index on isActive for filtering active/inactive categories
 WorkerCategorySchema.index({ isActive: 1 });
+WorkerCategorySchema.index({ order: 1, type: 1 });
 
 // Index on timestamps for sorting/filtering
 WorkerCategorySchema.index({ createdAt: -1 });

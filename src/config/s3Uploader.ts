@@ -1,15 +1,26 @@
 import path from "path";
-import AWS from "aws-sdk";
 import { v4 as uuid } from "uuid";
 import { config } from "../config/config";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 
 const s3 =
   config.s3.enabled &&
-  new AWS.S3({
+  new S3Client({
     region: config.s3.region,
-    accessKeyId: config.s3.accessKeyId,
-    secretAccessKey: config.s3.secretAccessKey,
+    credentials: {
+      accessKeyId: config.s3.accessKeyId,
+      secretAccessKey: config.s3.secretAccessKey,
+    },
   });
+
+const getS3BaseUrl = () => {
+  if (config.s3.baseUrl) return config.s3.baseUrl.replace(/\/+$/, "");
+  return `https://${config.s3.bucket}.s3.${config.s3.region}.amazonaws.com`;
+};
 
 /**
  * Upload a file buffer to AWS S3 and return the public URL
@@ -17,7 +28,7 @@ const s3 =
 export const uploadToS3 = async (
   fileBuffer: Buffer,
   originalname: string,
-  folder: string
+  folder: string,
 ): Promise<string> => {
   if (!config.s3.enabled || !s3) {
     throw new Error("S3 is disabled or not configured correctly.");
@@ -27,18 +38,19 @@ export const uploadToS3 = async (
   const contentType = getContentType(ext);
   const key = `${folder}/${uuid()}${ext}`;
 
-  const params: AWS.S3.PutObjectRequest = {
+  const params = {
     Key: key,
     Body: fileBuffer,
     Bucket: config.s3.bucket,
     ContentType: contentType,
   };
 
-  const { Location } = await s3.upload(params).promise();
+  await s3.send(new PutObjectCommand(params));
+  const location = `${getS3BaseUrl()}/${key}`;
 
   if (config.env !== "production")
-    console.log(`✅ Uploaded to S3 → ${Location}`);
-  return Location;
+    console.log(`✅ Uploaded to S3 → ${location}`);
+  return location;
 };
 
 /**
@@ -71,7 +83,7 @@ export const deleteFromS3 = async (key: string): Promise<void> => {
   const params = { Bucket: config.s3.bucket, Key: key };
 
   try {
-    await s3.deleteObject(params).promise();
+    await s3.send(new DeleteObjectCommand(params));
     console.log(`✅ Deleted from S3: ${key}`);
   } catch (err: any) {
     console.log(`⚠️ Failed to delete from S3: ${key}`, err.message);

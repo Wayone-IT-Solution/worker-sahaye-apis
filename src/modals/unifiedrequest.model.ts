@@ -1,12 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-export enum CommunicationMode {
-  EMAIL = "Email",
-  PHONE_CALL = "Phone Call",
-  WHATSAPP = "WhatsApp",
-  GOOGLE_MEET = "Google Meet",
-  ZOOM = "Zoom",
-}
 
 export enum UnifiedRequestStatus {
   PENDING = "Pending",
@@ -43,7 +36,7 @@ export interface IUnifiedServiceRequest extends Document {
   assignedTo?: Types.ObjectId;
   status: UnifiedRequestStatus;
   location: { state: string; city: string };
-  preferredCommunicationMode: "Email" | "Phone Call" | "WhatsApp" | "Google Meet" | "Zoom" | string;
+  preferredCommunicationMode: string;
 }
 
 const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
@@ -88,13 +81,13 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     field: {
       type: String,
-      required: true,
+      required: false,
       maxlength: 100,
     },
     preferredCommunicationMode: {
       type: String,
-      enum: Object.values(CommunicationMode),
-      default: CommunicationMode.EMAIL,
+      default: "Email",
+      required: false,
     },
     preferredDateTime: {
       type: Date,
@@ -106,7 +99,7 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     numberOfEmployees: {
       type: Number,
-      required: true,
+      required: false,
       min: 1,
     },
     additionalNotes: {

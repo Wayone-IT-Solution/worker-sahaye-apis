@@ -15,19 +15,17 @@ const bulkHiringService = new CommonService(BulkHiringRequest);
 
 // Helper function to check if user can request bulk hiring service
 const checkBulkHiringServiceEligibility = async (userId: string) => {
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: PlanEnrollmentStatus.ACTIVE,
-  }).populate("plan");
+  const { UserSubscriptionService } = require("../../services/userSubscription.service");
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return {
       eligible: false,
       message: "Your subscription plan does not allow requesting bulk hiring services. Please upgrade to BASIC or above.",
     };
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   if (planType === PlanType.FREE) {
     return {

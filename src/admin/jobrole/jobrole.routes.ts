@@ -1,7 +1,11 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { JobRoleController } from "./jobrole.controller";
-import { isAdmin, authenticateToken } from "../../middlewares/authMiddleware";
+import {
+  isAdmin,
+  authenticateToken,
+  authenticateTokenOptional,
+} from "../../middlewares/authMiddleware";
 
 const {
   createJobRole,
@@ -23,9 +27,9 @@ router
     isAdmin,
     asyncHandler(createJobRole)
   )
-  .get("/", asyncHandler(getAllJobRoles))
+  .get("/", authenticateTokenOptional, asyncHandler(getAllJobRoles))
   .get("/active/list", asyncHandler(getActiveJobRoles))
-  .get("/search/query", asyncHandler(searchJobRoles))
+  .get("/search/query", authenticateTokenOptional, asyncHandler(searchJobRoles))
   .get("/slug/:slug", asyncHandler(getJobRoleBySlug))
   .get("/:id", asyncHandler(getJobRoleById))
   .put(

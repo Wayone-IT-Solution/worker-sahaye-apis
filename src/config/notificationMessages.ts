@@ -149,7 +149,9 @@ export const NotificationMessages: Record<
   "job-status-update": {
     sender: (ctx) => ({
       title: `Job marked as "${ctx?.status}"`,
-      message: `You updated the job "${ctx?.jobTitle || "Untitled"}" to "${ctx?.status}".`,
+      message: ctx?.remark
+        ? `You updated the job "${ctx?.jobTitle || "Untitled"}" to "${ctx?.status}" with remark: "${ctx?.remark}".`
+        : `You updated the job "${ctx?.jobTitle || "Untitled"}" to "${ctx?.status}".`,
     }),
     receiver: (ctx) => ({
       title: `Job "${ctx?.jobTitle}" is now "${ctx?.status}"`,
@@ -168,6 +170,8 @@ export const NotificationMessages: Record<
                     ? `The job "${ctx?.jobTitle}" has expired and is no longer available.`
                     : ctx?.status === "rejected"
                       ? `The job "${ctx?.jobTitle}" was rejected during review.`
+                      : ctx?.status === "under_review"
+                        ? `The job "${ctx?.jobTitle}" is under review and awaiting admin approval.`
                       : ctx?.status === "pending-approval"
                         ? `The job "${ctx?.jobTitle}" is pending approval and will be reviewed shortly.`
                         : `The job "${ctx?.jobTitle}" status has been updated.`,

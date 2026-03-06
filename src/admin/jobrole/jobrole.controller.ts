@@ -9,8 +9,10 @@ import {
   buildPaginationResponse,
   SEARCH_FIELD_MAP,
 } from "../../utils/queryBuilder";
+import { sanitizePayloadObject } from "../../utils/payloadSanitizer";
 
 const jobRoleService = new CommonService(JobRole);
+const PUBLIC_JOB_ROLE_STATUSES = new Set(["active", "inactive"]);
 
 /**
  * Generate URL-friendly slug from name
@@ -34,9 +36,114 @@ export class JobRoleController {
   ) {
     try {
       const adminId = (req as any).user?.id;
+      const incomingPayload = req.body;
+
+      if (Array.isArray(incomingPayload)) {
+        if (!incomingPayload.length) {
+          return res
+            .status(400)
+            .json(new ApiError(400, "Bulk payload cannot be empty"));
+        }
+
+        const seenSlugs = new Set<string>();
+        const bulkPayload: Array<Record<string, any>> = [];
+
+        for (let index = 0; index < incomingPayload.length; index += 1) {
+          const item = sanitizePayloadObject(incomingPayload[index]);
+          const rowNumber = index + 1;
+          const name = String(item?.name || "").trim();
+
+          if (!name) {
+            return res
+              .status(400)
+              .json(new ApiError(400, `Row ${rowNumber}: "name" is required`));
+          }
+
+          const slug = generateSlug(name);
+          if (!slug) {
+            return res.status(400).json(
+              new ApiError(400, `Row ${rowNumber}: Unable to generate slug from name`)
+            );
+          }
+
+          if (seenSlugs.has(slug)) {
+            return res.status(400).json(
+              new ApiError(400, `Row ${rowNumber}: Duplicate job role name in upload`)
+            );
+          }
+
+          seenSlugs.add(slug);
+
+          if (item?.categoryId && !item?.category) {
+            item.category = item.categoryId;
+          }
+          delete item.categoryId;
+
+          if (typeof item?.tags === "string") {
+            item.tags = item.tags
+              .split(",")
+              .map((tag: string) => tag.trim())
+              .filter(Boolean);
+          }
+
+          bulkPayload.push({
+            ...item,
+            name,
+            slug,
+            createdBy: adminId,
+          });
+        }
+
+        const existingRoles = await JobRole.find({
+          slug: { $in: Array.from(seenSlugs) },
+        })
+          .select("name")
+          .lean();
+
+        if (existingRoles.length > 0) {
+          const existingNames = existingRoles
+            .map((role: any) => String(role?.name || "").trim())
+            .filter(Boolean);
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Job role(s) already exist: ${existingNames.join(", ")}`
+            )
+          );
+        }
+
+        const result = await JobRole.insertMany(bulkPayload);
+        return res.status(201).json(
+          new ApiResponse(
+            201,
+            result,
+            `${result.length} job role(s) created successfully`
+          )
+        );
+      }
 
       // Generate slug from name
-      const slug = generateSlug(req.body.name);
+      const sanitizedBody = sanitizePayloadObject(req.body);
+      if (sanitizedBody?.categoryId && !sanitizedBody?.category) {
+        sanitizedBody.category = sanitizedBody.categoryId;
+      }
+      delete sanitizedBody.categoryId;
+
+      if (typeof sanitizedBody?.tags === "string") {
+        sanitizedBody.tags = sanitizedBody.tags
+          .split(",")
+          .map((tag: string) => tag.trim())
+          .filter(Boolean);
+      }
+
+      const name = String(sanitizedBody?.name || "").trim();
+      if (!name) {
+        return res
+          .status(400)
+          .json(new ApiError(400, `"name" is required`));
+      }
+
+      const slug = generateSlug(name);
 
       // Check if slug already exists
       const existingRole = await JobRole.findOne({ slug });
@@ -46,13 +153,14 @@ export class JobRoleController {
           .json(
             new ApiError(
               400,
-              `A job role with the name "${req.body.name}" already exists`
+              `A job role with the name "${name}" already exists`
             )
           );
       }
 
       const data = {
-        ...req.body,
+        ...sanitizedBody,
+        name,
         slug,
         createdBy: adminId,
       };
@@ -77,13 +185,33 @@ export class JobRoleController {
     next: NextFunction
   ) {
     try {
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+      const rawStatusQuery = String(req.query.status || "").trim().toLowerCase();
+      const hasStatusQuery = rawStatusQuery.length > 0;
+
+      if (
+        !isAuthenticatedRequest &&
+        hasStatusQuery &&
+        !PUBLIC_JOB_ROLE_STATUSES.has(rawStatusQuery)
+      ) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "Public status supports only active or inactive"));
+      }
+
+      const effectiveStatus = hasStatusQuery
+        ? rawStatusQuery
+        : !isAuthenticatedRequest
+          ? "active"
+          : undefined;
+
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
 
       const matchStage = buildMatchStage(
         {
-          status: req.query.status as string,
+          status: effectiveStatus,
           search: req.query.search as string,
           searchKey: req.query.searchKey as string,
           startDate: req.query.startDate as string,
@@ -96,7 +224,7 @@ export class JobRoleController {
       const sortObj = buildSortObject(
         req.query.sortKey as string,
         req.query.sortDir as string,
-        { createdAt: -1 }
+        { order: 1, name: 1 }
       );
 
       const pipeline = [
@@ -127,6 +255,7 @@ export class JobRoleController {
                   _id: 1,
                   name: 1,
                   slug: 1,
+                  order: 1,
                   description: 1,
                   status: 1,
                   salaryRange: 1,
@@ -299,8 +428,15 @@ export class JobRoleController {
           .json(new ApiError(400, "Search query is required"));
       }
 
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
+      const searchFilter: any = { $text: { $search: query } };
+
+      if (!isAuthenticatedRequest) {
+        searchFilter.status = "active";
+      }
+
       const results = await JobRole.find(
-        { $text: { $search: query } },
+        searchFilter,
         { score: { $meta: "textScore" } }
       )
         .sort({ score: { $meta: "textScore" } })
@@ -323,6 +459,8 @@ export class JobRoleController {
       const query = {
         ...req.query,
         status: "active",
+        sortKey: (req.query.sortKey as string) || "order",
+        sortDir: (req.query.sortDir as string) || "1",
       };
 
       const result = await jobRoleService.getAll(query);

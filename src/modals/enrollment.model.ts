@@ -12,6 +12,7 @@ export enum EnrollmentStatus {
 export enum PaymentGateway {
   FREE = "free",
   RAZORPAY = "razorpay",
+  ADMIN_ASSIGN = "admin_assign",
 }
 
 export enum PaymentStatus {
@@ -25,8 +26,18 @@ export interface IEnrollment extends Document {
   enrolledAt: Date;
   refundedAt?: Date;
   progress?: number;
+  certificateIssuedAt?: Date;
+  certificateIssuedBy?: Types.ObjectId;
+  certificateIssuedFor?: Types.ObjectId;
+  certificateStatus?: "pending" | "issued";
+  adminRemark?: string;
+  adminRemarkUpdatedAt?: Date;
+  adminRemarkUpdatedBy?: Types.ObjectId;
   totalAmount: number;
   finalAmount: number;
+  pointsRedeemed?: number;
+  pointsValue?: number;
+  pointsRefunded?: boolean;
   refundReason?: string;
   numberOfPeople: number;
   appliedCoupon?: {
@@ -62,12 +73,26 @@ const PaymentDetailsSchema = new Schema(
 const EnrollmentSchema = new Schema<IEnrollment>(
   {
     appliedCoupon: {},
+    adminRemark: { type: String, trim: true, maxlength: 2000 },
+    adminRemarkUpdatedAt: { type: Date },
+    adminRemarkUpdatedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    certificateIssuedAt: { type: Date },
+    certificateIssuedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    certificateIssuedFor: { type: Schema.Types.ObjectId, ref: "User" },
+    certificateStatus: {
+      type: String,
+      default: "pending",
+      enum: ["pending", "issued"],
+    },
     refundedAt: { type: Date },
     refundReason: { type: String },
     progress: { type: Number, default: 0 },
     enrolledAt: { type: Date, default: Date.now },
     totalAmount: { type: Number, required: true },
     finalAmount: { type: Number, required: true },
+    pointsRedeemed: { type: Number, default: 0 },
+    pointsValue: { type: Number, default: 0 },
+    pointsRefunded: { type: Boolean, default: false },
     paymentDetails: { type: PaymentDetailsSchema },
     numberOfPeople: { type: Number, default: 1, min: 1 },
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },

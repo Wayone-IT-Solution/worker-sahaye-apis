@@ -77,7 +77,41 @@ export class CandidateBrandingBadgeController {
     next: NextFunction
   ) {
     try {
-      const result = await candidateBrandingBadgesService.create(req.body);
+      const { user, badge } = req.body || {};
+      if (!user || !badge) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "user and badge are required"));
+      }
+
+      const userRecord = await User.findById(user).select("_id userType").lean();
+      if (!userRecord) {
+        return res.status(404).json(new ApiError(404, "User not found"));
+      }
+
+      // Support badge by name or slug, but persist normalized badge name.
+      const badgeRecord = await Badge.findOne({
+        $or: [{ name: badge }, { slug: badge }],
+      }).lean();
+      if (!badgeRecord) {
+        return res.status(404).json(new ApiError(404, "Badge not found"));
+      }
+      if (!badgeRecord.isActive) {
+        return res.status(400).json(new ApiError(400, "Badge is inactive"));
+      }
+      if (!Array.isArray(badgeRecord.userTypes) || !badgeRecord.userTypes.includes(userRecord.userType as any)) {
+        return res
+          .status(400)
+          .json(new ApiError(400, `Badge is not allowed for userType ${userRecord.userType}`));
+      }
+
+      const payload = {
+        ...req.body,
+        user,
+        badge: badgeRecord.name,
+      };
+
+      const result = await candidateBrandingBadgesService.create(payload);
       if (!result)
         return res
           .status(400)

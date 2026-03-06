@@ -28,6 +28,9 @@ const {
   // Combined
   createStateCity,
   getAllStateCitys,
+
+  // Public
+  getPublicLocationData,
 } = StateCityController;
 
 const router = express.Router();
@@ -39,7 +42,11 @@ router.post("/country", authenticateToken, asyncHandler(createCountry));
 router.get("/country", authenticateToken, asyncHandler(getAllCountries));
 router.get("/country/:id", authenticateToken, asyncHandler(getCountryById));
 router.put("/country/:id", authenticateToken, asyncHandler(updateCountryById));
-router.delete("/country/:id", authenticateToken, asyncHandler(deleteCountryById));
+router.delete(
+  "/country/:id",
+  authenticateToken,
+  asyncHandler(deleteCountryById),
+);
 
 // ==============================
 // 📍 State Routes
@@ -64,5 +71,10 @@ router.delete("/city/:id", authenticateToken, asyncHandler(deleteCityById));
 // ==============================
 router.post("/", authenticateToken, asyncHandler(createStateCity));
 router.get("/", authenticateToken, asyncHandler(getAllStateCitys));
+
+// ==============================
+// 🌐 Public Location Data
+// ==============================
+router.get("/public/all", asyncHandler(getPublicLocationData));
 
 export default router;

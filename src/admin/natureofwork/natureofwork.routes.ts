@@ -1,6 +1,7 @@
 import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NatureOfWorkController } from "./natureofwork.controller";
+import { authenticateTokenOptional } from "../../middlewares/authMiddleware";
 
 const {
   createNatureOfWork,
@@ -15,7 +16,7 @@ const router = express.Router();
 
 router
   .post("/", asyncHandler(createNatureOfWork))
-  .get("/", asyncHandler(getAllNatureOfWorks))
+  .get("/", authenticateTokenOptional, asyncHandler(getAllNatureOfWorks))
   .get("/:id", asyncHandler(getNatureOfWorkById))
   .post("/all", asyncHandler(createAllNatureOfWork))
   .put("/:id", asyncHandler(updateNatureOfWorkById))

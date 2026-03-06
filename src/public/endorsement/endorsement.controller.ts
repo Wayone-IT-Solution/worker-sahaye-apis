@@ -9,19 +9,17 @@ import { ConnectionModel, ConnectionStatus } from "../../modals/connection.model
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import { User } from "../../modals/user.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const endorsementService = new CommonService(Endorsement);
 
 // Helper function to check endorsement eligibility based on subscription plan
 const getEndorsementEligibility = async (userId: string) => {
-  // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  // Get user's highest priority active subscription plan
+  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, user is on FREE plan - not eligible for endorsement requests
-  if (!enrolledPlan) {
+  if (!enrollment) {
     return {
       eligible: false,
       planType: PlanType.FREE,
@@ -29,7 +27,7 @@ const getEndorsementEligibility = async (userId: string) => {
     };
   }
 
-  const planType = (enrolledPlan.plan as any).planType;
+  const planType = (enrollment.plan as any).planType;
 
   // BASIC and PREMIUM plans are eligible, FREE plan is not
   if (planType === PlanType.FREE) {
@@ -599,10 +597,11 @@ export class EndorsementController {
       }
 
       // Check if user has ENTERPRISE plan
-      const enrolled = await EnrolledPlan.findOne({ user: userId, status: "active" }).populate("plan");
-      const planType = (enrolled?.plan as any)?.planType;
+      const { UserSubscriptionService } = require("../../services/userSubscription.service");
+      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+      const planType = (enrollment?.plan as any)?.planType;
 
-      if (!enrolled || planType !== PlanType.ENTERPRISE) {
+      if (!enrollment || planType !== PlanType.ENTERPRISE) {
         return res.status(403).json(new ApiError(403, "Only users with ENTERPRISE plan can approve endorsements. Please upgrade your subscription."));
       }
 

@@ -1,85 +1,96 @@
 import express from "express";
 import { asyncHandler } from "./../../utils/asyncHandler";
 import { DashboardController } from "./dashboard.controller";
-import { allowAllExcept, authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import {
+  allowAllExcept,
+  authenticateToken,
+  isAdmin,
+} from "../../middlewares/authMiddleware";
 
 const {
-    getCurrentStats,
-    getDashboardStats,
-    getIvrCallSummary,
-    getBadgeStatusCounts,
-    getServicesStatusCounts,
-    getJobApplicationsStats,
-    getCustomerSupportDetails,
-    getQuotationAmountSummary,
-    getQuotationsStatusCounts,
-    getYearlyRevenueComparison,
-    getUserStatsByTypeAndStatus,
+  getCurrentStats,
+  getDashboardStats,
+  getJobPostedGrowth,
+  getIvrCallSummary,
+  getBadgeStatusCounts,
+  getServicesStatusCounts,
+  getJobApplicationsStats,
+  getCustomerSupportDetails,
+  getQuotationAmountSummary,
+  getQuotationsStatusCounts,
+  getYearlyRevenueComparison,
+  getUserStatsByTypeAndStatus,
 } = DashboardController;
 
 const router = express.Router();
 
-router.get("/",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getDashboardStats));
+router.get("/", authenticateToken, isAdmin, asyncHandler(getDashboardStats));
 router.get(
-    "/current-stats",
-    authenticateToken,
-    asyncHandler(getCurrentStats));
+  "/job-posted-growth",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getJobPostedGrowth),
+);
+router.get("/current-stats", authenticateToken, asyncHandler(getCurrentStats));
 router.get(
-    "/revenue-stats",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getYearlyRevenueComparison)
+  "/revenue-stats",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getYearlyRevenueComparison),
 );
 router.get(
-    "/ivrcall-summary",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getIvrCallSummary)
+  "/revenue-by-role",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(DashboardController.getRevenueByRoleDistribution),
 );
 router.get(
-    "/customer-support",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getCustomerSupportDetails)
+  "/ivrcall-summary",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getIvrCallSummary),
 );
 router.get(
-    "/badge-count",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getBadgeStatusCounts)
+  "/customer-support",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getCustomerSupportDetails),
 );
 router.get(
-    "/service-count",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getServicesStatusCounts)
+  "/badge-count",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getBadgeStatusCounts),
 );
 router.get(
-    "/service-quotations-count",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getQuotationsStatusCounts)
+  "/service-count",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getServicesStatusCounts),
 );
 router.get(
-    "/quotation-amount-summary",
-    // authenticateToken,
-    // isAdmin,
-    asyncHandler(getQuotationAmountSummary)
+  "/service-quotations-count",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getQuotationsStatusCounts),
 );
 router.get(
-    "/user-stats",
-    authenticateToken,
-    isAdmin,
-    asyncHandler(getUserStatsByTypeAndStatus)
+  "/quotation-amount-summary",
+  // authenticateToken,
+  // isAdmin,
+  asyncHandler(getQuotationAmountSummary),
 );
 router.get(
-    "/job-applications",
-    authenticateToken,
-    allowAllExcept("worker", "agent"),
-    asyncHandler(getJobApplicationsStats)
+  "/user-stats",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getUserStatsByTypeAndStatus),
+);
+router.get(
+  "/job-applications",
+  authenticateToken,
+  allowAllExcept("worker", "agent"),
+  asyncHandler(getJobApplicationsStats),
 );
 
 export default router;

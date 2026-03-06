@@ -361,7 +361,14 @@ export const getPipeline = (
     });
   } else {
     // Single field sorting
-    sortStage[sortKey] = sortDir === "asc" ? 1 : -1;
+    // Handle both numeric (1, -1) and string ("asc", "desc") formats
+    let sortDirection: 1 | -1 = -1;
+    if (sortDir === "asc" || sortDir === "1" || sortDir === 1) {
+      sortDirection = 1;
+    } else if (sortDir === "desc" || sortDir === "-1" || sortDir === -1) {
+      sortDirection = -1;
+    }
+    sortStage[sortKey] = sortDirection;
   }
 
   if (Object.keys(sortStage).length > 0) {

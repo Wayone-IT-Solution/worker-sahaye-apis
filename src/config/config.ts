@@ -88,7 +88,7 @@ export const config = {
     clientId: process.env.SERVETEL_CLIENT_ID || "",
     clientSecret: process.env.SERVETEL_CLIENT_SECRET || "",
     defaultCallerId: process.env.SERVETEL_DEFAULT_CALLER_ID || "",
-    authPath: process.env.SERVETEL_AUTH_PATH || "/v1/auth/login",
+    authPath: process.env.SERVETEL_AUTH_PATH || "/v1/login",
     clickToCallPath:
       process.env.SERVETEL_CLICK_TO_CALL_PATH || "/v1/click-to-call",
     statsPath: process.env.SERVETEL_STATS_PATH || "/v1/calls/summary",

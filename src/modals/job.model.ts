@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { getNextYearlyUniqueCode } from "../utils/yearlyUniqueCode";
 
 // ADVANCED ENUMS
 export enum JobType {
@@ -46,6 +47,7 @@ export enum JobStatus {
   CLOSED = "closed",
   EXPIRED = "expired",
   REJECTED = "rejected",
+  UNDER_REVIEW = "under_review",
   PENDING_APPROVAL = "pending-approval",
 }
 
@@ -158,6 +160,7 @@ const JobHistorySchema = new Schema<IJobHistory>(
 );
 
 export interface IJob extends Document {
+  jobKey?: string;
   // Basic Information
   title: string;
   nature: any;
@@ -195,7 +198,7 @@ export interface IJob extends Document {
   attributes: any;
 
   // Job Details
-  jobType: JobType;
+  jobType: string;
   workMode: WorkMode;
   industry: Industry;
   industryId?: Types.ObjectId; // Reference to industry document
@@ -338,7 +341,7 @@ const JobSchema = new Schema<IJob>(
       type: String,
       index: true,
       default: JobType.FULL_TIME,
-      enum: Object.values(JobType),
+      // enum: Object.values(JobType),
     },
     // Job Details
     userType: {
@@ -441,11 +444,18 @@ const JobSchema = new Schema<IJob>(
     },
 
     // Job Management
+    jobKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+      trim: true,
+    },
     status: {
       index: true,
       type: String,
       enum: Object.values(JobStatus),
-      default: JobStatus.PENDING_APPROVAL,
+      default: JobStatus.UNDER_REVIEW,
     },
     imageUrl: { type: String },
     priority: {
@@ -645,6 +655,16 @@ JobSchema.pre("save", function (next) {
   if (!this.expiresAt && this.status === JobStatus.OPEN)
     this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   next();
+});
+
+JobSchema.pre("validate", async function (next) {
+  try {
+    if (!this.isNew || this.jobKey) return next();
+    this.jobKey = await getNextYearlyUniqueCode("WSJ", "job");
+    return next();
+  } catch (error) {
+    return next(error as any);
+  }
 });
 
 // Static methods for common queries

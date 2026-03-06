@@ -28,8 +28,10 @@ router.get("/eligibility/check", authenticateToken, isWorker, asyncHandler(check
 // Check job application eligibility for contractors
 router.get("/contractor/eligibility/check", authenticateToken, isContractor, asyncHandler(checkContractorJobApplicationEligibility));
 
-router.post("/", authenticateToken, isWorker, asyncHandler(applyToJob));
-router.get("/", authenticateToken, isWorker, asyncHandler(getUserApplications));
+// Allow both workers and contractors to apply to jobs
+router.post("/", authenticateToken, asyncHandler(applyToJob));
+// Allow both workers and contractors to view their applications
+router.get("/", authenticateToken, asyncHandler(getUserApplications));
 router.get(
   "/all/:userType?",
   authenticateToken,
@@ -43,13 +45,11 @@ router.get(
 router.get(
   "/:id",
   authenticateToken,
-  isWorker,
   asyncHandler(getApplicationById)
 );
 router.get(
   "/offer-accepted/:id",
   authenticateToken,
-  isWorker,
   asyncHandler(handleOfferAccepted)
 );
 router.get(

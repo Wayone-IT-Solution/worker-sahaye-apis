@@ -97,11 +97,21 @@ export class RoleController {
     next: NextFunction
   ) {
     try {
-      const result = await RoleService.deleteById(req.params.id);
-      if (!result)
+      const role = await Role.findById(req.params.id);
+
+      if (!role)
         return res
           .status(404)
-          .json(new ApiError(404, "Failed to delete worker category"));
+          .json(new ApiError(404, "Role not found"));
+
+      if (String(role.name).trim().toLowerCase() === "admin")
+        return res
+          .status(403)
+          .json(new ApiError(403, "Admin role cannot be deleted"));
+
+      const result = await RoleService.deleteById(req.params.id);
+      if (!result)
+        return res.status(404).json(new ApiError(404, "Failed to delete role"));
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));

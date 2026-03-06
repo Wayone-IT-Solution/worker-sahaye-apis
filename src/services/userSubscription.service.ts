@@ -3,11 +3,60 @@
 // ============================================================
 
 import { Document, Schema } from "mongoose";
-import { SubscriptionPlan } from "../modals/subscriptionplan.model";
+import { SubscriptionPlan, PlanType, ISubscriptionPlan } from "../modals/subscriptionplan.model";
 // import { SubscriptionPlanFeatureService } from "./subscriptionPlanFeature.service";
 import { calculateExpiryDate } from "../modals/subscriptionplan.model";
+import { EnrolledPlan, PlanEnrollmentStatus } from "../modals/enrollplan.model";
+
+// Plan priority order (highest to lowest)
+const PLAN_PRIORITY: Record<PlanType, number> = {
+    [PlanType.ENTERPRISE]: 5,
+    [PlanType.PROFESSIONAL]: 4,
+    [PlanType.GROWTH]: 3,
+    [PlanType.PREMIUM]: 2,
+    [PlanType.BASIC]: 1,
+    [PlanType.FREE]: 0,
+};
 
 export class UserSubscriptionService {
+    /**
+     * Get the highest priority active plan for a user
+     * If user has multiple active plans, returns the best one
+     * Priority Order: ENTERPRISE > PROFESSIONAL > GROWTH > PREMIUM > BASIC > FREE
+     */
+    static async getHighestPriorityPlan(userId: string): Promise<any> {
+        const enrollments = await EnrolledPlan.find({
+            user: userId,
+            status: PlanEnrollmentStatus.ACTIVE,
+        }).populate<{ plan: ISubscriptionPlan }>("plan");
+
+        if (!enrollments || enrollments.length === 0) {
+            return null;
+        }
+
+        // Filter out plans with expired dates
+        const validEnrollments = enrollments.filter(enrollment => {
+            if (enrollment.expiredAt) {
+                return new Date(enrollment.expiredAt) > new Date();
+            }
+            return true;
+        });
+
+        if (validEnrollments.length === 0) {
+            return null;
+        }
+
+        // Sort by priority and return the highest
+        const sorted = validEnrollments.sort((a, b) => {
+            const planA = a.plan as ISubscriptionPlan;
+            const planB = b.plan as ISubscriptionPlan;
+            const priorityA = PLAN_PRIORITY[planA.planType] || 0;
+            const priorityB = PLAN_PRIORITY[planB.planType] || 0;
+            return priorityB - priorityA; // Descending order
+        });
+
+        return sorted[0];
+    }
     /**
      * Subscribe user to a plan
      */

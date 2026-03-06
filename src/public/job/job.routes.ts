@@ -15,6 +15,7 @@ import { enforceJobListingLimit } from "../../middlewares/jobListingLimitMiddlew
 
 const {
   createJob,
+  createBulkJobsForOwner,
   getAllJobs,
   getJobById,
   addJobComment,
@@ -28,6 +29,7 @@ const {
   getAllSuggestedJobsByUser,
   getJobCities,
   getMyJobs,
+  getAllContractorJobs,
 } = JobController;
 
 const router = express.Router();
@@ -47,6 +49,7 @@ router
     asyncHandler(getJobListingUsage)
   )
   .get("/cities", asyncHandler(getJobCities))
+  .get("/contractor/list", authenticateToken, asyncHandler(getAllContractorJobs))
   .get("/", authenticateToken, asyncHandler(getAllJobs))
   .get(
     "/:id",
@@ -60,7 +63,13 @@ router
     },
     asyncHandler(getJobById)
   )
-  .put("/:id", authenticateToken, asyncHandler(updateJobById))
+  .put(
+    "/:id",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(updateJobById)
+  )
   .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
   .get("/user-wise/list", authenticateToken, asyncHandler(getAllUserWiseJobs))
   .get("/user-wise/list/:id", authenticateToken, asyncHandler(getJobById))
@@ -74,10 +83,18 @@ router
   .post(
     "/user-wise/list",
     authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
     asyncHandler(enforceJobListingLimit),
     asyncHandler(createJob)
   )
-  .put("/user-wise/list/:id", authenticateToken, asyncHandler(updateJobById))
+  .put(
+    "/user-wise/list/:id",
+    authenticateToken,
+    dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
+    s3UploaderMiddleware("jobposting"),
+    asyncHandler(updateJobById)
+  )
   .delete("/user-wise/list/:id", authenticateToken, asyncHandler(deleteJobById))
   .put(
     "/add-comment/:id",
@@ -95,6 +112,12 @@ router
     "/get-comment-history/:id",
     authenticateToken,
     asyncHandler(getJobWithHistory)
+  )
+  .post(
+    "/admin/bulk/:ownerId",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(createBulkJobsForOwner)
   )
   .post(
     "/",

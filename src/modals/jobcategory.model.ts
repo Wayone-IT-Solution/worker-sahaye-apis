@@ -67,6 +67,7 @@ export enum JobCategoryType {
 
 export interface IJobCategory extends Document {
   name: string;
+  order: number;
   type: JobCategoryType;
   description?: string;
   icon?: string; // optional icon for UI display
@@ -79,6 +80,7 @@ export interface IJobCategory extends Document {
 const JobCategorySchema: Schema<IJobCategory> = new Schema(
   {
     name: { type: String, required: true, unique: true, trim: true },
+    order: { type: Number, default: 0, index: true },
     type: {
       type: String,
       enum: Object.values(JobCategoryType),
@@ -97,6 +99,7 @@ JobCategorySchema.index({ type: 1 });
 
 // To filter only active categories
 JobCategorySchema.index({ isActive: 1 });
+JobCategorySchema.index({ order: 1, name: 1 });
 
 // For nested category filtering (sub-category/parent relationship)
 JobCategorySchema.index({ parentCategory: 1 });

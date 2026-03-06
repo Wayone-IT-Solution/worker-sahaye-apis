@@ -2,6 +2,7 @@ import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import SubIndustry from "../../modals/subindustry.model";
 import Industry from "../../modals/industry.model";
+import mongoose from "mongoose";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import {
@@ -10,59 +11,142 @@ import {
   buildPaginationResponse,
   SEARCH_FIELD_MAP,
 } from "../../utils/queryBuilder";
+import { SubIndustryStatus } from "../../modals/subindustry.model";
+import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const SubIndustryService = new CommonService(SubIndustry);
+const VALID_SUB_INDUSTRY_STATUS = new Set(Object.values(SubIndustryStatus));
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export class SubIndustryController {
+  private static async resolveIndustryId(input: unknown): Promise<string | null> {
+    if (input === null || input === undefined) return null;
+
+    if (typeof input === "object" && !Array.isArray(input)) {
+      const candidate = (input as any)?._id
+        ?? (input as any)?.id
+        ?? (input as any)?.name
+        ?? (input as any)?.title
+        ?? (input as any)?.label
+        ?? (input as any)?.code;
+      return SubIndustryController.resolveIndustryId(candidate);
+    }
+
+    const value = String(input).trim();
+    if (!value) return null;
+
+    if (mongoose.Types.ObjectId.isValid(value)) {
+      const exists = await Industry.exists({ _id: value });
+      if (exists) return value;
+    }
+
+    const byName = await Industry.findOne(
+      {
+        name: {
+          $regex: new RegExp(`^${escapeRegex(value)}$`, "i"),
+        },
+      },
+      { _id: 1 }
+    );
+
+    if (byName?._id) return String(byName._id);
+    return null;
+  }
+
   static async createSubIndustry(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const { name, description, icon, industryId } = req.body;
-
-      // Validation
-      if (!name || !industryId) {
+      const items = normalizePayloadToArray(req.body);
+      if (!items.length) {
         return res.status(400).json({
           success: false,
           message: "Name and industryId are required",
         });
       }
 
-      // Check if industry exists
-      const industry = await Industry.findById(industryId);
-      if (!industry) {
-        return res.status(404).json({
-          success: false,
-          message: "Industry not found",
+      const createdBy = (req as any).user?._id;
+      const normalizedPayload: Array<Record<string, unknown>> = [];
+
+      for (let index = 0; index < items.length; index += 1) {
+        const row = (items[index] ?? {}) as Record<string, unknown>;
+        const rowNumber = index + 1;
+        const name = String(row?.name ?? "").trim();
+        const industryInput =
+          row?.industryId
+          ?? row?.["industryId.name"]
+          ?? row?.["industryId.title"]
+          ?? row?.["industryId.label"]
+          ?? row?.industryName
+          ?? row?.["industry.name"];
+
+        const industryId = await SubIndustryController.resolveIndustryId(industryInput);
+        if (!name || !industryId) {
+          return res.status(400).json({
+            success: false,
+            message:
+              items.length > 1
+                ? `Row ${rowNumber}: Name and industryId are required`
+                : "Name and industryId are required",
+          });
+        }
+
+        const existingSubIndustry = await SubIndustry.findOne({
+          industryId,
+          name,
+        });
+
+        if (existingSubIndustry) {
+          return res.status(400).json({
+            success: false,
+            message:
+              items.length > 1
+                ? `Row ${rowNumber}: Sub-industry with this name already exists for this industry`
+                : "Sub-industry with this name already exists for this industry",
+          });
+        }
+
+        const statusRaw = String(row?.status ?? SubIndustryStatus.ACTIVE)
+          .trim()
+          .toLowerCase();
+        const status = VALID_SUB_INDUSTRY_STATUS.has(statusRaw as SubIndustryStatus)
+          ? (statusRaw as SubIndustryStatus)
+          : SubIndustryStatus.ACTIVE;
+
+        const normalizedOrder =
+          row?.order !== undefined &&
+          row?.order !== null &&
+          String(row.order).trim() !== "" &&
+          Number.isFinite(Number(row.order))
+            ? Number(row.order)
+            : 0;
+
+        normalizedPayload.push({
+          name,
+          status,
+          industryId,
+          createdBy,
+          order: normalizedOrder,
+          icon: row?.icon ? String(row.icon).trim() : null,
+          description: row?.description ? String(row.description).trim() : null,
         });
       }
 
-      // Check if sub-industry with same name already exists for this industry
-      const existingSubIndustry = await SubIndustry.findOne({
-        industryId,
-        name: name.trim(),
-      });
+      const result = Array.isArray(req.body)
+        ? await SubIndustry.insertMany(normalizedPayload)
+        : await SubIndustryService.create(normalizedPayload[0] as any);
 
-      if (existingSubIndustry) {
-        return res.status(400).json({
-          success: false,
-          message: "Sub-industry with this name already exists for this industry",
-        });
-      }
-
-      const data = {
-        name: name.trim(),
-        description: description?.trim() || null,
-        icon: icon?.trim() || null,
-        industryId,
-        createdBy: (req as any).user?._id,
-      };
-
-      const result = await SubIndustryService.create(data);
       return res.status(201).json(
-        new ApiResponse(201, result, "Sub-industry created successfully")
+        new ApiResponse(
+          201,
+          result,
+          Array.isArray(req.body)
+            ? `${(result as any[])?.length || normalizedPayload.length} sub-industries created successfully`
+            : "Sub-industry created successfully"
+        )
       );
     } catch (error) {
       next(error);
@@ -93,7 +177,8 @@ export class SubIndustryController {
 
       const sortObj = buildSortObject(
         req.query.sortKey as string,
-        req.query.sortDir as string
+        req.query.sortDir as string,
+        { order: 1, name: 1 }
       );
 
       const total = await SubIndustry.countDocuments(matchStage);
@@ -196,6 +281,7 @@ export const getSubIndustriesByIndustry = async (req: Request, res: Response) =>
   try {
     const { industryId } = req.params;
     const status = req.query.status as string;
+    const effectiveStatus = status || "active";
 
     if (!industryId) {
       return res.status(400).json({
@@ -213,15 +299,12 @@ export const getSubIndustriesByIndustry = async (req: Request, res: Response) =>
       });
     }
 
-    const matchStage: any = { industryId };
-    if (status) {
-      matchStage.status = status;
-    }
+    const matchStage: any = { industryId, status: effectiveStatus };
 
     const subIndustries = await SubIndustry.find(matchStage)
       .populate("industryId", "name icon")
       .populate("createdBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ order: 1, name: 1 });
 
     return res.status(200).json({
       success: true,

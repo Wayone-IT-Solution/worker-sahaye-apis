@@ -1,13 +1,14 @@
-import { VirtualHR } from "./virtualhr.model";
+import { Promotion } from "./promotion.model";
 import { BulkHiringRequest } from "./bulkhiring.model";
 import { JobRequirement } from "./jobrequirement.model";
 import { VirtualHRRequest } from "./virtualhrrequest.model";
+import { VirtualHrRecruiter } from "./virtualhrecruiter.model";
 import { UnifiedServiceRequest } from "./unifiedrequest.model";
 import { ProjectBasedHiring } from "./projectbasedhiring.model";
-import { VirtualHrRecruiter } from "./virtualhrecruiter.model";
 import mongoose, { Schema, Document, Types, model } from "mongoose";
 
 export enum RequestModelType {
+  PROMOTION = "Promotion",
   BULK = "BulkHiringRequest",
   ONDEMAND = "JobRequirement",
   VirtualHR = "VirtualHRRequest",
@@ -23,6 +24,7 @@ export const modelMap: Record<string, mongoose.Model<any>> = {
   ProjectBasedHiring: ProjectBasedHiring,
   UnifiedServiceRequest: UnifiedServiceRequest,
   VirtualHrRecruiter: VirtualHrRecruiter,
+  Promotion: Promotion,
 };
 
 export function getModelFromType(model: RequestModelType) {
@@ -39,6 +41,8 @@ export function getModelFromType(model: RequestModelType) {
       return UnifiedServiceRequest;
     case RequestModelType.VIRTUAL_HR_RECRUITER:
       return VirtualHrRecruiter;
+    case RequestModelType.PROMOTION:
+      return Promotion;
     default:
       return null;
   }
@@ -51,25 +55,81 @@ export enum QuotationStatus {
   UNDER_REVIEW = "under_review",
 }
 
+export enum InstallmentAdminApprovalStatus {
+  PENDING = "pending",
+  APPROVED = "approved",
+  REJECTED = "rejected",
+}
+
+interface IInstallment {
+  title?: string;
+  amount: number;
+  dueDate?: Date;
+  paidAt?: Date;
+  proofUploadedAt?: Date;
+  isPaid?: boolean;
+  paidAmount?: number;
+  installmentNumber: number;
+  adminApprovedAt?: Date;
+  adminApprovedBy?: Types.ObjectId;
+  proofDocument?: string;
+  paymentMode?: "cash" | "upi" | "bank_transfer" | "card";
+  transactionReference?: string;
+  notificationSentAt?: Date;
+  notificationSentCount?: number;
+  adminApprovalStatus: InstallmentAdminApprovalStatus;
+}
+
 interface INote {
   text: string;
   createdAt?: Date;
   status: QuotationStatus;
 }
 
+interface IUserQuotationResponse {
+  comment?: string;
+  respondedAt?: Date;
+  respondedBy?: Types.ObjectId;
+  decision: "accepted" | "declined";
+}
+
+interface IQuotationActivity {
+  action: "created" | "updated" | "accepted" | "declined";
+  actorRole: "admin" | "employer" | "contractor" | "worker" | "agent" | "system";
+  actorId?: Types.ObjectId;
+  status: QuotationStatus;
+  comment?: string;
+  snapshot: Record<string, any>;
+  createdAt?: Date;
+}
+
 export interface IQuotation extends Document {
   notes: INote[];
   amount: number;
+  installments: IInstallment[];
+  gstType?: "intra_state" | "inter_state";
+  gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  igstRate?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
+  totalTaxAmount?: number;
+  totalAmountWithTax?: number;
   createdAt: Date;
   updatedAt: Date;
   paymentDate?: Date;
   advanceAmount?: number;
   userId: Types.ObjectId;
-  agentId: Types.ObjectId;
+  agentId?: Types.ObjectId;
+  quotationDocument?: string;
   isAdvancePaid?: boolean;
   status: QuotationStatus;
   requestId: Types.ObjectId;
   requestModel: RequestModelType;
+  userResponse?: IUserQuotationResponse;
+  activityTimeline?: IQuotationActivity[];
   paymentMode?: "cash" | "upi" | "bank_transfer" | "card";
 }
 
@@ -83,7 +143,85 @@ const NoteSchema = new Schema<INote>(
     },
     createdAt: { type: Date, default: Date.now },
   },
-  { _id: false }
+  { _id: false },
+);
+
+const UserResponseSchema = new Schema<IUserQuotationResponse>(
+  {
+    decision: {
+      type: String,
+      enum: ["accepted", "declined"],
+      required: true,
+    },
+    comment: { type: String, trim: true },
+    respondedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    respondedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const QuotationActivitySchema = new Schema<IQuotationActivity>(
+  {
+    action: {
+      type: String,
+      enum: ["created", "updated", "accepted", "declined"],
+      required: true,
+    },
+    actorRole: {
+      type: String,
+      enum: ["admin", "employer", "contractor", "worker", "agent", "system"],
+      required: true,
+    },
+    actorId: {
+      type: Schema.Types.ObjectId,
+      required: false,
+    },
+    status: {
+      type: String,
+      enum: Object.values(QuotationStatus),
+      required: true,
+    },
+    comment: { type: String, trim: true },
+    snapshot: {
+      type: Schema.Types.Mixed,
+      required: true,
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const InstallmentSchema = new Schema<IInstallment>(
+  {
+    title: { type: String, trim: true },
+    amount: { type: Number, required: true, min: 0 },
+    dueDate: { type: Date },
+    paidAt: { type: Date },
+    proofUploadedAt: { type: Date },
+    isPaid: { type: Boolean, default: false },
+    paidAmount: { type: Number, default: 0, min: 0 },
+    installmentNumber: { type: Number, required: true, min: 1 },
+    adminApprovedAt: { type: Date },
+    adminApprovedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    proofDocument: { type: String, trim: true },
+    paymentMode: {
+      type: String,
+      default: "upi",
+      enum: ["cash", "upi", "bank_transfer", "card"],
+    },
+    transactionReference: { type: String, trim: true },
+    notificationSentAt: { type: Date },
+    notificationSentCount: { type: Number, default: 0, min: 0 },
+    adminApprovalStatus: {
+      type: String,
+      default: InstallmentAdminApprovalStatus.PENDING,
+      enum: Object.values(InstallmentAdminApprovalStatus),
+    },
+  },
+  { _id: true },
 );
 
 /* ---------- MAIN SCHEMA ---------- */
@@ -105,6 +243,24 @@ const QuotationSchema = new Schema<IQuotation>(
       enum: Object.values(QuotationStatus),
     },
     amount: { type: Number, required: true },
+    gstType: {
+      type: String,
+      enum: ["intra_state", "inter_state"],
+      default: "intra_state",
+    },
+    gstRate: { type: Number, default: 0 },
+    cgstRate: { type: Number, default: 0 },
+    sgstRate: { type: Number, default: 0 },
+    igstRate: { type: Number, default: 0 },
+    cgstAmount: { type: Number, default: 0 },
+    sgstAmount: { type: Number, default: 0 },
+    igstAmount: { type: Number, default: 0 },
+    totalTaxAmount: { type: Number, default: 0 },
+    totalAmountWithTax: { type: Number, default: 0 },
+    installments: {
+      default: [],
+      type: [InstallmentSchema],
+    },
     isAdvancePaid: { type: Boolean, default: false },
     advanceAmount: { type: Number },
     paymentMode: {
@@ -119,19 +275,30 @@ const QuotationSchema = new Schema<IQuotation>(
       type: Schema.Types.ObjectId,
     },
     agentId: {
-      required: true,
+      required: false,
       ref: "Salesperson",
       type: Schema.Types.ObjectId,
+    },
+    quotationDocument: {
+      type: String,
+      trim: true,
+    },
+    userResponse: {
+      type: UserResponseSchema,
     },
     notes: {
       default: [],
       type: [NoteSchema],
     },
+    activityTimeline: {
+      default: [],
+      type: [QuotationActivitySchema],
+    },
   },
   {
     timestamps: true,
     versionKey: false,
-  }
+  },
 );
 
 export const Quotation = model<IQuotation>("Quotation", QuotationSchema);

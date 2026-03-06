@@ -10,9 +10,9 @@ import {
 
 const {
   createCourse,
-  createCourseBulk,
   getAllCourses,
   getCourseById,
+  createCourseBulk,
   updateCourseById,
   deleteCourseById,
   getTrainingBenefits,
@@ -32,8 +32,17 @@ const {
 const router = express.Router();
 
 // Get training and certification benefits based on subscription plan (Info only)
-router.get("/benefits/my", authenticateToken, asyncHandler(getTrainingBenefits));
-router.post("/bulk", authenticateToken, isAdmin, asyncHandler(createCourseBulk));
+router.get(
+  "/benefits/my",
+  authenticateToken,
+  asyncHandler(getTrainingBenefits),
+);
+router.post(
+  "/bulk",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(createCourseBulk),
+);
 
 router
   .post(
@@ -41,7 +50,7 @@ router
     authenticateToken,
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("courses"),
-    asyncHandler(createCourse)
+    asyncHandler(createCourse),
   )
   .get("/", authenticateToken, asyncHandler(getAllCourses))
   .get("/:id", authenticateToken, asyncHandler(getCourseById))
@@ -50,7 +59,7 @@ router
     authenticateToken,
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("courses"),
-    asyncHandler(updateCourseById)
+    asyncHandler(updateCourseById),
   )
   .delete("/:id", authenticateToken, asyncHandler(deleteCourseById));
 
@@ -58,25 +67,40 @@ router
 router.post("/lesson", authenticateToken, asyncHandler(createLesson));
 router.get("/lesson/all", authenticateToken, asyncHandler(getAllLesson));
 router.get("/lesson/:id", authenticateToken, asyncHandler(getLessonById));
-router.get("/lesson/all/:id", authenticateToken, isAdmin, asyncHandler(getLessonById));
-router.put("/lesson/all/:id", authenticateToken, isAdmin, asyncHandler(updateLessonById));
-router.delete("/lesson/all/:id", authenticateToken, isAdmin, asyncHandler(deleteLessonById));
+router.get(
+  "/lesson/all/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getLessonById),
+);
+router.put(
+  "/lesson/all/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(updateLessonById),
+);
+router.delete(
+  "/lesson/all/:id",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(deleteLessonById),
+);
 
 // Optional: Get lessons for a specific course
 router.get(
   "/:id/lesson",
   authenticateToken,
-  asyncHandler(getLessonsByCourseId)
+  asyncHandler(getLessonsByCourseId),
 );
 router.patch(
   "/mark-as-started",
   authenticateToken,
-  asyncHandler(markAsStarted)
+  asyncHandler(markAsStarted),
 );
 router.patch(
   "/mark-as-completed",
   authenticateToken,
-  asyncHandler(markAsCompleted)
+  asyncHandler(markAsCompleted),
 );
 
 export default router;

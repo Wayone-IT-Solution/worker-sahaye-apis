@@ -55,6 +55,31 @@ export enum QuotationStatus {
   UNDER_REVIEW = "under_review",
 }
 
+export enum InstallmentAdminApprovalStatus {
+  PENDING = "pending",
+  APPROVED = "approved",
+  REJECTED = "rejected",
+}
+
+interface IInstallment {
+  title?: string;
+  amount: number;
+  dueDate?: Date;
+  paidAt?: Date;
+  proofUploadedAt?: Date;
+  isPaid?: boolean;
+  paidAmount?: number;
+  installmentNumber: number;
+  adminApprovedAt?: Date;
+  adminApprovedBy?: Types.ObjectId;
+  proofDocument?: string;
+  paymentMode?: "cash" | "upi" | "bank_transfer" | "card";
+  transactionReference?: string;
+  notificationSentAt?: Date;
+  notificationSentCount?: number;
+  adminApprovalStatus: InstallmentAdminApprovalStatus;
+}
+
 interface INote {
   text: string;
   createdAt?: Date;
@@ -81,6 +106,7 @@ interface IQuotationActivity {
 export interface IQuotation extends Document {
   notes: INote[];
   amount: number;
+  installments: IInstallment[];
   gstType?: "intra_state" | "inter_state";
   gstRate?: number;
   cgstRate?: number;
@@ -168,6 +194,36 @@ const QuotationActivitySchema = new Schema<IQuotationActivity>(
   { _id: false },
 );
 
+const InstallmentSchema = new Schema<IInstallment>(
+  {
+    title: { type: String, trim: true },
+    amount: { type: Number, required: true, min: 0 },
+    dueDate: { type: Date },
+    paidAt: { type: Date },
+    proofUploadedAt: { type: Date },
+    isPaid: { type: Boolean, default: false },
+    paidAmount: { type: Number, default: 0, min: 0 },
+    installmentNumber: { type: Number, required: true, min: 1 },
+    adminApprovedAt: { type: Date },
+    adminApprovedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    proofDocument: { type: String, trim: true },
+    paymentMode: {
+      type: String,
+      default: "upi",
+      enum: ["cash", "upi", "bank_transfer", "card"],
+    },
+    transactionReference: { type: String, trim: true },
+    notificationSentAt: { type: Date },
+    notificationSentCount: { type: Number, default: 0, min: 0 },
+    adminApprovalStatus: {
+      type: String,
+      default: InstallmentAdminApprovalStatus.PENDING,
+      enum: Object.values(InstallmentAdminApprovalStatus),
+    },
+  },
+  { _id: true },
+);
+
 /* ---------- MAIN SCHEMA ---------- */
 const QuotationSchema = new Schema<IQuotation>(
   {
@@ -201,6 +257,10 @@ const QuotationSchema = new Schema<IQuotation>(
     igstAmount: { type: Number, default: 0 },
     totalTaxAmount: { type: Number, default: 0 },
     totalAmountWithTax: { type: Number, default: 0 },
+    installments: {
+      default: [],
+      type: [InstallmentSchema],
+    },
     isAdvancePaid: { type: Boolean, default: false },
     advanceAmount: { type: Number },
     paymentMode: {

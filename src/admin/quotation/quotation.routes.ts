@@ -14,6 +14,11 @@ const {
   getAllQuotations,
   getQuotationById,
   respondToQuotation,
+  respondToQuotationByRequestId,
+  respondToQuotationByRequest,
+  sendInstallmentNotification,
+  updateInstallmentAdminApproval,
+  updateInstallmentPayment,
   updateQuotationById,
   deleteQuotationById,
 } = QuotationController;
@@ -34,6 +39,25 @@ const upload = multer({
     return cb(new Error("Only PDF/DOC/DOCX files are allowed"));
   },
 });
+const installmentProofUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 20 * 1024 * 1024,
+  },
+  fileFilter: (_, file, cb) => {
+    const allowed = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    return cb(new Error("Only PDF/JPEG/JPG/PNG/WEBP/HEIC files are allowed"));
+  },
+});
 
 router
   .get(
@@ -50,6 +74,25 @@ router
     asyncHandler(createQuotation),
   )
   .get("/detail/:id", authenticateToken, asyncHandler(getQuotationById))
+  .patch(
+    "/:id/installments/:installmentId/payment",
+    authenticateToken,
+    allowOnly("admin", "employer", "contractor"),
+    installmentProofUpload.single("proofDocument"),
+    asyncHandler(updateInstallmentPayment),
+  )
+  .patch(
+    "/:id/installments/:installmentId/admin-approval",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(updateInstallmentAdminApproval),
+  )
+  .post(
+    "/:id/send-installment-notification",
+    authenticateToken,
+    isAdmin,
+    asyncHandler(sendInstallmentNotification),
+  )
   .get("/:requestModel/:id", authenticateToken, asyncHandler(getQuotationById))
   .get("/:requestModel?", authenticateToken, asyncHandler(getAllQuotations))
   .put(
@@ -64,6 +107,18 @@ router
     authenticateToken,
     allowOnly("employer", "contractor"),
     asyncHandler(respondToQuotation),
+  )
+  .patch(
+    "/request/:requestId/respond",
+    authenticateToken,
+    allowOnly("employer", "contractor"),
+    asyncHandler(respondToQuotationByRequestId),
+  )
+  .patch(
+    "/:requestModel/:requestId/respond",
+    authenticateToken,
+    allowOnly("employer", "contractor"),
+    asyncHandler(respondToQuotationByRequest),
   )
   .delete("/:id", authenticateToken, isAdmin, asyncHandler(deleteQuotationById));
 

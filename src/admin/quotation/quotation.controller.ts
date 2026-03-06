@@ -6,8 +6,12 @@ import ActivityLog from "../../modals/activitylog.model";
 import { User } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";
 import { uploadToS3 } from "../../config/s3Uploader";
+import { sendEmail } from "../../utils/emailService";
+import { NotificationService } from "../../services/notification.service";
+import { UserType as NotificationUserType } from "../../modals/notification.model";
 import {
   getModelFromType,
+  InstallmentAdminApprovalStatus,
   modelMap,
   Quotation,
   QuotationStatus,
@@ -29,6 +33,9 @@ const DIRECT_SEARCH_FIELDS = new Set([
   "salesPersonToDetails.mobile",
   "userResponse.decision",
 ]);
+
+const PAYMENT_MODES = ["cash", "upi", "bank_transfer", "card"] as const;
+type PaymentMode = (typeof PAYMENT_MODES)[number];
 
 const toSafeNumber = (value: any): number => {
   const parsed = Number(value);
@@ -121,6 +128,234 @@ const parseIncomingNotes = (value: any) => {
       status: item?.status,
     }))
     .filter((item: any) => item.text && Object.values(QuotationStatus).includes(item.status));
+};
+
+const parseDateValue = (value: any): Date | undefined => {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+const normalizePaymentMode = (value: any): PaymentMode => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return PAYMENT_MODES.includes(normalized as PaymentMode)
+    ? (normalized as PaymentMode)
+    : "upi";
+};
+
+const normalizeInstallmentAdminApprovalStatus = (
+  value: any,
+): InstallmentAdminApprovalStatus => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === InstallmentAdminApprovalStatus.APPROVED) {
+    return InstallmentAdminApprovalStatus.APPROVED;
+  }
+  if (normalized === InstallmentAdminApprovalStatus.REJECTED) {
+    return InstallmentAdminApprovalStatus.REJECTED;
+  }
+  return InstallmentAdminApprovalStatus.PENDING;
+};
+
+const parseIncomingInstallments = (value: any, fallbackPaymentMode?: any) => {
+  const parsed = parseIfJson(value);
+  if (!Array.isArray(parsed)) return [];
+
+  const normalized = parsed
+    .map((item: any, index: number) => {
+      const amount = Math.max(0, toSafeNumber(item?.amount));
+      if (amount <= 0) return null;
+
+      const installmentNumber = Math.max(
+        1,
+        Math.floor(toSafeNumber(item?.installmentNumber)) || index + 1,
+      );
+      const isPaid = parseMaybeBoolean(item?.isPaid) ?? false;
+      const parsedPaidAmount = toSafeNumber(item?.paidAmount);
+      const paidAmount = Math.max(
+        0,
+        isPaid && parsedPaidAmount <= 0 ? amount : parsedPaidAmount,
+      );
+      const finalPaidAmount = Math.min(paidAmount, amount);
+
+      const adminApprovalStatus = normalizeInstallmentAdminApprovalStatus(
+        item?.adminApprovalStatus,
+      );
+      const adminApprovedAt = parseDateValue(item?.adminApprovedAt);
+      const paidAt = parseDateValue(item?.paidAt || item?.paymentDate);
+      const dueDate = parseDateValue(item?.dueDate);
+      const notificationSentAt = parseDateValue(item?.notificationSentAt);
+      const proofUploadedAt = parseDateValue(item?.proofUploadedAt);
+      const notificationSentCount = Math.max(
+        0,
+        Math.floor(toSafeNumber(item?.notificationSentCount)),
+      );
+
+      return {
+        _id:
+          item?._id && mongoose.Types.ObjectId.isValid(item._id)
+            ? new mongoose.Types.ObjectId(item._id)
+            : undefined,
+        title:
+          String(item?.title || "").trim() || `Installment ${installmentNumber}`,
+        amount,
+        dueDate,
+        isPaid: Boolean(isPaid || finalPaidAmount >= amount),
+        paidAmount: finalPaidAmount,
+        paidAt:
+          paidAt ||
+          ((Boolean(isPaid || finalPaidAmount >= amount) && finalPaidAmount > 0)
+            ? new Date()
+            : undefined),
+        installmentNumber,
+        paymentMode: normalizePaymentMode(
+          item?.paymentMode || fallbackPaymentMode || "upi",
+        ),
+        transactionReference: String(item?.transactionReference || "").trim() || undefined,
+        proofDocument: String(item?.proofDocument || "").trim() || undefined,
+        proofUploadedAt,
+        adminApprovalStatus,
+        adminApprovedAt:
+          adminApprovalStatus === InstallmentAdminApprovalStatus.APPROVED
+            ? adminApprovedAt || new Date()
+            : adminApprovedAt,
+        adminApprovedBy:
+          item?.adminApprovedBy && mongoose.Types.ObjectId.isValid(item.adminApprovedBy)
+            ? new mongoose.Types.ObjectId(item.adminApprovedBy)
+            : undefined,
+        notificationSentAt,
+        notificationSentCount,
+      };
+    })
+    .filter(Boolean)
+    .sort(
+      (a: any, b: any) =>
+        Number(a?.installmentNumber || 0) - Number(b?.installmentNumber || 0),
+    )
+    .map((item: any, index: number) => ({
+      ...item,
+      installmentNumber: index + 1,
+    }));
+
+  return normalized;
+};
+
+const ensureInstallments = (
+  installments: any[],
+  fallback: { amount: number; paymentDate?: Date; paymentMode?: PaymentMode },
+) => {
+  if (Array.isArray(installments) && installments.length > 0) return installments;
+
+  const fallbackAmount = Math.max(0, toSafeNumber(fallback?.amount));
+  return [
+    {
+      title: "Installment 1",
+      amount: fallbackAmount,
+      dueDate: fallback?.paymentDate,
+      isPaid: false,
+      paidAmount: 0,
+      installmentNumber: 1,
+      paymentMode: normalizePaymentMode(fallback?.paymentMode || "upi"),
+      adminApprovalStatus: InstallmentAdminApprovalStatus.PENDING,
+      notificationSentCount: 0,
+    },
+  ];
+};
+
+const calculateInstallmentSummary = (quotation: any) => {
+  const installments = Array.isArray(quotation?.installments)
+    ? quotation.installments
+    : [];
+
+  const paidInstallmentCount = installments.filter((item: any) => {
+    const amount = toSafeNumber(item?.amount);
+    const paidAmount = toSafeNumber(item?.paidAmount);
+    return Boolean(item?.isPaid) || (amount > 0 && paidAmount >= amount);
+  }).length;
+
+  const pendingInstallmentCount = Math.max(
+    0,
+    installments.length - paidInstallmentCount,
+  );
+  const adminApprovedInstallmentCount = installments.filter(
+    (item: any) =>
+      item?.adminApprovalStatus === InstallmentAdminApprovalStatus.APPROVED,
+  ).length;
+  const adminPendingInstallmentCount = Math.max(
+    0,
+    installments.length - adminApprovedInstallmentCount,
+  );
+  const totalInstallmentAmount = +installments
+    .reduce((sum: number, item: any) => sum + toSafeNumber(item?.amount), 0)
+    .toFixed(2);
+  const paidInstallmentAmount = +installments
+    .reduce((sum: number, item: any) => {
+      const amount = toSafeNumber(item?.amount);
+      const paidAmount = toSafeNumber(item?.paidAmount);
+      const currentPaid = Boolean(item?.isPaid) ? amount : Math.min(amount, paidAmount);
+      return sum + Math.max(0, currentPaid);
+    }, 0)
+    .toFixed(2);
+  const pendingInstallmentAmount = +(totalInstallmentAmount - paidInstallmentAmount).toFixed(2);
+  const nextPendingInstallment = installments.find((item: any) => {
+    const amount = toSafeNumber(item?.amount);
+    const paidAmount = toSafeNumber(item?.paidAmount);
+    return !(Boolean(item?.isPaid) || (amount > 0 && paidAmount >= amount));
+  });
+
+  return {
+    installmentCount: installments.length,
+    paidInstallmentCount,
+    pendingInstallmentCount,
+    adminApprovedInstallmentCount,
+    adminPendingInstallmentCount,
+    totalInstallmentAmount,
+    paidInstallmentAmount,
+    pendingInstallmentAmount,
+    nextPendingInstallmentId: nextPendingInstallment?._id,
+    nextInstallmentDueDate: nextPendingInstallment?.dueDate || null,
+  };
+};
+
+const withInstallmentSummary = (quotation: any) => ({
+  ...quotation,
+  ...calculateInstallmentSummary(quotation),
+});
+
+const formatDateForMail = (value?: Date) => {
+  if (!value) return "N/A";
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const buildInstallmentReminderEmailHtml = (params: {
+  userName: string;
+  quotationId: string;
+  installmentTitle: string;
+  dueDate?: Date;
+  amount: number;
+  requestModel: string;
+}) => {
+  const dueDateText = formatDateForMail(params?.dueDate);
+  const amountText = `INR ${toSafeNumber(params?.amount).toFixed(2)}`;
+  const requestType = String(params?.requestModel || "Service");
+  const safeName = String(params?.userName || "User");
+
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;">
+      <p>Dear ${safeName},</p>
+      <p>This is a reminder for your approved quotation payment.</p>
+      <p><strong>Quotation ID:</strong> #${params?.quotationId}</p>
+      <p><strong>Service:</strong> ${requestType}</p>
+      <p><strong>Installment:</strong> ${params?.installmentTitle}</p>
+      <p><strong>Amount:</strong> ${amountText}</p>
+      <p><strong>Due Date:</strong> ${dueDateText}</p>
+      <p>Please complete this installment on or before the due date.</p>
+      <p>Regards,<br/>Worker Sahay Team</p>
+    </div>
+  `;
 };
 
 const buildSnapshot = (quotation: any) => {
@@ -240,6 +475,75 @@ const normalizeBodyForQuotation = (body: any) => {
   }
 
   return payload;
+};
+
+const applyUserQuotationDecision = async (quotation: any, req: Request) => {
+  if (!quotation) {
+    throw new ApiError(404, "Quotation not found");
+  }
+
+  const { id: userId, role } = (req as any).user || {};
+  const actorRole = String(role || "").toLowerCase();
+  if (!["employer", "contractor"].includes(actorRole)) {
+    throw new ApiError(403, "Only agency/employer can respond");
+  }
+
+  if (String(quotation.userId) !== String(userId)) {
+    throw new ApiError(403, "You can only respond to your own quotation");
+  }
+
+  if (quotation.status === QuotationStatus.APPROVED) {
+    throw new ApiError(409, "Quotation already accepted");
+  }
+
+  const decision = String(req.body?.action || "").trim().toLowerCase();
+  const comment = String(req.body?.comment || "").trim();
+
+  if (!["accept", "decline"].includes(decision)) {
+    throw new ApiError(400, "Action must be either 'accept' or 'decline'");
+  }
+
+  const nextStatus =
+    decision === "accept" ? QuotationStatus.APPROVED : QuotationStatus.REJECTED;
+
+  quotation.status = nextStatus;
+  quotation.userResponse = {
+    decision: decision === "accept" ? "accepted" : "declined",
+    comment: comment || undefined,
+    respondedAt: new Date(),
+    respondedBy: new mongoose.Types.ObjectId(userId),
+  };
+
+  if (decision === "accept") {
+    quotation.installments = ensureInstallments(quotation.installments || [], {
+      amount: quotation.totalAmountWithTax || quotation.amount,
+      paymentDate: quotation.paymentDate,
+      paymentMode: quotation.paymentMode,
+    });
+  }
+
+  if (comment) {
+    quotation.notes.push({
+      text: comment,
+      status: nextStatus,
+      createdAt: new Date(),
+    });
+  }
+
+  await quotation.save();
+
+  if (decision === "accept") {
+    await syncRequestAfterAcceptance(quotation);
+  }
+
+  await appendQuotationActivity(
+    quotation,
+    req,
+    decision === "accept" ? "accepted" : "declined",
+    comment,
+  );
+
+  return { quotation, decision };
 };
 
 export class QuotationController {
@@ -367,8 +671,13 @@ export class QuotationController {
       const payload = normalizeBodyForQuotation(req.body);
       const noteText = String(payload?.note || "").trim();
       const incomingNotes = parseIncomingNotes(payload?.notes);
+      const incomingInstallments = parseIncomingInstallments(
+        payload?.installments,
+        payload?.paymentMode,
+      );
       delete payload.note;
       delete payload.notes;
+      delete payload.installments;
 
       if (req.file) {
         payload.quotationDocument = await uploadToS3(
@@ -379,11 +688,17 @@ export class QuotationController {
       }
 
       const gstDetails = buildGSTDetails(payload);
+      const installments = ensureInstallments(incomingInstallments, {
+        amount: gstDetails.totalAmountWithTax || payload?.amount,
+        paymentDate: payload?.paymentDate,
+        paymentMode: payload?.paymentMode,
+      });
       const quotation = await Quotation.create({
         userId,
         agentId,
         requestId,
         requestModel,
+        installments,
         ...payload,
         ...gstDetails,
       });
@@ -405,7 +720,13 @@ export class QuotationController {
 
       return res
         .status(201)
-        .json(new ApiResponse(201, quotation, "Quotation created successfully"));
+        .json(
+          new ApiResponse(
+            201,
+            withInstallmentSummary(quotation.toObject()),
+            "Quotation created successfully",
+          ),
+        );
     } catch (error) {
       next(error);
     }
@@ -514,6 +835,7 @@ export class QuotationController {
             requestModel: 1,
             isAdvancePaid: 1,
             advanceAmount: 1,
+            installments: 1,
             gstType: 1,
             gstRate: 1,
             cgstRate: 1,
@@ -545,7 +867,7 @@ export class QuotationController {
       const enrichedQuotations = await Promise.all(
         rawQuotations.map(async (q) => {
           const Model = modelMap[q.requestModel];
-          if (!Model || !q.requestId) return q;
+          if (!Model || !q.requestId) return withInstallmentSummary(q);
 
           const requestDetailsPipeline = [
             { $match: { _id: new mongoose.Types.ObjectId(q.requestId) } },
@@ -574,7 +896,7 @@ export class QuotationController {
 
           const requestDetailsArr = await Model.aggregate(requestDetailsPipeline);
           const requestDetails = requestDetailsArr.length > 0 ? requestDetailsArr[0] : null;
-          return { ...q, requestDetails };
+          return withInstallmentSummary({ ...q, requestDetails });
         }),
       );
 
@@ -619,7 +941,13 @@ export class QuotationController {
 
       return res
         .status(200)
-        .json(new ApiResponse(200, result, "Data fetched successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            withInstallmentSummary(result),
+            "Data fetched successfully",
+          ),
+        );
     } catch (err) {
       next(err);
     }
@@ -647,8 +975,17 @@ export class QuotationController {
       const payload = normalizeBodyForQuotation(req.body);
       const noteText = String(payload?.note || "").trim();
       const incomingNotes = parseIncomingNotes(payload?.notes);
+      const hasInstallmentPayload =
+        req.body?.installments !== undefined || payload?.installments !== undefined;
+      const incomingInstallments = hasInstallmentPayload
+        ? parseIncomingInstallments(
+            payload?.installments ?? req.body?.installments,
+            payload?.paymentMode ?? existing?.paymentMode,
+          )
+        : null;
       delete payload.note;
       delete payload.notes;
+      delete payload.installments;
 
       if (req.file) {
         payload.quotationDocument = await uploadToS3(
@@ -665,6 +1002,17 @@ export class QuotationController {
       });
 
       Object.assign(existing, payload, gstDetails);
+      if (hasInstallmentPayload && incomingInstallments) {
+        existing.installments = ensureInstallments(incomingInstallments, {
+          amount:
+            gstDetails.totalAmountWithTax ||
+            payload?.amount ||
+            existing.totalAmountWithTax ||
+            existing.amount,
+          paymentDate: payload?.paymentDate ?? existing?.paymentDate,
+          paymentMode: payload?.paymentMode ?? existing?.paymentMode,
+        });
+      }
 
       if (incomingNotes.length > 0) {
         existing.notes.push(...incomingNotes);
@@ -683,7 +1031,13 @@ export class QuotationController {
 
       return res
         .status(200)
-        .json(new ApiResponse(200, existing, "Updated successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            withInstallmentSummary(existing.toObject()),
+            "Updated successfully",
+          ),
+        );
     } catch (err) {
       next(err);
     }
@@ -692,72 +1046,404 @@ export class QuotationController {
   static async respondToQuotation(req: Request, res: Response, next: NextFunction) {
     try {
       const quotation: any = await Quotation.findById(req.params.id);
+      const { quotation: updatedQuotation, decision } = await applyUserQuotationDecision(
+        quotation,
+        req,
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          withInstallmentSummary(updatedQuotation.toObject()),
+          decision === "accept"
+            ? "Quotation accepted successfully"
+            : "Quotation declined successfully",
+        ),
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async respondToQuotationByRequest(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { requestId, requestModel } = req.params;
+      if (!requestId || !mongoose.Types.ObjectId.isValid(requestId)) {
+        return res.status(400).json(new ApiError(400, "Valid requestId is required"));
+      }
+
+      if (
+        !requestModel ||
+        !Object.values(RequestModelType).includes(requestModel as RequestModelType)
+      ) {
+        return res.status(400).json(new ApiError(400, "Valid requestModel is required"));
+      }
+
+      const { id: userId } = (req as any).user || {};
+      const quotation: any = await Quotation.findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+        requestId: new mongoose.Types.ObjectId(requestId),
+        requestModel,
+        status: {
+          $nin: [QuotationStatus.REJECTED, QuotationStatus.COMPLETED],
+        },
+      }).sort({ createdAt: -1 });
+
+      if (!quotation) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "No active quotation found for this request"));
+      }
+
+      const { quotation: updatedQuotation, decision } = await applyUserQuotationDecision(
+        quotation,
+        req,
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          withInstallmentSummary(updatedQuotation.toObject()),
+          decision === "accept"
+            ? "Quotation accepted successfully"
+            : "Quotation declined successfully",
+        ),
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async respondToQuotationByRequestId(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { requestId } = req.params;
+      if (!requestId || !mongoose.Types.ObjectId.isValid(requestId)) {
+        return res.status(400).json(new ApiError(400, "Valid requestId is required"));
+      }
+
+      const { id: userId } = (req as any).user || {};
+      const quotation: any = await Quotation.findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+        requestId: new mongoose.Types.ObjectId(requestId),
+        status: {
+          $nin: [QuotationStatus.REJECTED, QuotationStatus.COMPLETED],
+        },
+      }).sort({ createdAt: -1 });
+
+      if (!quotation) {
+        return res
+          .status(404)
+          .json(new ApiError(404, "No active quotation found for this request"));
+      }
+
+      const { quotation: updatedQuotation, decision } = await applyUserQuotationDecision(
+        quotation,
+        req,
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          withInstallmentSummary(updatedQuotation.toObject()),
+          decision === "accept"
+            ? "Quotation accepted successfully"
+            : "Quotation declined successfully",
+        ),
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateInstallmentPayment(req: Request, res: Response, next: NextFunction) {
+    try {
+      const quotation: any = await Quotation.findById(req.params.id);
       if (!quotation) {
         return res.status(404).json(new ApiError(404, "Quotation not found"));
       }
 
       const { id: userId, role } = (req as any).user || {};
       const actorRole = String(role || "").toLowerCase();
-      if (!["employer", "contractor"].includes(actorRole)) {
-        return res.status(403).json(new ApiError(403, "Only agency/employer can respond"));
+      if (
+        ["employer", "contractor"].includes(actorRole) &&
+        String(quotation.userId) !== String(userId)
+      ) {
+        return res.status(403).json(new ApiError(403, "Unauthorized quotation access"));
       }
 
-      if (String(quotation.userId) !== String(userId)) {
-        return res.status(403).json(new ApiError(403, "You can only respond to your own quotation"));
-      }
-
-      if (quotation.status === QuotationStatus.APPROVED) {
-        return res.status(409).json(new ApiError(409, "Quotation already accepted"));
-      }
-
-      const decision = String(req.body?.action || "").trim().toLowerCase();
-      const comment = String(req.body?.comment || "").trim();
-
-      if (!["accept", "decline"].includes(decision)) {
+      if (![QuotationStatus.APPROVED, QuotationStatus.COMPLETED].includes(quotation.status)) {
         return res
-          .status(400)
-          .json(new ApiError(400, "Action must be either 'accept' or 'decline'"));
+          .status(409)
+          .json(new ApiError(409, "Installment payment is allowed only for approved quotations"));
       }
 
-      const nextStatus =
-        decision === "accept" ? QuotationStatus.APPROVED : QuotationStatus.REJECTED;
+      const installment = quotation.installments?.id(req.params.installmentId);
+      if (!installment) {
+        return res.status(404).json(new ApiError(404, "Installment not found"));
+      }
 
-      quotation.status = nextStatus;
-      quotation.userResponse = {
-        decision: decision === "accept" ? "accepted" : "declined",
-        comment: comment || undefined,
-        respondedAt: new Date(),
-        respondedBy: new mongoose.Types.ObjectId(userId),
-      };
+      const parsedIsPaid = parseMaybeBoolean(req.body?.isPaid);
+      if (parsedIsPaid !== undefined) {
+        installment.isPaid = parsedIsPaid;
+      }
 
-      if (comment) {
+      if (req.body?.paidAmount !== undefined) {
+        installment.paidAmount = Math.max(0, toSafeNumber(req.body?.paidAmount));
+      } else if (installment.isPaid) {
+        installment.paidAmount = toSafeNumber(installment.amount);
+      }
+
+      if (req.body?.paymentMode !== undefined) {
+        installment.paymentMode = normalizePaymentMode(req.body?.paymentMode);
+      }
+
+      if (req.body?.transactionReference !== undefined) {
+        installment.transactionReference =
+          String(req.body?.transactionReference || "").trim() || undefined;
+      }
+
+      if (req.body?.proofDocument !== undefined) {
+        installment.proofDocument =
+          String(req.body?.proofDocument || "").trim() || undefined;
+        installment.proofUploadedAt = installment.proofDocument ? new Date() : undefined;
+      }
+
+      if (req.file) {
+        installment.proofDocument = await uploadToS3(
+          req.file.buffer,
+          req.file.originalname,
+          "quotation-installment-proofs",
+        );
+        installment.proofUploadedAt = new Date();
+      }
+
+      const paidAt = parseDateValue(req.body?.paidAt || req.body?.paymentDate);
+      if (paidAt) {
+        installment.paidAt = paidAt;
+      } else if (installment.isPaid && !installment.paidAt) {
+        installment.paidAt = new Date();
+      } else if (!installment.isPaid) {
+        installment.paidAt = undefined;
+      }
+
+      if (toSafeNumber(installment?.paidAmount) >= toSafeNumber(installment?.amount)) {
+        installment.isPaid = true;
+      }
+
+      if (!installment.isPaid && req.body?.paidAmount === undefined) {
+        installment.paidAmount = 0;
+      }
+
+      const noteText = String(req.body?.comment || req.body?.note || "").trim();
+      if (noteText) {
         quotation.notes.push({
-          text: comment,
-          status: nextStatus,
+          text: noteText,
+          status: quotation.status,
+          createdAt: new Date(),
+        });
+      }
+
+      const allPaid = quotation.installments.every((item: any) => {
+        const amount = toSafeNumber(item?.amount);
+        const paidAmount = toSafeNumber(item?.paidAmount);
+        return Boolean(item?.isPaid) || (amount > 0 && paidAmount >= amount);
+      });
+      if (allPaid) {
+        quotation.status = QuotationStatus.COMPLETED;
+      }
+
+      await quotation.save();
+      await appendQuotationActivity(quotation, req, "updated", noteText || "Installment payment updated");
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          withInstallmentSummary(quotation.toObject()),
+          "Installment payment updated successfully",
+        ),
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateInstallmentAdminApproval(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const quotation: any = await Quotation.findById(req.params.id);
+      if (!quotation) {
+        return res.status(404).json(new ApiError(404, "Quotation not found"));
+      }
+
+      const installment = quotation.installments?.id(req.params.installmentId);
+      if (!installment) {
+        return res.status(404).json(new ApiError(404, "Installment not found"));
+      }
+
+      const nextStatus = normalizeInstallmentAdminApprovalStatus(
+        req.body?.adminApprovalStatus ?? req.body?.status,
+      );
+      installment.adminApprovalStatus = nextStatus;
+      if (nextStatus === InstallmentAdminApprovalStatus.APPROVED) {
+        installment.adminApprovedAt = new Date();
+        const adminId = (req as any)?.user?.id;
+        installment.adminApprovedBy =
+          adminId && mongoose.Types.ObjectId.isValid(adminId)
+            ? new mongoose.Types.ObjectId(adminId)
+            : undefined;
+      } else {
+        installment.adminApprovedAt = undefined;
+        installment.adminApprovedBy = undefined;
+      }
+
+      const noteText = String(req.body?.comment || req.body?.note || "").trim();
+      if (noteText) {
+        quotation.notes.push({
+          text: noteText,
+          status: quotation.status,
           createdAt: new Date(),
         });
       }
 
       await quotation.save();
-
-      if (decision === "accept") {
-        await syncRequestAfterAcceptance(quotation);
-      }
-
       await appendQuotationActivity(
         quotation,
         req,
-        decision === "accept" ? "accepted" : "declined",
-        comment,
+        "updated",
+        noteText || `Installment ${installment.installmentNumber} approval updated`,
       );
 
       return res.status(200).json(
         new ApiResponse(
           200,
-          quotation,
-          decision === "accept"
-            ? "Quotation accepted successfully"
-            : "Quotation declined successfully",
+          withInstallmentSummary(quotation.toObject()),
+          "Installment admin approval updated successfully",
+        ),
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async sendInstallmentNotification(req: Request, res: Response, next: NextFunction) {
+    try {
+      const quotation: any = await Quotation.findById(req.params.id).populate(
+        "userId",
+        "fullName email userType",
+      );
+
+      if (!quotation) {
+        return res.status(404).json(new ApiError(404, "Quotation not found"));
+      }
+
+      if (quotation.status !== QuotationStatus.APPROVED) {
+        return res
+          .status(409)
+          .json(new ApiError(409, "Installment reminders can be sent only for approved quotations"));
+      }
+
+      const installments = ensureInstallments(quotation.installments || [], {
+        amount: quotation.totalAmountWithTax || quotation.amount,
+        paymentDate: quotation.paymentDate,
+        paymentMode: quotation.paymentMode,
+      });
+      quotation.installments = installments;
+
+      const requestedInstallmentId = String(req.body?.installmentId || "").trim();
+      let targetInstallment = requestedInstallmentId
+        ? quotation.installments.id(requestedInstallmentId)
+        : null;
+
+      if (!targetInstallment) {
+        targetInstallment = quotation.installments.find((item: any) => {
+          const amount = toSafeNumber(item?.amount);
+          const paidAmount = toSafeNumber(item?.paidAmount);
+          return !(Boolean(item?.isPaid) || (amount > 0 && paidAmount >= amount));
+        });
+      }
+
+      if (!targetInstallment) {
+        targetInstallment = quotation.installments[0];
+      }
+
+      if (!targetInstallment) {
+        return res.status(404).json(new ApiError(404, "No installment found for notification"));
+      }
+
+      const userDetails: any = quotation.userId;
+      if (!userDetails?._id) {
+        return res.status(404).json(new ApiError(404, "Quotation user not found"));
+      }
+
+      const shortQuotationId = String(quotation._id).slice(-8).toUpperCase();
+      const installmentTitle =
+        String(targetInstallment?.title || "").trim() ||
+        `Installment ${targetInstallment.installmentNumber}`;
+      const amount = toSafeNumber(targetInstallment.amount);
+      const dueDateText = formatDateForMail(targetInstallment?.dueDate);
+      const message = `Reminder: ${installmentTitle} of INR ${amount.toFixed(2)} for quotation #${shortQuotationId} is due on ${dueDateText}.`;
+      const title = `Installment Payment Reminder (#${shortQuotationId})`;
+      const adminId = (req as any)?.user?.id;
+
+      await NotificationService.send({
+        type: "quotation-installment-reminder",
+        title,
+        message,
+        toUserId: String(userDetails._id),
+        toRole: userDetails.userType as NotificationUserType,
+        fromUser: {
+          id: String(adminId),
+          role: NotificationUserType.ADMIN,
+        },
+      });
+
+      if (userDetails?.email) {
+        await sendEmail({
+          to: String(userDetails.email),
+          from: { name: "Worker Sahay Team" },
+          subject: title,
+          text: message,
+          html: buildInstallmentReminderEmailHtml({
+            amount,
+            installmentTitle,
+            dueDate: targetInstallment?.dueDate,
+            requestModel: quotation?.requestModel,
+            quotationId: shortQuotationId,
+            userName: String(userDetails?.fullName || "User"),
+          }),
+        });
+      }
+
+      targetInstallment.notificationSentAt = new Date();
+      targetInstallment.notificationSentCount = Math.max(
+        0,
+        toSafeNumber(targetInstallment.notificationSentCount),
+      ) + 1;
+
+      await quotation.save();
+      await appendQuotationActivity(
+        quotation,
+        req,
+        "updated",
+        `Installment reminder sent for ${installmentTitle}`,
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          withInstallmentSummary(quotation.toObject()),
+          "Installment notification sent successfully",
         ),
       );
     } catch (error) {

@@ -1,26 +1,29 @@
 import ApiError from "../../utils/ApiError";
+import { User } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
 import { Course } from "../../modals/courses.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
 import { NextFunction, Request, Response } from "express";
-import { CommonService } from "../../services/common.services";
-import { getReviewStats } from "../../public/coursereview/coursereview.controller";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
-import { User } from "../../modals/user.model";
-import { normalizePayloadToArray, sanitizePayloadObject } from "../../utils/payloadSanitizer";
+import { CommonService } from "../../services/common.services";
+import { getReviewStats } from "../../public/coursereview/coursereview.controller";
+import {
+  sanitizePayloadObject,
+  normalizePayloadToArray,
+} from "../../utils/payloadSanitizer";
 
 const courseService = new CommonService(Course);
 const ENROLLMENT_LOCK_HOURS = 12;
 
 const normalizeCourseType = (rawType: any): string => {
-  const values = (Array.isArray(rawType) ? rawType : [rawType])
-    .flatMap((value) =>
+  const values = (Array.isArray(rawType) ? rawType : [rawType]).flatMap(
+    (value) =>
       String(value || "")
         .split(",")
         .map((entry) => entry.trim().toLowerCase())
         .filter(Boolean),
-    );
+  );
 
   const allowedTypes = new Set(["online", "offline"]);
   const filteredValues = values.filter((entry) => allowedTypes.has(entry));
@@ -93,7 +96,7 @@ const parseTimeToMinutes = (rawTime?: string): number | null => {
   }
 
   const twelveHourMatch = normalized.match(
-    /^(0?\d|1[0-2]):([0-5]\d)\s*([aApP][mM])$/
+    /^(0?\d|1[0-2]):([0-5]\d)\s*([aApP][mM])$/,
   );
   if (twelveHourMatch) {
     let hours = Number(twelveHourMatch[1]) % 12;
@@ -111,9 +114,7 @@ const buildSessionStartDate = (session: any): Date | null => {
   if (!date) return null;
 
   const withTime = new Date(date);
-  const minutes = parseTimeToMinutes(
-    normalizeTimeString(session?.startTime)
-  );
+  const minutes = parseTimeToMinutes(normalizeTimeString(session?.startTime));
   if (minutes !== null) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -160,7 +161,7 @@ const parseClassScheduleRaw = (rawSchedule: unknown): any[] | undefined => {
 
     throw new ApiError(
       400,
-      'classSchedule must be a valid JSON array string (example: [{"date":"2026-04-10","hours":2,"mode":"online","meetingLink":"https://..."}])'
+      'classSchedule must be a valid JSON array string (example: [{"date":"2026-04-10","hours":2,"mode":"online","meetingLink":"https://..."}])',
     );
   }
 
@@ -173,7 +174,7 @@ const parseClassScheduleRaw = (rawSchedule: unknown): any[] | undefined => {
 
 const normalizeClassSchedule = (
   rawSchedule: unknown,
-  normalizedCourseType: string
+  normalizedCourseType: string,
 ): Array<Record<string, any>> | undefined => {
   const parsedSchedule = parseClassScheduleRaw(rawSchedule);
   if (!parsedSchedule) return undefined;
@@ -192,75 +193,83 @@ const normalizeClassSchedule = (
       } catch {
         throw new ApiError(
           400,
-          `classSchedule row ${rowNumber} must be valid JSON`
+          `classSchedule row ${rowNumber} must be valid JSON`,
         );
       }
     }
     if (!source || typeof source !== "object") {
-      throw new ApiError(400, `classSchedule row ${rowNumber} must be an object`);
+      throw new ApiError(
+        400,
+        `classSchedule row ${rowNumber} must be an object`,
+      );
     }
 
     const date = normalizeDateValue(
       (source as any).date ??
         (source as any).classDate ??
-        (source as any).sessionDate
+        (source as any).sessionDate,
     );
     if (!date) {
-      throw new ApiError(400, `classSchedule row ${rowNumber} has invalid date`);
+      throw new ApiError(
+        400,
+        `classSchedule row ${rowNumber} has invalid date`,
+      );
     }
 
     const hours = normalizeNumericValue(
       (source as any).hours ??
         (source as any).durationHours ??
-        (source as any).duration
+        (source as any).duration,
     );
     if (hours === undefined || hours <= 0) {
       throw new ApiError(
         400,
-        `classSchedule row ${rowNumber} requires hours greater than 0`
+        `classSchedule row ${rowNumber} requires hours greater than 0`,
       );
     }
 
     const modeRaw = String(
-      (source as any).mode ?? (source as any).type ?? defaultMode
+      (source as any).mode ?? (source as any).type ?? defaultMode,
     )
       .trim()
       .toLowerCase();
     const mode = modeRaw === "offline" ? "offline" : "online";
 
     const meetingLink = normalizeTimeString(
-      (source as any).meetingLink ?? (source as any).onlineLink ?? (source as any).link
+      (source as any).meetingLink ??
+        (source as any).onlineLink ??
+        (source as any).link,
     );
     const locationName = normalizeTimeString(
-      (source as any).locationName ?? (source as any).location
+      (source as any).locationName ?? (source as any).location,
     );
     const locationAddress = normalizeTimeString(
-      (source as any).locationAddress ?? (source as any).address
+      (source as any).locationAddress ?? (source as any).address,
     );
 
     if (mode === "online" && !meetingLink) {
       throw new ApiError(
         400,
-        `classSchedule row ${rowNumber} requires meetingLink for online mode`
+        `classSchedule row ${rowNumber} requires meetingLink for online mode`,
       );
     }
 
     if (mode === "offline" && !locationName && !locationAddress) {
       throw new ApiError(
         400,
-        `classSchedule row ${rowNumber} requires locationName or locationAddress for offline mode`
+        `classSchedule row ${rowNumber} requires locationName or locationAddress for offline mode`,
       );
     }
 
     const maxStudents = normalizeNumericValue(
       (source as any).maxStudents ??
         (source as any).capacity ??
-        (source as any).maxSeats
+        (source as any).maxSeats,
     );
     if (maxStudents !== undefined && maxStudents < 1) {
       throw new ApiError(
         400,
-        `classSchedule row ${rowNumber} maxStudents must be at least 1`
+        `classSchedule row ${rowNumber} maxStudents must be at least 1`,
       );
     }
 
@@ -295,8 +304,8 @@ const getFirstClassStartDate = (courseData: any): Date | undefined => {
   if (scheduleStarts.length > 0) {
     return new Date(
       Math.min(
-        ...scheduleStarts.map((sessionStart: Date) => sessionStart.getTime())
-      )
+        ...scheduleStarts.map((sessionStart: Date) => sessionStart.getTime()),
+      ),
     );
   }
 
@@ -309,7 +318,7 @@ const getEnrollmentLockDate = (courseData: any): Date | undefined => {
   const firstClassStart = getFirstClassStartDate(courseData);
   if (!firstClassStart) return undefined;
   return new Date(
-    firstClassStart.getTime() - ENROLLMENT_LOCK_HOURS * 60 * 60 * 1000
+    firstClassStart.getTime() - ENROLLMENT_LOCK_HOURS * 60 * 60 * 1000,
   );
 };
 
@@ -368,14 +377,17 @@ const normalizeCoursePayload = (payload: Record<string, any>) => {
   const normalizedAmount = normalizeNumericValue(normalizedPayload.amount);
   const normalizedType = normalizeCourseType(normalizedPayload.type);
   const normalizedDiscountedAmount = normalizeNumericValue(
-    normalizedPayload.discountedAmount
+    normalizedPayload.discountedAmount,
   );
   const rawScheduleInput =
     normalizedPayload.classSchedule ??
     normalizedPayload.classSessions ??
     normalizedPayload.schedule;
   const hasScheduleInput = rawScheduleInput !== undefined;
-  const normalizedSchedule = normalizeClassSchedule(rawScheduleInput, normalizedType);
+  const normalizedSchedule = normalizeClassSchedule(
+    rawScheduleInput,
+    normalizedType,
+  );
 
   normalizedPayload.isFree = normalizeBooleanValue(normalizedPayload.isFree);
   normalizedPayload.type = normalizedType;
@@ -383,7 +395,8 @@ const normalizeCoursePayload = (payload: Record<string, any>) => {
   if (normalizedTags) normalizedPayload.tags = normalizedTags;
   if (normalizedExtras) normalizedPayload.extras = normalizedExtras;
 
-  if (normalizedAmount !== undefined) normalizedPayload.amount = normalizedAmount;
+  if (normalizedAmount !== undefined)
+    normalizedPayload.amount = normalizedAmount;
   if (normalizedDiscountedAmount !== undefined) {
     normalizedPayload.discountedAmount = normalizedDiscountedAmount;
   } else if (normalizedAmount !== undefined) {
@@ -396,16 +409,19 @@ const normalizeCoursePayload = (payload: Record<string, any>) => {
   delete normalizedPayload.classSessions;
   delete normalizedPayload.schedule;
 
-  if (Array.isArray(normalizedPayload.classSchedule) && normalizedPayload.classSchedule.length) {
+  if (
+    Array.isArray(normalizedPayload.classSchedule) &&
+    normalizedPayload.classSchedule.length
+  ) {
     const scheduleDates = normalizedPayload.classSchedule
       .map((session: any) => normalizeDateValue(session?.date))
       .filter((date: Date | undefined): date is Date => Boolean(date));
     if (scheduleDates.length > 0) {
       const start = new Date(
-        Math.min(...scheduleDates.map((date) => date.getTime()))
+        Math.min(...scheduleDates.map((date) => date.getTime())),
       );
       const end = new Date(
-        Math.max(...scheduleDates.map((date) => date.getTime()))
+        Math.max(...scheduleDates.map((date) => date.getTime())),
       );
       normalizedPayload.startDate = start;
       normalizedPayload.endDate = end;
@@ -520,12 +536,14 @@ export class CourseController {
   static async createCourseBulk(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const incomingRows = normalizePayloadToArray(req.body);
       if (!incomingRows.length) {
-        return res.status(400).json(new ApiError(400, "Bulk payload cannot be empty"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Bulk payload cannot be empty"));
       }
 
       const payloadForInsert: Record<string, any>[] = [];
@@ -534,7 +552,9 @@ export class CourseController {
         const normalizedRow = normalizeCoursePayload(incomingRows[index]);
         const name = String(normalizedRow?.name ?? "").trim();
         const amount = normalizeNumericValue(normalizedRow?.amount);
-        const discountedAmount = normalizeNumericValue(normalizedRow?.discountedAmount);
+        const discountedAmount = normalizeNumericValue(
+          normalizedRow?.discountedAmount,
+        );
 
         if (!name) {
           return res
@@ -549,13 +569,23 @@ export class CourseController {
         if (amount < 0) {
           return res
             .status(400)
-            .json(new ApiError(400, `Row ${rowNumber}: "amount" must be 0 or greater`));
+            .json(
+              new ApiError(
+                400,
+                `Row ${rowNumber}: "amount" must be 0 or greater`,
+              ),
+            );
         }
 
         if (discountedAmount !== undefined && discountedAmount < 0) {
-          return res.status(400).json(
-            new ApiError(400, `Row ${rowNumber}: "discountedAmount" must be 0 or greater`)
-          );
+          return res
+            .status(400)
+            .json(
+              new ApiError(
+                400,
+                `Row ${rowNumber}: "discountedAmount" must be 0 or greater`,
+              ),
+            );
         }
 
         payloadForInsert.push({
@@ -567,9 +597,15 @@ export class CourseController {
       }
 
       const result = await Course.insertMany(payloadForInsert);
-      return res.status(201).json(
-        new ApiResponse(201, result, `${result.length} course(s) created successfully`)
-      );
+      return res
+        .status(201)
+        .json(
+          new ApiResponse(
+            201,
+            result,
+            `${result.length} course(s) created successfully`,
+          ),
+        );
     } catch (err) {
       next(err);
     }
@@ -580,8 +616,6 @@ export class CourseController {
       const userId = (req as any).user?.id || null;
       const benefits = await getCourseAccessBenefits(userId);
       const categoryWise = String(req.query.categoryWise) === "true";
-      console.log(req.query.categoryWise);
-      console.log("categoryWise:", categoryWise);
 
       // Fetch user's worker category if authenticated
       let userWorkerCategoryId = null;
@@ -645,7 +679,9 @@ export class CourseController {
 
           // Calculate discount for paid courses
           if (!course.isFree && benefits.trainingFeeDiscount > 0) {
-            discountAmount = Math.round((course.amount * benefits.trainingFeeDiscount) / 100);
+            discountAmount = Math.round(
+              (course.amount * benefits.trainingFeeDiscount) / 100,
+            );
             yourPrice = course.amount - discountAmount;
           }
 
@@ -667,7 +703,9 @@ export class CourseController {
 
           // Calculate discount for paid courses
           if (!course.isFree && benefits.trainingFeeDiscount > 0) {
-            discountAmount = Math.round((course.amount * benefits.trainingFeeDiscount) / 100);
+            discountAmount = Math.round(
+              (course.amount * benefits.trainingFeeDiscount) / 100,
+            );
             yourPrice = course.amount - discountAmount;
           }
 
@@ -710,7 +748,9 @@ export class CourseController {
       let discountAmount = 0;
 
       if (!result.isFree && benefits.trainingFeeDiscount > 0) {
-        discountAmount = Math.round((result.amount * benefits.trainingFeeDiscount) / 100);
+        discountAmount = Math.round(
+          (result.amount * benefits.trainingFeeDiscount) / 100,
+        );
         yourPrice = result.amount - discountAmount;
       }
 
@@ -736,7 +776,7 @@ export class CourseController {
   static async updateCourseById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const extractImageUrl = async (input: any, existing: string) => {
@@ -765,22 +805,24 @@ export class CourseController {
         hasSchedulingFields(bodyPayload) &&
         Date.now() >= scheduleLockedAt.getTime()
       ) {
-        return res.status(400).json(
-          new ApiError(
-            400,
-            `Course schedule is locked. Scheduling changes are allowed only until ${ENROLLMENT_LOCK_HOURS} hours before first class start.`
-          )
-        );
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              `Course schedule is locked. Scheduling changes are allowed only until ${ENROLLMENT_LOCK_HOURS} hours before first class start.`,
+            ),
+          );
       }
 
       const normalizedData = normalizeCoursePayload(bodyPayload);
       normalizedData.imageUrl = await extractImageUrl(
         req.body.imageUrl,
-        existingCourse?.imageUrl
+        existingCourse?.imageUrl,
       );
       const result = await courseService.updateById(
         req.params.id,
-        normalizedData
+        normalizedData,
       );
       if (!result)
         return res
@@ -797,7 +839,7 @@ export class CourseController {
   static async deleteCourseById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await courseService.deleteById(req.params.id);
@@ -816,19 +858,21 @@ export class CourseController {
   static async getTrainingBenefits(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const userId = (req as any).user?.id || null;
       const benefits = await getCourseAccessBenefits(userId);
 
-      return res.status(200).json(
-        new ApiResponse(
-          200,
-          benefits,
-          "Training and Certification benefits fetched successfully"
-        )
-      );
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            benefits,
+            "Training and Certification benefits fetched successfully",
+          ),
+        );
     } catch (err) {
       next(err);
     }

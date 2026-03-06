@@ -17,6 +17,9 @@ export interface IAdmin extends Document {
   username: string;
   password: string;
   employeeCode: string;
+  phoneNumber?: string;
+  callsTaken: number;
+  lastCallAt?: Date;
   role: Schema.Types.ObjectId;
   comparePassword(password: string): Promise<boolean>;
 }
@@ -28,6 +31,9 @@ const adminSchema = new Schema<IAdmin>(
     password: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true },
+    phoneNumber: { type: String },
+    callsTaken: { type: Number, default: 0 },
+    lastCallAt: { type: Date },
     role: {
       ref: "Role",
       required: true,

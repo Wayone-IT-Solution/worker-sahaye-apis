@@ -33,6 +33,7 @@ import { VirtualHrRecruiter } from "../../modals/virtualhrecruiter.model";
 import { UnifiedServiceRequest } from "../../modals/unifiedrequest.model";
 import { Promotion } from "../../modals/promotion.model";
 import { Endorsement } from "../../modals/endorsement.model";
+import Role from "../../modals/role.model";
 
 const secret = config.jwt.secret;
 const adminService = new CommonService(Admin);
@@ -238,7 +239,21 @@ export class AdminController {
     next: NextFunction,
   ): Promise<any> {
     try {
-      const pipeline = [
+      const query = { ...req.query };
+      const roleFilter = query.role as string;
+
+      // If a role name filter is provided, resolve it to an ID
+      if (roleFilter && !mongoose.Types.ObjectId.isValid(roleFilter)) {
+        const role = await Role.findOne({ name: roleFilter.toLowerCase() });
+        if (role) {
+          query.role = role._id.toString();
+        } else {
+          // If role not found, ensure no results are returned by using a non-existent ID
+          query.role = new mongoose.Types.ObjectId().toString();
+        }
+      }
+
+      const pipeline: any[] = [
         {
           $lookup: {
             from: "roles",
@@ -266,7 +281,7 @@ export class AdminController {
         },
       ];
 
-      const result = await adminService.getAll(req.query, pipeline);
+      const result = await adminService.getAll(query, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -510,13 +525,13 @@ export class AdminController {
 
       const averageReceivedEndorsementRating = receivedEndorsements.length
         ? Number(
-            (
-              receivedEndorsements.reduce(
-                (sum: number, item: any) => sum + Number(item?.overallPerformance || 0),
-                0,
-              ) / receivedEndorsements.length
-            ).toFixed(2),
-          )
+          (
+            receivedEndorsements.reduce(
+              (sum: number, item: any) => sum + Number(item?.overallPerformance || 0),
+              0,
+            ) / receivedEndorsements.length
+          ).toFixed(2),
+        )
         : 0;
 
       const enrollmentRevenue = enrollments.reduce(
@@ -539,13 +554,13 @@ export class AdminController {
         },
         subscription: activePlanEnrollment
           ? {
-              enrollmentId: activePlanEnrollment._id,
-              enrolledAt: activePlanEnrollment.enrolledAt,
-              expiredAt: activePlanEnrollment.expiredAt,
-              status: activePlanEnrollment.status,
-              paymentDetails: activePlanEnrollment.paymentDetails,
-              plan: activePlanEnrollment.plan,
-            }
+            enrollmentId: activePlanEnrollment._id,
+            enrolledAt: activePlanEnrollment.enrolledAt,
+            expiredAt: activePlanEnrollment.expiredAt,
+            status: activePlanEnrollment.status,
+            paymentDetails: activePlanEnrollment.paymentDetails,
+            plan: activePlanEnrollment.plan,
+          }
           : null,
         transactions: {
           enrollments,
@@ -742,8 +757,8 @@ export class AdminController {
         const applications =
           user.userType === "contractor"
             ? applicationsRaw.filter(
-                (a: any) => (a as any)?.applicant?.userType === "worker",
-              )
+              (a: any) => (a as any)?.applicant?.userType === "worker",
+            )
             : applicationsRaw;
 
         const applicationsByStatus = applications.reduce((acc: any, app: any) => {

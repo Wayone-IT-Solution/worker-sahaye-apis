@@ -47,6 +47,7 @@ import serviceLocationRoutes from "../admin/servicelocation/servicelocation.rout
 import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
 import minimumWagesRoutes from "../admin/minimumwages/minimumwages.routes";
 import innerCircleBadgeRoutes from "../admin/innercirclebadge/innercirclebadge.routes";
+import acefoneRoutes from "../admin/acefone/acefone.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -145,6 +146,7 @@ router.use("/supportservice", supportServiceRoutes);
 router.use("/servicelocation", serviceLocationRoutes);
 router.use("/subscriptionplan", subscriptionPlanRoutes);
 router.use("/projectbasedhiring", projectBasedHiringRoutes);
+router.use("/acefone", acefoneRoutes);
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);

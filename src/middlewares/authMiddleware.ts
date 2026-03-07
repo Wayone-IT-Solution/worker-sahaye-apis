@@ -239,7 +239,7 @@ const getModelByRole = (role: Role) => {
     case "contractor":
       return User;
     default:
-      return null;
+      return Admin;
   }
 };
 
@@ -247,7 +247,7 @@ const isAccountActive = (role: Role, account: any): boolean => {
   if (!account) return false;
   if (role === "admin") return account.status !== false;
   if (role === "agent") return account.status !== false;
-  return account.status === UserStatus.ACTIVE;
+  return account.status === UserStatus.ACTIVE || account.status === true;
 };
 
 // Utility: Capitalize the first letter

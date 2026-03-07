@@ -30,6 +30,7 @@ import quotationRoutes from "../admin/quotation/quotation.routes";
 import natureRoutes from "../admin/natureofwork/natureofwork.routes";
 import bulkhiringRoutes from "../admin/bulkhiring/bulkhiring.routes";
 import jobCategoryRoutes from "../admin/jobcategory/jobcategory.routes";
+import designationRoutes from "../admin/designation/designation.routes";
 import salespersonRoutes from "../admin/salesperson/salesperson.routes";
 import contentRoutes from "../admin/brandingcontent/brandingcontent.routes";
 import workerCategoryRoutes from "../admin/workercategory/workercategory.routes";
@@ -100,7 +101,7 @@ import loanSupportRoutes from "../public/loansupport/loansupport.routes";
 import notificationRoutes from "../public/notification/notification.routes";
 import paymentRoutes from "../public/payment/payment.routes";
 import subscriptionRoutes from "../public/subscription/subscription.routes";
-import promotionRoutes from "../public/promotion/promotion.routes"
+import promotionRoutes from "../public/promotion/promotion.routes";
 // Create main router
 const router = Router();
 
@@ -137,6 +138,7 @@ router.use("/faqcategory", faqCategoryRoutes);
 router.use("/subindustry", subIndustryRoutes);
 router.use("/planfeature", planfeatureRoutes);
 router.use("/jobcategory", jobCategoryRoutes);
+router.use("/designation", designationRoutes);
 router.use("/branding-content", contentRoutes);
 router.use("/badge-bundles", badgeBundleRoutes);
 router.use("/callsupport", callSupportAgentRoutes);

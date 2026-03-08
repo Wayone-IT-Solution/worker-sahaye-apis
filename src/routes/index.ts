@@ -48,6 +48,10 @@ import serviceLocationRoutes from "../admin/servicelocation/servicelocation.rout
 import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
 import minimumWagesRoutes from "../admin/minimumwages/minimumwages.routes";
 import innerCircleBadgeRoutes from "../admin/innercirclebadge/innercirclebadge.routes";
+import departmentRoutes from "../admin/department/department.routes";
+import skillsRoutes from "../admin/skills/skills.routes";
+import educationRoutes from "../admin/education/education.routes";
+import functionRoutes from "../admin/function/function.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -102,6 +106,7 @@ import notificationRoutes from "../public/notification/notification.routes";
 import paymentRoutes from "../public/payment/payment.routes";
 import subscriptionRoutes from "../public/subscription/subscription.routes";
 import promotionRoutes from "../public/promotion/promotion.routes";
+
 // Create main router
 const router = Router();
 
@@ -136,6 +141,10 @@ router.use("/bulkhiring", bulkhiringRoutes);
 router.use("/salesperson", salespersonRoutes);
 router.use("/faqcategory", faqCategoryRoutes);
 router.use("/subindustry", subIndustryRoutes);
+router.use("/department", departmentRoutes);
+router.use("/skills", skillsRoutes);
+router.use("/education", educationRoutes);
+router.use("/function", functionRoutes);
 router.use("/planfeature", planfeatureRoutes);
 router.use("/jobcategory", jobCategoryRoutes);
 router.use("/designation", designationRoutes);

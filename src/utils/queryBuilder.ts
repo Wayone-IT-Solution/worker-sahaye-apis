@@ -13,7 +13,7 @@ export const buildMatchStage = (
     categoryId?: string;
     headerId?: string;
   },
-  searchFields?: Record<string, string[]>
+  searchFields?: Record<string, string[]>,
 ): any => {
   const matchStage: any = {};
 
@@ -70,7 +70,7 @@ export const buildMatchStage = (
 export const buildSortObject = (
   sortKey?: string,
   sortDir?: string | number,
-  defaultSort: Record<string, 1 | -1> = { createdAt: -1 }
+  defaultSort: Record<string, 1 | -1> = { createdAt: -1 },
 ): Record<string, 1 | -1> => {
   if (sortKey && sortDir) {
     return {
@@ -83,7 +83,12 @@ export const buildSortObject = (
 /**
  * Build pagination response
  */
-export const buildPaginationResponse = (data: any[], total: number, page: number, limit: number) => {
+export const buildPaginationResponse = (
+  data: any[],
+  total: number,
+  page: number,
+  limit: number,
+) => {
   const totalPages = Math.ceil(total / limit);
   return {
     result: data,
@@ -103,6 +108,12 @@ export const SEARCH_FIELD_MAP = {
   servicelocation: {
     location: ["location"],
     status: ["status"],
+  },
+  designation: {
+    name: ["name"],
+    description: ["description"],
+    status: ["status"],
+    workerCategory: ["workerCategoryId.type"],
   },
   subindustry: {
     name: ["name"],

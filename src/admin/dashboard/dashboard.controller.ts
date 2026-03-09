@@ -40,6 +40,8 @@ import {
 import { VirtualHrRecruiter } from "../../modals/virtualhrecruiter.model";
 import { Job } from "../../modals/job.model";
 import { Subscription } from "../../modals/subscription.model";
+import { CommunityMember } from "../../modals/communitymember.model";
+import { ForumPost } from "../../modals/forumpost.model";
 
 export class DashboardController {
   static async getJobPostedGrowth(
@@ -54,7 +56,10 @@ export class DashboardController {
       const startDate = start ? new Date(start as string) : subDays(endDate, 7);
 
       const prevEndDate = subDays(startDate, 1);
-      const prevStartDate = subDays(startDate, 7);
+      const diffDays = Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const prevStartDate = subDays(startDate, diffDays + 1);
 
       const currentRange = {
         $gte: startOfDay(startDate),
@@ -115,10 +120,10 @@ export class DashboardController {
               ? 100
               : 0
             : parseFloat(
-                (((totalCurrent - totalPrevious) / totalPrevious) * 100).toFixed(
-                  2,
-                ),
-              );
+              (((totalCurrent - totalPrevious) / totalPrevious) * 100).toFixed(
+                2,
+              ),
+            );
 
         return { totalCurrent, totalPrevious, percentageChange, chartData };
       };
@@ -143,12 +148,12 @@ export class DashboardController {
             ? 100
             : 0
           : parseFloat(
-              (
-                ((combined.totalCurrent - combined.totalPrevious) /
-                  combined.totalPrevious) *
-                100
-              ).toFixed(2),
-            );
+            (
+              ((combined.totalCurrent - combined.totalPrevious) /
+                combined.totalPrevious) *
+              100
+            ).toFixed(2),
+          );
 
       return res.status(200).json(
         new ApiResponse(
@@ -174,365 +179,219 @@ export class DashboardController {
     next: NextFunction,
   ) {
     try {
-      const { startDate, endDate, year } = req.query;
+      const { startDate: start, endDate: end, year } = req.query;
 
-      const yearParam = parseInt(year as string) || new Date().getFullYear();
-      const currentYear = yearParam;
-      const previousYear = currentYear - 1;
+      const endDate = end ? new Date(end as string) : new Date();
+      const startDate = start ? new Date(start as string) : subDays(endDate, 7);
 
-      const getMonthlyRevenue = async (
-        model: any,
-        yr: number,
-      ): Promise<number[]> => {
-        const pipeline = [
-          {
-            $match: {
-              createdAt: {
-                $gte: new Date(`${yr}-01-01T00:00:00.000Z`),
-                $lte: new Date(`${yr}-12-31T23:59:59.999Z`),
-              },
-              "paymentDetails.status": "success",
-            },
-          },
-          {
-            $group: {
-              _id: { month: { $month: "$createdAt" } },
-              total: { $sum: "$finalAmount" },
-            },
-          },
-          { $sort: { "_id.month": 1 } },
-        ];
+      const prevEndDate = subDays(startDate, 1);
+      const diffDays = Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const prevStartDate = subDays(startDate, diffDays + 1);
 
-        const result = await model.aggregate(pipeline);
-        const monthlyTotals = Array(12).fill(0);
-        for (const item of result) {
-          const monthIndex = item._id.month - 1;
-          monthlyTotals[monthIndex] = item.total;
+      const currentRange = {
+        $gte: startOfDay(startDate),
+        $lte: endOfDay(endDate),
+      };
+
+      const prevRange = {
+        $gte: startOfDay(prevStartDate),
+        $lte: endOfDay(prevEndDate),
+      };
+
+      const buildDateList = (startDt: Date, endDtParam: Date) => {
+        const days: string[] = [];
+        const cur = new Date(startDt);
+        while (cur <= endDtParam) {
+          days.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
         }
-
-        return monthlyTotals;
+        return days;
       };
 
-      const [
-        enrollmentCurrent,
-        enrolledPlanCurrent,
-        enrollmentPrevious,
-        enrolledPlanPrevious,
-      ] = await Promise.all([
-        getMonthlyRevenue(Enrollment, currentYear),
-        getMonthlyRevenue(EnrolledPlan, currentYear),
-        getMonthlyRevenue(Enrollment, previousYear),
-        getMonthlyRevenue(EnrolledPlan, previousYear),
-      ]);
+      const dateList = buildDateList(startOfDay(startDate), endOfDay(endDate));
 
-      const totalEnrollmentCurrent = enrollmentCurrent.reduce(
-        (a, b) => a + b,
-        0,
-      );
-      const totalEnrollmentPrevious = enrollmentPrevious.reduce(
-        (a, b) => a + b,
-        0,
-      );
-      const totalEnrolledPlanCurrent = enrolledPlanCurrent.reduce(
-        (a, b) => a + b,
-        0,
-      );
-      const totalEnrolledPlanPrevious = enrolledPlanPrevious.reduce(
-        (a, b) => a + b,
-        0,
-      );
-
-      const totalCurrent = totalEnrollmentCurrent + totalEnrolledPlanCurrent;
-      const totalPrevious = totalEnrollmentPrevious + totalEnrolledPlanPrevious;
-
-      const getPercentageChange = (curr: number, prev: number) => {
-        if (prev === 0 && curr > 0) return 100;
-        if (prev === 0 && curr === 0) return 0;
-        if (prev === 0 && curr < 0) return -100;
-        return +(((curr - prev) / prev) * 100).toFixed(2);
-      };
-
-      const percentageChange = getPercentageChange(totalCurrent, totalPrevious);
-      const enrollmentPercentageChange = getPercentageChange(
-        totalEnrollmentCurrent,
-        totalEnrollmentPrevious,
-      );
-      const enrolledPlanPercentageChange = getPercentageChange(
-        totalEnrolledPlanCurrent,
-        totalEnrolledPlanPrevious,
-      );
-
-      // If startDate and endDate are provided, also fetch daily revenue by role
-      let dailyData = null;
-      if (
-        startDate &&
-        endDate &&
-        isValid(new Date(startDate as string)) &&
-        isValid(new Date(endDate as string))
-      ) {
-        const start = startOfDay(parseISO(startDate as string));
-        const endDt = endOfDay(parseISO(endDate as string));
-
-        const buildDateList = (startDt: Date, endDtParam: Date) => {
-          const days: string[] = [];
-          const cur = new Date(startDt);
-          while (cur <= endDtParam) {
-            days.push(cur.toISOString().slice(0, 10));
-            cur.setDate(cur.getDate() + 1);
-          }
-          return days;
-        };
-
-        const dateList = buildDateList(start, endDt);
-
-        const aggregateTotalsAndSeries = async (
-          model: any,
-          dateField: string,
-          amountField: string,
-          match: any = {},
-          treatPersonalAsWorker = false,
-        ) => {
-          const totalPipeline: any[] = [
-            { $match: { [dateField]: { $gte: start, $lte: endDt }, ...match } },
+      // 1. Revenue Stats
+      const getRevenueSeries = async (range: any, populateSeries: boolean) => {
+        const [enrollment, enrolledPlan, booking, badge] = await Promise.all([
+          Enrollment.aggregate([
             {
-              $lookup: {
-                from: "users",
-                localField: "user",
-                foreignField: "_id",
-                as: "userDoc",
+              $match: {
+                createdAt: range,
+                "paymentDetails.status": "success",
               },
             },
-            { $unwind: { path: "$userDoc", preserveNullAndEmptyArrays: true } },
             {
               $group: {
-                _id: "$userDoc.userType",
-                total: { $sum: `$${amountField}` },
+                _id: {
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                },
+                total: { $sum: "$finalAmount" },
               },
             },
-          ];
-
-          const totalRes = await model.aggregate(totalPipeline);
-          const totalsMap: Record<string, number> = {
-            worker: 0,
-            employer: 0,
-            contractor: 0,
-          };
-          totalRes.forEach((r: any) => {
-            if (r._id && totalsMap[r._id] !== undefined)
-              totalsMap[r._id] = r.total;
-          });
-
-          let dateGroupPipeline: any[];
-          if (treatPersonalAsWorker) {
-            dateGroupPipeline = [
-              {
-                $match: { [dateField]: { $gte: start, $lte: endDt }, ...match },
+          ]),
+          EnrolledPlan.aggregate([
+            {
+              $match: {
+                createdAt: range,
+                "paymentDetails.status": "success",
               },
-              {
-                $group: {
-                  _id: {
-                    date: {
-                      $dateToString: {
-                        format: "%Y-%m-%d",
-                        date: `$${dateField}`,
-                      },
-                    },
-                  },
-                  total: { $sum: `$${amountField}` },
+            },
+            {
+              $group: {
+                _id: {
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
                 },
+                total: { $sum: "$finalAmount" },
               },
-            ];
-            const raw = await model.aggregate(dateGroupPipeline);
-            const seriesMap: Record<string, Record<string, number>> = {};
-            dateList.forEach(
-              (d) => (seriesMap[d] = { worker: 0, employer: 0, contractor: 0 }),
-            );
-            raw.forEach((r: any) => {
-              const d = r._id.date;
-              if (!seriesMap[d])
-                seriesMap[d] = { worker: 0, employer: 0, contractor: 0 };
-              seriesMap[d]["worker"] += r.total;
-            });
-            return { totalsMap, seriesMap };
-          } else {
-            dateGroupPipeline = [
-              {
-                $match: { [dateField]: { $gte: start, $lte: endDt }, ...match },
+            },
+          ]),
+          Booking.aggregate([
+            {
+              $match: {
+                createdAt: range,
+                paymentStatus: "success",
               },
-              {
-                $lookup: {
-                  from: "users",
-                  localField: "user",
-                  foreignField: "_id",
-                  as: "userDoc",
+            },
+            {
+              $group: {
+                _id: {
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
                 },
+                total: { $sum: "$totalAmount" },
               },
-              {
-                $unwind: { path: "$userDoc", preserveNullAndEmptyArrays: true },
+            },
+          ]),
+          Subscription.aggregate([
+            {
+              $match: {
+                createdAt: range,
+                status: "active",
               },
-              {
-                $group: {
-                  _id: {
-                    date: {
-                      $dateToString: {
-                        format: "%Y-%m-%d",
-                        date: `$${dateField}`,
-                      },
-                    },
-                    userType: "$userDoc.userType",
-                  },
-                  total: { $sum: `$${amountField}` },
+            },
+            {
+              $group: {
+                _id: {
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
                 },
+                total: { $sum: "$amount" },
               },
-            ];
-            const raw = await model.aggregate(dateGroupPipeline);
-            const seriesMap: Record<string, Record<string, number>> = {};
-            dateList.forEach(
-              (d) => (seriesMap[d] = { worker: 0, employer: 0, contractor: 0 }),
-            );
-            raw.forEach((r: any) => {
-              const d = r._id.date;
-              const role = r._id.userType || "unknown";
-              if (!seriesMap[d])
-                seriesMap[d] = { worker: 0, employer: 0, contractor: 0 };
-              if (seriesMap[d][role] !== undefined)
-                seriesMap[d][role] += r.total;
-            });
-            return { totalsMap, seriesMap };
-          }
-        };
-
-        const [enrollmentAgg, enrolledPlanAgg, bookingAgg] = await Promise.all([
-          aggregateTotalsAndSeries(
-            Enrollment,
-            "createdAt",
-            "finalAmount",
-            { "paymentDetails.status": "success" },
-            false,
-          ),
-          aggregateTotalsAndSeries(
-            EnrolledPlan,
-            "createdAt",
-            "finalAmount",
-            { "paymentDetails.status": "success" },
-            false,
-          ),
-          aggregateTotalsAndSeries(
-            Booking,
-            "createdAt",
-            "totalAmount",
-            { paymentStatus: "success" },
-            true,
-          ),
+            },
+          ]),
         ]);
 
-        const byRoleTotals: Record<string, any> = {
-          worker: {
-            enrollment: 0,
-            enrolledPlan: 0,
-            personalAssistance: 0,
-            total: 0,
-          },
-          employer: {
-            enrollment: 0,
-            enrolledPlan: 0,
-            personalAssistance: 0,
-            total: 0,
-          },
-          contractor: {
-            enrollment: 0,
-            enrolledPlan: 0,
-            personalAssistance: 0,
-            total: 0,
-          },
-        };
-        const totals = {
-          enrollment: 0,
-          enrolledPlan: 0,
-          personalAssistance: 0,
-          total: 0,
-        };
+        let total = 0;
+        const seriesMap: Record<string, number> = {};
+        if (populateSeries) {
+          dateList.forEach((d) => (seriesMap[d] = 0));
+        }
 
-        ["worker", "employer", "contractor"].forEach((role) => {
-          const e = enrollmentAgg.totalsMap[role] || 0;
-          const p = enrolledPlanAgg.totalsMap[role] || 0;
-          const pa = bookingAgg.totalsMap[role] || 0;
-          const t = e + p + pa;
-          byRoleTotals[role] = {
-            enrollment: e,
-            enrolledPlan: p,
-            personalAssistance: pa,
-            total: t,
-          };
-          totals.enrollment += e;
-          totals.enrolledPlan += p;
-          totals.personalAssistance += pa;
-          totals.total += t;
+        [enrollment, enrolledPlan, booking, badge].forEach((resArr) => {
+          resArr.forEach((item: any) => {
+            total += item.total;
+            if (populateSeries && seriesMap[item._id.date] !== undefined) {
+              seriesMap[item._id.date] += item.total;
+            }
+          });
         });
 
-        const timeSeries: any = {
-          dates: dateList,
-          roles: { worker: [], employer: [], contractor: [] },
+        return {
+          total,
+          series: populateSeries ? dateList.map((d) => seriesMap[d]) : [],
         };
-        dateList.forEach((d) => {
-          timeSeries.roles.worker.push(
-            (enrollmentAgg.seriesMap[d]?.worker || 0) +
-              (enrolledPlanAgg.seriesMap[d]?.worker || 0) +
-              (bookingAgg.seriesMap[d]?.worker || 0),
-          );
-          timeSeries.roles.employer.push(
-            (enrollmentAgg.seriesMap[d]?.employer || 0) +
-              (enrolledPlanAgg.seriesMap[d]?.employer || 0) +
-              (bookingAgg.seriesMap[d]?.employer || 0),
-          );
-          timeSeries.roles.contractor.push(
-            (enrollmentAgg.seriesMap[d]?.contractor || 0) +
-              (enrolledPlanAgg.seriesMap[d]?.contractor || 0) +
-              (bookingAgg.seriesMap[d]?.contractor || 0),
-          );
-        });
-
-        dailyData = {
-          byRole: byRoleTotals,
-          totals,
-          timeSeries,
-          dates: dateList,
-        };
-      }
-
-      const responseData: any = {
-        currentYear,
-        previousYear,
-        totalEnrollmentCurrent,
-        totalEnrollmentPrevious,
-        totalEnrolledPlanCurrent,
-        totalEnrolledPlanPrevious,
-        totalCurrent,
-        totalPrevious,
-        percentageChange,
-        enrollmentPercentageChange,
-        enrolledPlanPercentageChange,
-        monthlyData: {
-          [currentYear]: {
-            enrollment: enrollmentCurrent,
-            enrolledPlan: enrolledPlanCurrent,
-          },
-          [previousYear]: {
-            enrollment: enrollmentPrevious,
-            enrolledPlan: enrolledPlanPrevious,
-          },
-        },
       };
 
-      if (dailyData) {
-        responseData.dailyData = dailyData;
-      }
+      const [revenueCurrent, revenuePrev] = await Promise.all([
+        getRevenueSeries(currentRange, true),
+        getRevenueSeries(prevRange, false),
+      ]);
+
+      const revenuePercentageChange =
+        revenuePrev.total === 0
+          ? revenueCurrent.total > 0
+            ? 100
+            : 0
+          : parseFloat(
+            (
+              ((revenueCurrent.total - revenuePrev.total) / revenuePrev.total) *
+              100
+            ).toFixed(2),
+          );
+
+      const revenue = {
+        totalCurrent: revenueCurrent.total,
+        totalPrevious: revenuePrev.total,
+        percentageChange: revenuePercentageChange,
+        chartData: revenueCurrent.series,
+      };
+
+      // 2. Generic Stats Helper
+      const getCounts = async (Model: any, rangeSearch: any) => {
+        const [totalCurrent, totalPrevious, currentSeriesRaw] = await Promise.all([
+          Model.countDocuments({ createdAt: currentRange, ...rangeSearch }),
+          Model.countDocuments({ createdAt: prevRange, ...rangeSearch }),
+          Model.aggregate([
+            { $match: { createdAt: currentRange, ...rangeSearch } },
+            {
+              $group: {
+                _id: {
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                },
+                total: { $sum: 1 },
+              },
+            },
+          ]),
+        ]);
+
+        const seriesMap: Record<string, number> = {};
+        dateList.forEach((d) => (seriesMap[d] = 0));
+        currentSeriesRaw.forEach((item: any) => {
+          if (seriesMap[item._id.date] !== undefined) {
+            seriesMap[item._id.date] = item.total;
+          }
+        });
+
+        const percentageChange =
+          totalPrevious === 0
+            ? totalCurrent > 0
+              ? 100
+              : 0
+            : parseFloat(
+              (((totalCurrent - totalPrevious) / totalPrevious) * 100).toFixed(
+                2,
+              ),
+            );
+
+        return {
+          totalCurrent,
+          totalPrevious,
+          percentageChange,
+          chartData: dateList.map((d) => seriesMap[d]),
+        };
+      };
+
+      const [activeUsers, appliedJobs, communityJoins, posts, jobs] =
+        await Promise.all([
+          getCounts(User, { status: "active" }),
+          getCounts(JobApplication, {}),
+          getCounts(CommunityMember, { status: "joined" }),
+          getCounts(ForumPost, { status: "active" }),
+          getCounts(Job, {}),
+        ]);
+
+      const responseData = {
+        revenue,
+        activeUsers,
+        appliedJobs,
+        communityJoins,
+        posts,
+        jobs,
+      };
 
       return res
         .status(200)
-        .json(
-          new ApiResponse(200, responseData, "Yearly revenue data fetched"),
-        );
+        .json(new ApiResponse(200, responseData, "Dashboard stats fetched"));
     } catch (err) {
       next(err);
     }
@@ -788,7 +647,10 @@ export class DashboardController {
       const startDate = start ? new Date(start as string) : subDays(endDate, 7);
 
       const prevEndDate = subDays(startDate, 1);
-      const prevStartDate = subDays(startDate, 7);
+      const diffDays = Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const prevStartDate = subDays(startDate, diffDays + 1);
 
       const currentRange = {
         $gte: startOfDay(startDate),
@@ -877,7 +739,10 @@ export class DashboardController {
       const startDate = start ? new Date(start as string) : subDays(endDate, 7);
 
       const prevEndDate = subDays(startDate, 1);
-      const prevStartDate = subDays(startDate, 7);
+      const diffDays = Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const prevStartDate = subDays(startDate, diffDays + 1);
 
       const currentRange = {
         $gte: startOfDay(startDate),
@@ -960,7 +825,10 @@ export class DashboardController {
       const startDate = start ? new Date(start as string) : subDays(endDate, 7);
 
       const prevEndDate = subDays(startDate, 1);
-      const prevStartDate = subDays(startDate, 7);
+      const diffDays = Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const prevStartDate = subDays(startDate, diffDays + 1);
 
       const currentRange = {
         $gte: startOfDay(startDate),
@@ -1509,52 +1377,52 @@ export class DashboardController {
         statusMap?: Partial<Record<VirtualHRRequestStatus, string>>;
         dateFieldMap?: Partial<Record<VirtualHRRequestStatus, string>>;
       }> = [
-        {
-          key: "on_demand_hiring",
-          Model: JobRequirement,
-          usesVirtualHrFilter: true,
-        },
-        {
-          key: "bulk_hiring",
-          Model: BulkHiringRequest,
-          usesVirtualHrFilter: true,
-        },
-        {
-          key: "project_based_hiring",
-          Model: ProjectBasedHiring,
-          usesVirtualHrFilter: true,
-        },
-        {
-          key: "virtual_hr_request",
-          Model: VirtualHRRequest,
-          usesVirtualHrFilter: true,
-        },
-        {
-          key: "virtual_hr_recruiter",
-          Model: VirtualHrRecruiter,
-          usesVirtualHrFilter: true,
-        },
-        {
-          key: "promotional_services",
-          Model: Promotion,
-          usesVirtualHrFilter: false,
-          statusMap: {
-            [VirtualHRRequestStatus.PENDING]: "pending",
-            [VirtualHRRequestStatus.COMPLETED]: "approved",
-            [VirtualHRRequestStatus.CANCELLED]: "rejected",
+          {
+            key: "on_demand_hiring",
+            Model: JobRequirement,
+            usesVirtualHrFilter: true,
           },
-          dateFieldMap: {
-            [VirtualHRRequestStatus.PENDING]: "createdAt",
-            [VirtualHRRequestStatus.COMPLETED]: "updatedAt",
-            [VirtualHRRequestStatus.CANCELLED]: "updatedAt",
+          {
+            key: "bulk_hiring",
+            Model: BulkHiringRequest,
+            usesVirtualHrFilter: true,
           },
-        },
-        {
-          key: "exclusive_services",
-          Model: UnifiedServiceRequest,
-          usesVirtualHrFilter: true,
-        },
-      ];
+          {
+            key: "project_based_hiring",
+            Model: ProjectBasedHiring,
+            usesVirtualHrFilter: true,
+          },
+          {
+            key: "virtual_hr_request",
+            Model: VirtualHRRequest,
+            usesVirtualHrFilter: true,
+          },
+          {
+            key: "virtual_hr_recruiter",
+            Model: VirtualHrRecruiter,
+            usesVirtualHrFilter: true,
+          },
+          {
+            key: "promotional_services",
+            Model: Promotion,
+            usesVirtualHrFilter: false,
+            statusMap: {
+              [VirtualHRRequestStatus.PENDING]: "pending",
+              [VirtualHRRequestStatus.COMPLETED]: "approved",
+              [VirtualHRRequestStatus.CANCELLED]: "rejected",
+            },
+            dateFieldMap: {
+              [VirtualHRRequestStatus.PENDING]: "createdAt",
+              [VirtualHRRequestStatus.COMPLETED]: "updatedAt",
+              [VirtualHRRequestStatus.CANCELLED]: "updatedAt",
+            },
+          },
+          {
+            key: "exclusive_services",
+            Model: UnifiedServiceRequest,
+            usesVirtualHrFilter: true,
+          },
+        ];
 
       const results: Record<
         string,
@@ -1564,60 +1432,60 @@ export class DashboardController {
       await Promise.all(
         models.map(
           async ({ key, Model, usesVirtualHrFilter, statusMap, dateFieldMap }) => {
-          const statusCount: Record<VirtualHRRequestStatus, number> = {
-            [VirtualHRRequestStatus.PENDING]: 0,
-            [VirtualHRRequestStatus.ASSIGNED]: 0,
-            [VirtualHRRequestStatus.IN_PROGRESS]: 0,
-            [VirtualHRRequestStatus.COMPLETED]: 0,
-            [VirtualHRRequestStatus.CANCELLED]: 0,
-          };
-
-          const matchBase: Record<string, any> = {};
-          if (virtualHRId && usesVirtualHrFilter) {
-            matchBase.assignedTo = virtualHRId;
-          }
-
-          const statusDateFieldMap: Record<VirtualHRRequestStatus, string> = {
-            [VirtualHRRequestStatus.PENDING]: "createdAt",
-            [VirtualHRRequestStatus.ASSIGNED]: "assignedAt",
-            [VirtualHRRequestStatus.IN_PROGRESS]: "updatedAt",
-            [VirtualHRRequestStatus.COMPLETED]: "completedAt",
-            [VirtualHRRequestStatus.CANCELLED]: "updatedAt",
-          };
-
-          const countForStatus = async (status: VirtualHRRequestStatus) => {
-            const mappedStatus = statusMap?.[status] || status;
-            if (!mappedStatus) return 0;
-
-            const query: Record<string, any> = {
-              ...matchBase,
-              status: mappedStatus,
+            const statusCount: Record<VirtualHRRequestStatus, number> = {
+              [VirtualHRRequestStatus.PENDING]: 0,
+              [VirtualHRRequestStatus.ASSIGNED]: 0,
+              [VirtualHRRequestStatus.IN_PROGRESS]: 0,
+              [VirtualHRRequestStatus.COMPLETED]: 0,
+              [VirtualHRRequestStatus.CANCELLED]: 0,
             };
 
-            if (start && end) {
-              const dateField = dateFieldMap?.[status] || statusDateFieldMap[status];
-              query[dateField] = { $gte: start, $lte: end };
+            const matchBase: Record<string, any> = {};
+            if (virtualHRId && usesVirtualHrFilter) {
+              matchBase.assignedTo = virtualHRId;
             }
 
-            return Model.countDocuments(query);
-          };
+            const statusDateFieldMap: Record<VirtualHRRequestStatus, string> = {
+              [VirtualHRRequestStatus.PENDING]: "createdAt",
+              [VirtualHRRequestStatus.ASSIGNED]: "assignedAt",
+              [VirtualHRRequestStatus.IN_PROGRESS]: "updatedAt",
+              [VirtualHRRequestStatus.COMPLETED]: "completedAt",
+              [VirtualHRRequestStatus.CANCELLED]: "updatedAt",
+            };
 
-          const [pending, assigned, inProgress, completed, cancelled] =
-            await Promise.all([
-              countForStatus(VirtualHRRequestStatus.PENDING),
-              countForStatus(VirtualHRRequestStatus.ASSIGNED),
-              countForStatus(VirtualHRRequestStatus.IN_PROGRESS),
-              countForStatus(VirtualHRRequestStatus.COMPLETED),
-              countForStatus(VirtualHRRequestStatus.CANCELLED),
-            ]);
+            const countForStatus = async (status: VirtualHRRequestStatus) => {
+              const mappedStatus = statusMap?.[status] || status;
+              if (!mappedStatus) return 0;
 
-          statusCount[VirtualHRRequestStatus.PENDING] = pending;
-          statusCount[VirtualHRRequestStatus.ASSIGNED] = assigned;
-          statusCount[VirtualHRRequestStatus.IN_PROGRESS] = inProgress;
-          statusCount[VirtualHRRequestStatus.COMPLETED] = completed;
-          statusCount[VirtualHRRequestStatus.CANCELLED] = cancelled;
+              const query: Record<string, any> = {
+                ...matchBase,
+                status: mappedStatus,
+              };
 
-          results[key] = statusCount;
+              if (start && end) {
+                const dateField = dateFieldMap?.[status] || statusDateFieldMap[status];
+                query[dateField] = { $gte: start, $lte: end };
+              }
+
+              return Model.countDocuments(query);
+            };
+
+            const [pending, assigned, inProgress, completed, cancelled] =
+              await Promise.all([
+                countForStatus(VirtualHRRequestStatus.PENDING),
+                countForStatus(VirtualHRRequestStatus.ASSIGNED),
+                countForStatus(VirtualHRRequestStatus.IN_PROGRESS),
+                countForStatus(VirtualHRRequestStatus.COMPLETED),
+                countForStatus(VirtualHRRequestStatus.CANCELLED),
+              ]);
+
+            statusCount[VirtualHRRequestStatus.PENDING] = pending;
+            statusCount[VirtualHRRequestStatus.ASSIGNED] = assigned;
+            statusCount[VirtualHRRequestStatus.IN_PROGRESS] = inProgress;
+            statusCount[VirtualHRRequestStatus.COMPLETED] = completed;
+            statusCount[VirtualHRRequestStatus.CANCELLED] = cancelled;
+
+            results[key] = statusCount;
           },
         ),
       );
@@ -1780,25 +1648,25 @@ export class DashboardController {
           const found = result.find((r) => r._id === model);
           acc[model] = found
             ? {
-                totalAmount: found.totalAmount,
-                totalAdvancePaid: found.totalAdvancePaid,
-                totalPendingAdvance: found.totalAmount - found.totalAdvancePaid,
-                totalTaxAmount: found.totalTaxAmount || 0,
-                totalAmountWithTax: found.totalAmountWithTax || found.totalAmount || 0,
-                quotationCount: found.quotationCount,
-                advancePaidCount: found.advancePaidCount,
-                advanceUnpaidCount: found.advanceUnpaidCount,
-              }
+              totalAmount: found.totalAmount,
+              totalAdvancePaid: found.totalAdvancePaid,
+              totalPendingAdvance: found.totalAmount - found.totalAdvancePaid,
+              totalTaxAmount: found.totalTaxAmount || 0,
+              totalAmountWithTax: found.totalAmountWithTax || found.totalAmount || 0,
+              quotationCount: found.quotationCount,
+              advancePaidCount: found.advancePaidCount,
+              advanceUnpaidCount: found.advanceUnpaidCount,
+            }
             : {
-                totalAmount: 0,
-                totalAdvancePaid: 0,
-                totalPendingAdvance: 0,
-                totalTaxAmount: 0,
-                totalAmountWithTax: 0,
-                quotationCount: 0,
-                advancePaidCount: 0,
-                advanceUnpaidCount: 0,
-              };
+              totalAmount: 0,
+              totalAdvancePaid: 0,
+              totalPendingAdvance: 0,
+              totalTaxAmount: 0,
+              totalAmountWithTax: 0,
+              quotationCount: 0,
+              advancePaidCount: 0,
+              advanceUnpaidCount: 0,
+            };
           return acc;
         },
         {} as Record<string, any>,

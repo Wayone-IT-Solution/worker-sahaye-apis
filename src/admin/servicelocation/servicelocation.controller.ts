@@ -11,6 +11,36 @@ import {
 } from "../../utils/queryBuilder";
 
 const ServiceLocationService = new CommonService(ServiceLocation as any);
+let ensuredServiceLocationIndexes = false;
+
+const ensureServiceLocationIndexes = async () => {
+  if (ensuredServiceLocationIndexes) return;
+
+  try {
+    const indexes = await ServiceLocation.collection.indexes();
+    const legacyIndexNames = new Set([
+      "serviceId_1_location_1",
+      "serviceId_1_state_1_city_1",
+    ]);
+
+    for (const index of indexes) {
+      const indexName = index?.name;
+      if (!indexName) continue;
+
+      if (legacyIndexNames.has(indexName)) {
+        await ServiceLocation.collection.dropIndex(indexName);
+      }
+    }
+
+    ensuredServiceLocationIndexes = true;
+  } catch (error: any) {
+    // Namespace may not exist on fresh DB; ignore and continue.
+    if (error?.codeName !== "NamespaceNotFound") {
+      throw error;
+    }
+    ensuredServiceLocationIndexes = true;
+  }
+};
 
 export class ServiceLocationController {
   static async createServiceLocation(
@@ -20,6 +50,7 @@ export class ServiceLocationController {
   ) {
     try {
       const { serviceId, state, city, address, locationType } = req.body;
+      await ensureServiceLocationIndexes();
 
       // Validation
       if (!serviceId || !state || !city || !address || !locationType) {
@@ -29,27 +60,49 @@ export class ServiceLocationController {
         });
       }
 
-      // Check if location already exists for this service in the same state and city
+      const normalizedState = String(state).trim();
+      const normalizedCity = String(city).trim();
+      const normalizedAddress = String(address).trim();
+      const normalizedLocationType = String(locationType).trim();
+
+      // Only block exact duplicate row (same service + state + city + address + locationType)
       const existingLocation = await ServiceLocation.findOne({
         serviceId,
-        state,
-        city,
+        state: normalizedState,
+        city: normalizedCity,
+        address: normalizedAddress,
+        locationType: normalizedLocationType,
       });
 
       if (existingLocation) {
-        return res.status(400).json({
+        return res.status(409).json({
           success: false,
-          message: "This location already exists for this service in the selected state and city",
+          message:
+            "This exact service location already exists. Change city/address/locationType or update the existing record.",
         });
       }
 
-      const data = { ...req.body, createdBy: (req as any).user?.id };
+      const data = {
+        ...req.body,
+        state: normalizedState,
+        city: normalizedCity,
+        address: normalizedAddress,
+        locationType: normalizedLocationType,
+        createdBy: (req as any).user?.id,
+      };
       const result = await ServiceLocationService.create(data);
 
       return res.status(201).json(
         new ApiResponse(201, result, "Service location created successfully")
       );
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Duplicate service location detected by database index. Please verify unique fields and retry.",
+        });
+      }
       next(error);
     }
   }

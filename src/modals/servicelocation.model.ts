@@ -63,9 +63,6 @@ const ServiceLocationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound unique index for efficient filtering - serviceId + state + city must be unique together
-ServiceLocationSchema.index({ serviceId: 1, state: 1, city: 1 }, { unique: true });
-
 // Compound index for fetching all locations of a service
 ServiceLocationSchema.index({ serviceId: 1, status: 1, state: 1, city: 1 });
 

@@ -74,13 +74,32 @@ export class HeaderController {
   // Get all headers
   static async getAllHeaders(req: Request, res: Response, next: NextFunction) {
     try {
-      const pipeline: any[] = [
-        {
-          $sort: { order: 1 },
-        },
-      ];
+      const serviceType = req.query.serviceType as string;
+      const cleanQuery = { ...req.query };
+      delete cleanQuery.serviceType; // Remove serviceType from query to avoid incorrect filtering
 
-      const data = await HeaderService.getAll(req.query, pipeline);
+      let pipeline: any[] = [];
+
+      // If serviceType is provided, add match stage to filter by parent
+      if (serviceType) {
+        const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
+        if (!validServiceTypes.includes(serviceType)) {
+          return res.status(400).json({
+            success: false,
+            message: `Service type must be one of: ${validServiceTypes.join(", ")}`,
+          });
+        }
+        
+        pipeline.push({
+          $match: { parent: serviceType }
+        });
+      }
+
+      pipeline.push({
+        $sort: { order: 1 },
+      });
+
+      const data = await HeaderService.getAll(cleanQuery, pipeline);
       return res.status(200).json(
         new ApiResponse(
           200,

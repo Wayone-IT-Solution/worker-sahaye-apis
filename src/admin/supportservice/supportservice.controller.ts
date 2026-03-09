@@ -405,8 +405,8 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
 export const getServicesByType = async (req: Request, res: Response) => {
   try {
     const { serviceFor } = req.params;
-    // Try both .id and ._id for userId extraction
-    const userId = (req as any).user?.id || (req as any).user?._id || null;
+    // Extract userId from authenticated request
+    const userId = (req as any).user?.id || null;
 
     console.log("getServicesByType called:");
     console.log("Request user object:", (req as any).user);
@@ -588,7 +588,7 @@ export const updateSupportService = async (req: Request, res: Response) => {
     if (serviceFor !== undefined) updateData.serviceFor = serviceFor;
     if (status !== undefined) updateData.status = status;
     if (order !== undefined) updateData.order = order;
-    updateData.updatedBy = (req as any).user?._id;
+    updateData.updatedBy = (req as any).user?.id;
 
     console.log("Update Data to save:", updateData);
 

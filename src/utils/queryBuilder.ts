@@ -106,8 +106,11 @@ export const buildPaginationResponse = (
  */
 export const SEARCH_FIELD_MAP = {
   servicelocation: {
-    location: ["location"],
+    address: ["address"],
+    locationType: ["locationType"],
     status: ["status"],
+    state: ["state"],
+    city: ["city"],
   },
   designation: {
     name: ["name"],
@@ -144,5 +147,17 @@ export const SEARCH_FIELD_MAP = {
     email: ["email"],
     phone: ["phone"],
     employerName: ["employerName"],
+  },
+  educationfield: {
+    name: ["name"],
+    description: ["description"],
+    status: ["status"],
+  },
+  supportservice: {
+    title: ["title"],
+    subtitle: ["subtitle"],
+    description: ["description"],
+    status: ["status"],
+    serviceFor: ["serviceFor"],
   },
 };

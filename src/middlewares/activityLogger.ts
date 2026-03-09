@@ -24,7 +24,7 @@ export const activityLogger = async (
 
   res.send = function (body) {
     const log = new ActivityLog({
-      userId: (req as any).user?._id || null,
+      userId: (req as any).user?.id || null,
       role: (req as any).user?.role
         ? capitalize((req as any).user?.role)
         : null,

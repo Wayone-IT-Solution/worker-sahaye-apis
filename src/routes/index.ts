@@ -51,6 +51,7 @@ import innerCircleBadgeRoutes from "../admin/innercirclebadge/innercirclebadge.r
 import departmentRoutes from "../admin/department/department.routes";
 import skillsRoutes from "../admin/skills/skills.routes";
 import educationRoutes from "../admin/education/education.routes";
+import educationFieldRoutes from "../admin/educationfield/educationfield.routes";
 import functionRoutes from "../admin/function/function.routes";
 
 // PUBLIC FOLDER
@@ -144,6 +145,7 @@ router.use("/subindustry", subIndustryRoutes);
 router.use("/department", departmentRoutes);
 router.use("/skills", skillsRoutes);
 router.use("/education", educationRoutes);
+router.use("/educationfield", educationFieldRoutes);
 router.use("/function", functionRoutes);
 router.use("/planfeature", planfeatureRoutes);
 router.use("/jobcategory", jobCategoryRoutes);

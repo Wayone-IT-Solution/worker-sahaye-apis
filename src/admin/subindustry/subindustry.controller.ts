@@ -68,7 +68,7 @@ export class SubIndustryController {
         });
       }
 
-      const createdBy = (req as any).user?._id;
+      const createdBy = (req as any).user?.id;
       const normalizedPayload: Array<Record<string, unknown>> = [];
 
       for (let index = 0; index < items.length; index += 1) {
@@ -229,7 +229,7 @@ export class SubIndustryController {
     next: NextFunction
   ) {
     try {
-      const data = { ...req.body, updatedBy: (req as any).user?._id };
+      const data = { ...req.body, updatedBy: (req as any).user?.id };
       const result = await SubIndustryService.updateById(req.params.id, data);
 
       if (!result) {

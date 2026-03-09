@@ -8,11 +8,40 @@ const ServiceLocationSchema = new mongoose.Schema(
       required: [true, "Service ID is required"],
       index: true,
     },
-    location: {
+    state: {
       type: String,
-      required: [true, "Location is required"],
+      required: [true, "State is required"],
       trim: true,
-      maxlength: [150, "Location cannot be more than 150 characters"],
+      maxlength: [100, "State cannot be more than 100 characters"],
+      index: true,
+    },
+    city: {
+      type: String,
+      required: [true, "City is required"],
+      trim: true,
+      maxlength: [100, "City cannot be more than 100 characters"],
+      index: true,
+    },
+    address: {
+      type: String,
+      required: [true, "Address is required"],
+      trim: true,
+      maxlength: [500, "Address cannot be more than 500 characters"],
+    },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: [500, "Notes cannot be more than 500 characters"],
+    },
+    scheme: {
+      type: String,
+      default: "none",
+    },
+    locationType: {
+      type: String,
+      required: [true, "Location type is required"],
+      trim: true,
+      maxlength: [100, "Location type cannot be more than 100 characters"],
       index: true,
     },
     status: {
@@ -34,10 +63,10 @@ const ServiceLocationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound unique index for efficient filtering - serviceId + location must be unique together
-ServiceLocationSchema.index({ serviceId: 1, location: 1 }, { unique: true });
+// Compound unique index for efficient filtering - serviceId + state + city must be unique together
+ServiceLocationSchema.index({ serviceId: 1, state: 1, city: 1 }, { unique: true });
 
 // Compound index for fetching all locations of a service
-ServiceLocationSchema.index({ serviceId: 1, status: 1 });
+ServiceLocationSchema.index({ serviceId: 1, status: 1, state: 1, city: 1 });
 
 export default mongoose.model("ServiceLocation", ServiceLocationSchema);

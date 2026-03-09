@@ -33,27 +33,45 @@ export class PdfController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
       const headerId = req.query.headerId as string;
+      const serviceType = req.query.serviceType as string;
 
       const pipeline: any[] = [];
 
-      // Add filter by headerId if provided
+      // Lookup headers first
+      pipeline.push({
+        $lookup: {
+          from: "headers",
+          localField: "header",
+          foreignField: "_id",
+          as: "headerDetails",
+        },
+      });
+
+      // Add filter conditions
+      const matchStage: any = {};
       if (headerId && mongoose.Types.ObjectId.isValid(headerId)) {
+        matchStage.header = new mongoose.Types.ObjectId(headerId);
+      }
+
+      // Filter by service type if provided
+      if (serviceType) {
+        const validServiceTypes = ["ESIC", "EPFO", "LOAN", "LWF"];
+        if (!validServiceTypes.includes(serviceType)) {
+          return res.status(400).json({
+            success: false,
+            message: `Service type must be one of: ${validServiceTypes.join(", ")}`,
+          });
+        }
         pipeline.push({
-          $match: {
-            header: new mongoose.Types.ObjectId(headerId),
-          },
+          $match: { "headerDetails.parent": serviceType },
         });
       }
 
+      if (Object.keys(matchStage).length > 0) {
+        pipeline.push({ $match: matchStage });
+      }
+
       pipeline.push(
-        {
-          $lookup: {
-            from: "headers",
-            localField: "header",
-            foreignField: "_id",
-            as: "headerDetails",
-          },
-        },
         {
           $unwind: {
             path: "$headerDetails",
@@ -81,12 +99,28 @@ export class PdfController {
       const data = await Pdf.aggregate(pipeline);
       
       // Get total count with the same filter
-      let totalCount = await Pdf.countDocuments();
-      if (headerId && mongoose.Types.ObjectId.isValid(headerId)) {
-        totalCount = await Pdf.countDocuments({
-          header: new mongoose.Types.ObjectId(headerId),
+      const countPipeline: any[] = [];
+      countPipeline.push({
+        $lookup: {
+          from: "headers",
+          localField: "header",
+          foreignField: "_id",
+          as: "headerDetails",
+        },
+      });
+
+      if (serviceType) {
+        countPipeline.push({
+          $match: { "headerDetails.parent": serviceType },
         });
       }
+
+      if (Object.keys(matchStage).length > 0) {
+        countPipeline.push({ $match: matchStage });
+      }
+
+      const totalResult = await Pdf.aggregate([...countPipeline, { $count: "total" }]);
+      const totalCount = totalResult[0]?.total || 0;
 
       return res.status(200).json(
         new ApiResponse(

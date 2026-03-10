@@ -207,7 +207,7 @@ const SUPPORT_SERVICE_SEARCH_FIELDS = {
 // Create a new support service
 export const createSupportService = async (req: Request, res: Response) => {
   try {
-    const { title, subtitle, description, serviceFor, order } = req.body;
+    const { title, subtitle, description, serviceFor, order, isMainPage, isDropDown } = req.body;
 
     // Validation
     if (!title || !subtitle || !description || !serviceFor) {
@@ -233,12 +233,18 @@ export const createSupportService = async (req: Request, res: Response) => {
       });
     }
 
+    // Parse boolean fields
+    const parsedIsMainPage = isMainPage === true || isMainPage === "true";
+    const parsedIsDropDown = isDropDown === true || isDropDown === "true";
+
     const newService = await SupportService.create({
       title,
       subtitle,
       description,
       serviceFor,
       order: order || 0,
+      isMainPage: parsedIsMainPage,
+      isDropDown: parsedIsDropDown,
       createdBy: (req as any).user?.id,
     });
 
@@ -274,6 +280,16 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
       matchStage.status = req.query.status as string;
     } else if (!isAuthenticatedRequest) {
       matchStage.status = "active";
+    }
+
+    // Boolean filters for isMainPage and isDropDown
+    if (req.query.isMainPage !== undefined) {
+      const isMainPage = req.query.isMainPage === "true";
+      matchStage.isMainPage = isMainPage;
+    }
+    if (req.query.isDropDown !== undefined) {
+      const isDropDown = req.query.isDropDown === "true";
+      matchStage.isDropDown = isDropDown;
     }
 
     // Search functionality
@@ -353,6 +369,8 @@ export const getAllSupportServices = async (req: Request, res: Response) => {
                 order: 1,
                 createdAt: 1,
                 updatedAt: 1,
+                isMainPage: 1,
+                isDropDown: 1,
                 createdBy: {
                   _id: "$createdByUser._id",
                   name: "$createdByUser.name",
@@ -420,8 +438,20 @@ export const getServicesByType = async (req: Request, res: Response) => {
       });
     }
 
+    const matchStage: any = { serviceFor, status: "active" };
+
+    // Boolean filters for isMainPage and isDropDown
+    if (req.query.isMainPage !== undefined) {
+      const isMainPage = req.query.isMainPage === "true";
+      matchStage.isMainPage = isMainPage;
+    }
+    if (req.query.isDropDown !== undefined) {
+      const isDropDown = req.query.isDropDown === "true";
+      matchStage.isDropDown = isDropDown;
+    }
+
     const pipeline: PipelineStage[] = [
-      { $match: { serviceFor, status: "active" } },
+      { $match: matchStage },
       {
         $lookup: {
           from: "users",
@@ -446,6 +476,8 @@ export const getServicesByType = async (req: Request, res: Response) => {
           status: 1,
           order: 1,
           createdAt: 1,
+          isMainPage: 1,
+          isDropDown: 1,
           createdBy: {
             _id: "$createdByUser._id",
             name: "$createdByUser.name",
@@ -535,7 +567,7 @@ export const getSupportServiceById = async (req: Request, res: Response) => {
 export const updateSupportService = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    let { title, subtitle, description, serviceFor, status, order } = req.body;
+    let { title, subtitle, description, serviceFor, status, order, isMainPage, isDropDown } = req.body;
 
     console.log("Update Request Received:", {
       id,
@@ -545,6 +577,8 @@ export const updateSupportService = async (req: Request, res: Response) => {
       serviceFor,
       status,
       order,
+      isMainPage,
+      isDropDown,
     });
 
     // Normalize status to lowercase
@@ -557,6 +591,14 @@ export const updateSupportService = async (req: Request, res: Response) => {
       const parsedOrder = parseInt(String(order), 10);
       order = isNaN(parsedOrder) ? undefined : parsedOrder;
       console.log("Parsed Order:", order);
+    }
+
+    // Parse boolean fields
+    if (isMainPage !== undefined) {
+      isMainPage = isMainPage === true || isMainPage === "true";
+    }
+    if (isDropDown !== undefined) {
+      isDropDown = isDropDown === true || isDropDown === "true";
     }
 
     // Validate serviceFor if provided
@@ -588,6 +630,8 @@ export const updateSupportService = async (req: Request, res: Response) => {
     if (serviceFor !== undefined) updateData.serviceFor = serviceFor;
     if (status !== undefined) updateData.status = status;
     if (order !== undefined) updateData.order = order;
+    if (isMainPage !== undefined) updateData.isMainPage = isMainPage;
+    if (isDropDown !== undefined) updateData.isDropDown = isDropDown;
     updateData.updatedBy = (req as any).user?.id;
 
     console.log("Update Data to save:", updateData);

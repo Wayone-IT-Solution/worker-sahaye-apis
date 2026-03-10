@@ -18,6 +18,19 @@ export enum HRMasterType {
   WORK_MODE = "workMode",
   PERSONAL_ASSITANT_CITY = "PA_CITY",
   PERSONAL_ASSITANT_STATE = "PA_STATE",
+  SKILL_LEVEL = "skillLevel",
+  CANDIDATE_AVAILABILITY = "candidateAvailability",
+  EMPLOYMENT_TIME = "employmentTime",
+  SHIFT = "shift",
+  TYPE_OF_COMPANY = "typeOfCompany",
+  AGENCY_BADGE = "agencyBadge",
+  EMPLOYER_BADGE = "employerBadge",
+  WORKER_BADGE = "workerBadge",
+  TYPE_OF_ESTABLISHMENT = "typeOfEstablishment",
+  OTHER = "other",
+  VIRTUAL_HR = "virtualHR",
+  VIRTUAL_RECRUITER = "virtualRecruiter",
+  LANGUAGE = "language",
 }
 
 export enum HRMasterStatus {

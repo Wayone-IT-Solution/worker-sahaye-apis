@@ -42,6 +42,14 @@ const SupportServiceSchema = new mongoose.Schema(
       default: 0,
       index: true,
     },
+    isMainPage: {
+      type: Boolean,
+      default: false,
+    },
+    isDropDown: {
+      type: Boolean,
+      default: false,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

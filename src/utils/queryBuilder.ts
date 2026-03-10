@@ -1,6 +1,16 @@
 /**
  * Build MongoDB match stage with filters, search, and date range
  */
+import mongoose from "mongoose";
+
+const safeObjectId = (id: any) => {
+  try {
+    return new mongoose.Types.ObjectId(id);
+  } catch {
+    return id;
+  }
+};
+
 export const buildMatchStage = (
   params: {
     status?: string;
@@ -22,16 +32,16 @@ export const buildMatchStage = (
     matchStage.status = params.status;
   }
   if (params.industryId) {
-    matchStage.industryId = params.industryId;
+    matchStage.industryId = safeObjectId(params.industryId);
   }
   if (params.serviceId) {
-    matchStage.serviceId = params.serviceId;
+    matchStage.serviceId = safeObjectId(params.serviceId);
   }
   if (params.categoryId) {
-    matchStage.category = params.categoryId;
+    matchStage.category = safeObjectId(params.categoryId);
   }
   if (params.headerId) {
-    matchStage.header = params.headerId;
+    matchStage.header = safeObjectId(params.headerId);
   }
 
   // Search functionality with custom field mapping

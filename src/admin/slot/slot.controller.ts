@@ -231,24 +231,31 @@ export const getSlotsByDate = async (request: Request, response: Response) => {
 export const getAllSlotsByDate = async (request: Request, response: Response) => {
   const { date }: any = request.query;
 
-  if (!date) {
-    return response
-      .status(400)
-      .json(new ApiError(400, "Date is required"));
-  }
-
   try {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
+    let startDate: any;
+    let endDate: any;
 
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    // If date is provided, fetch slots for that specific date
+    // If not, fetch slots from today onwards
+    if (date) {
+      // Parse date in DD/MM/YYYY format
+      const [day, month, year] = date.split("/");
+      startDate = new Date(year, month - 1, day);
+      startDate.setHours(0, 0, 0, 0);
 
-    // Fetch all slots for that day
+      endDate = new Date(year, month - 1, day);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      // No date provided - return slots from today onwards (next 30 days)
+      startDate = startOfDay(new Date());
+      endDate = addDays(startDate, 30);
+    }
+
+    // Fetch all slots for that day/period
     const slots = await Slot.find({
       "timeslots.date": {
-        $gte: startOfDay,
-        $lt: endOfDay,
+        $gte: startDate,
+        $lt: endDate,
       },
     }).populate("user");
 
@@ -260,7 +267,7 @@ export const getAllSlotsByDate = async (request: Request, response: Response) =>
     const result = slots
       .map((slot) => {
         const filteredSlots = slot.timeslots.filter(
-          (ts) => ts.date >= startOfDay && ts.date < endOfDay
+          (ts) => ts.date >= startDate && ts.date < endDate
         );
         return { user: slot.user, slots: filteredSlots };
       })

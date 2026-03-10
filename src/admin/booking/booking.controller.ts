@@ -189,7 +189,39 @@ export const changeBookingSlot = async (req: Request, res: Response) => {
 export const getAllBookings = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await bookingService.getAll(req.query);
-    return res.status(200).json(new ApiResponse(200, result, "Data fetched successfully"));
+    
+    // Extract bookings data (handle both paginated and non-paginated responses)
+    const bookingList = Array.isArray(result) ? result : (result as any).result || result;
+    
+    // Get all service location IDs
+    const serviceLocationIds = bookingList
+      .map((b: any) => b.serviceLocationId)
+      .filter((id: any) => id);
+    
+    // Fetch all service locations in one query
+    const serviceLocations = await ServiceLocation.find({ _id: { $in: serviceLocationIds } });
+    
+    // Create a map for quick lookup
+    const locationMap: { [key: string]: any } = {};
+    serviceLocations.forEach((loc: any) => {
+      locationMap[loc._id.toString()] = loc;
+    });
+    
+    // Replace serviceLocationId with full object
+    const enrichedBookings = bookingList.map((booking: any) => {
+      const bookingObj = booking.toObject ? booking.toObject() : booking;
+      return {
+        ...bookingObj,
+        serviceLocationId: locationMap[booking.serviceLocationId?.toString()] || booking.serviceLocationId,
+      };
+    });
+
+    // Prepare response maintaining original structure
+    const response = !Array.isArray(result) && (result as any).pagination 
+      ? { result: enrichedBookings, pagination: (result as any).pagination }
+      : { result: enrichedBookings };
+    
+    return res.status(200).json(new ApiResponse(200, response, "Data fetched successfully"));
   } catch (err) {
     next(err);
   }

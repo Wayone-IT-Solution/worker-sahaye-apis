@@ -10,7 +10,7 @@ export enum HRMasterType {
   BADGE = "badge",
   EXPERIENCE = "experience",
   JOB_SHIFT = "JobShift",
-  CONTRACT_DURATIONS = "ContractDuration ",
+  CONTRACT_DURATIONS = "ContractDuration",
   JOINING_PREFERENCE = "joiningPreference",
   ESIC_SERVICE_TYPE ="esic_service_type",
   EXCLUSIVE_SUPPORT_SERVICE = "exclusive_support_service",
@@ -31,6 +31,15 @@ export enum HRMasterType {
   VIRTUAL_HR = "virtualHR",
   VIRTUAL_RECRUITER = "virtualRecruiter",
   LANGUAGE = "language",
+  COMPLIANCE_TYPE = "complianceType",
+  TRAINING_CATEGORY = "trainingCategory",
+  TRAINING_MODE = "trainingMode",
+  HIRING_TYPE = "hiringType",
+  COMPLIANCE_FREQUENCY = "complianceFrequency",
+  POST_TYPE = "postType",
+  VISIBILITY = "visibility",
+  RATING = "rating",
+  JOB_TYPE = "jobType",
 }
 
 export enum HRMasterStatus {
@@ -59,6 +68,7 @@ const HRMasterSchema: Schema<IHRMaster> = new Schema(
       type: String,
       enum: Object.values(HRMasterType),
       required: true,
+      trim: true,
       index: true,
     },
   },
@@ -74,3 +84,16 @@ const HRMaster: Model<IHRMaster> = mongoose.model<IHRMaster>(
 );
 
 export default HRMaster;
+
+
+
+
+
+
+
+
+
+
+
+
+

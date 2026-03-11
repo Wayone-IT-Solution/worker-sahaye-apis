@@ -16,15 +16,24 @@ import {
 import { Enrollment } from "../../modals/enrollment.model";
 import { Engagement } from "../../modals/engagement.model";
 import { CandidateBrandingBadge } from "../../modals/candidatebrandingbadge.model";
-import { CommunityMember, MemberStatus } from "../../modals/communitymember.model";
+import {
+  CommunityMember,
+  MemberStatus,
+} from "../../modals/communitymember.model";
 import { Community } from "../../modals/community.model";
-import { ConnectionModel, ConnectionStatus } from "../../modals/connection.model";
+import {
+  ConnectionModel,
+  ConnectionStatus,
+} from "../../modals/connection.model";
 import { Booking } from "../../modals/booking.model";
 import { GratuityRecord } from "../../modals/gratuityrecord.model";
 import LoanSupport from "../../modals/loansupport.model";
 import { Quotation, QuotationStatus } from "../../modals/quotation.model";
 import { Job } from "../../modals/job.model";
-import { ApplicationStatus, JobApplication } from "../../modals/jobapplication.model";
+import {
+  ApplicationStatus,
+  JobApplication,
+} from "../../modals/jobapplication.model";
 import { BulkHiringRequest } from "../../modals/bulkhiring.model";
 import { JobRequirement } from "../../modals/jobrequirement.model";
 import { ProjectBasedHiring } from "../../modals/projectbasedhiring.model";
@@ -44,6 +53,8 @@ interface AdminCreatePayload {
   status?: boolean | string | number;
   username: string;
   password: string;
+  mobile?: string;
+  callFields?: string[];
 }
 
 /**
@@ -99,7 +110,7 @@ export class AdminController {
         const users = [];
         for (let index = 0; index < req.body.length; index += 1) {
           const row = req.body[index] as AdminCreatePayload;
-          const { username, email, password, role, status } = row;
+          const { username, email, password, role, status, callFields } = row;
 
           if (!username || !email || !password || !role) {
             return res.status(400).json({
@@ -113,7 +124,9 @@ export class AdminController {
             email,
             password,
             username,
+            mobile: row.mobile,
             status: AdminController.normalizeStatus(status),
+            callFields,
           });
 
           users.push(AdminController.sanitizeAdmin(user));
@@ -126,14 +139,16 @@ export class AdminController {
         });
       }
 
-      const { username, email, password, role, status } =
+      const { username, email, password, role, status, callFields } =
         req.body as AdminCreatePayload;
       const user = await AdminController.createUser({
         role,
         email,
         password,
         username,
+        mobile: req.body.mobile,
         status: AdminController.normalizeStatus(status),
+        callFields,
       });
 
       return res.status(201).json({
@@ -179,13 +194,15 @@ export class AdminController {
   ): Promise<any> {
     try {
       const { id } = req.params;
-      const { username, role, status } = req.body;
+      const { username, role, status, callFields } = req.body;
       const updatedUser = await Admin.findByIdAndUpdate(
         id,
         {
           username,
           role,
+          mobile: req.body.mobile,
           status: AdminController.normalizeStatus(status),
+          callFields,
         },
         { new: true, runValidators: true },
       );
@@ -394,11 +411,14 @@ export class AdminController {
   static async getUserEngagementDetails(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const userId = req.params.userId;
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 100);
+      const limit = Math.min(
+        Math.max(parseInt(req.query.limit as string, 10) || 20, 1),
+        100,
+      );
       const page = Math.max(parseInt(req.query.page as string, 10) || 1, 1);
       const skip = (page - 1) * limit;
       const engagementType = (req.query.engagementType as string) || undefined;
@@ -425,10 +445,16 @@ export class AdminController {
         sentEndorsementRequests,
         receivedEndorsementRequests,
       ] = await Promise.all([
-        FileUpload.findOne({ userId: userObjectId, tag: FileTag.PROFILE_PICTURE })
+        FileUpload.findOne({
+          userId: userObjectId,
+          tag: FileTag.PROFILE_PICTURE,
+        })
           .sort({ createdAt: -1 })
           .lean(),
-        EnrolledPlan.findOne({ user: userObjectId, status: PlanEnrollmentStatus.ACTIVE })
+        EnrolledPlan.findOne({
+          user: userObjectId,
+          status: PlanEnrollmentStatus.ACTIVE,
+        })
           .sort({ enrolledAt: -1 })
           .populate("plan")
           .lean(),
@@ -512,7 +538,8 @@ export class AdminController {
         ? Number(
             (
               receivedEndorsements.reduce(
-                (sum: number, item: any) => sum + Number(item?.overallPerformance || 0),
+                (sum: number, item: any) =>
+                  sum + Number(item?.overallPerformance || 0),
                 0,
               ) / receivedEndorsements.length
             ).toFixed(2),
@@ -705,20 +732,25 @@ export class AdminController {
             .sort({ createdAt: -1 })
             .limit(100)
             .lean(),
-          Promotion.find({ userId })
-            .sort({ createdAt: -1 })
-            .limit(100)
-            .lean(),
+          Promotion.find({ userId }).sort({ createdAt: -1 }).limit(100).lean(),
         ]);
 
         const quotationStats = {
           total: quotations.length,
           received: quotations.length,
           sent: quotations.length,
-          approved: quotations.filter((q: any) => q.status === QuotationStatus.APPROVED).length,
-          replied: quotations.filter((q: any) => q.status !== QuotationStatus.UNDER_REVIEW).length,
-          completed: quotations.filter((q: any) => q.status === QuotationStatus.COMPLETED).length,
-          rejected: quotations.filter((q: any) => q.status === QuotationStatus.REJECTED).length,
+          approved: quotations.filter(
+            (q: any) => q.status === QuotationStatus.APPROVED,
+          ).length,
+          replied: quotations.filter(
+            (q: any) => q.status !== QuotationStatus.UNDER_REVIEW,
+          ).length,
+          completed: quotations.filter(
+            (q: any) => q.status === QuotationStatus.COMPLETED,
+          ).length,
+          rejected: quotations.filter(
+            (q: any) => q.status === QuotationStatus.REJECTED,
+          ).length,
         };
 
         const baseJobs = await Job.find({ postedBy: userObjectId })
@@ -746,11 +778,14 @@ export class AdminController {
               )
             : applicationsRaw;
 
-        const applicationsByStatus = applications.reduce((acc: any, app: any) => {
-          const status = app?.status || "unknown";
-          acc[status] = (acc[status] || 0) + 1;
-          return acc;
-        }, {});
+        const applicationsByStatus = applications.reduce(
+          (acc: any, app: any) => {
+            const status = app?.status || "unknown";
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+          },
+          {},
+        );
 
         const listingWiseStatsMap: Record<string, any> = {};
         jobs.forEach((job: any) => {
@@ -812,18 +847,27 @@ export class AdminController {
           jobWiseMap[jobId].total += 1;
           const s = app?.status;
           if (s === ApplicationStatus.HIRED) jobWiseMap[jobId].hired += 1;
-          if (s === ApplicationStatus.SHORTLISTED) jobWiseMap[jobId].shortlisted += 1;
+          if (s === ApplicationStatus.SHORTLISTED)
+            jobWiseMap[jobId].shortlisted += 1;
           if (s === ApplicationStatus.REJECTED) jobWiseMap[jobId].rejected += 1;
           if (s === ApplicationStatus.APPLIED) jobWiseMap[jobId].applied += 1;
 
-          if (s === ApplicationStatus.HIRED) listingWiseStatsMap[jobId].hired += 1;
-          if (s === ApplicationStatus.OFFERACCEPTED) listingWiseStatsMap[jobId].offerAccepted += 1;
-          if (s === ApplicationStatus.SHORTLISTED) listingWiseStatsMap[jobId].shortlisted += 1;
-          if (s === ApplicationStatus.REJECTED) listingWiseStatsMap[jobId].rejected += 1;
-          if (s === ApplicationStatus.UNDER_REVIEW) listingWiseStatsMap[jobId].underReview += 1;
-          if (s === ApplicationStatus.INTERVIEW) listingWiseStatsMap[jobId].interview += 1;
-          if (s === ApplicationStatus.OFFERED) listingWiseStatsMap[jobId].offered += 1;
-          if (s === ApplicationStatus.WITHDRAWN) listingWiseStatsMap[jobId].withdrawn += 1;
+          if (s === ApplicationStatus.HIRED)
+            listingWiseStatsMap[jobId].hired += 1;
+          if (s === ApplicationStatus.OFFERACCEPTED)
+            listingWiseStatsMap[jobId].offerAccepted += 1;
+          if (s === ApplicationStatus.SHORTLISTED)
+            listingWiseStatsMap[jobId].shortlisted += 1;
+          if (s === ApplicationStatus.REJECTED)
+            listingWiseStatsMap[jobId].rejected += 1;
+          if (s === ApplicationStatus.UNDER_REVIEW)
+            listingWiseStatsMap[jobId].underReview += 1;
+          if (s === ApplicationStatus.INTERVIEW)
+            listingWiseStatsMap[jobId].interview += 1;
+          if (s === ApplicationStatus.OFFERED)
+            listingWiseStatsMap[jobId].offered += 1;
+          if (s === ApplicationStatus.WITHDRAWN)
+            listingWiseStatsMap[jobId].withdrawn += 1;
         });
 
         const hiredApplications = applications.filter(
@@ -870,7 +914,13 @@ export class AdminController {
 
       return res
         .status(200)
-        .json(new ApiResponse(200, payload, "User engagement details fetched successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            payload,
+            "User engagement details fetched successfully",
+          ),
+        );
     } catch (error) {
       next(error);
     }
@@ -885,8 +935,11 @@ export class AdminController {
     status: boolean;
     username: string;
     password: string;
+    mobile?: string;
+    callFields?: string[];
   }) {
-    const { username, email, password, role, status } = userData;
+    const { username, email, password, role, status, mobile, callFields } =
+      userData;
 
     const existingUser = await Admin.findOne({
       $or: [{ email }, { username }],
@@ -903,6 +956,8 @@ export class AdminController {
       password,
       username,
       employeeCode,
+      mobile,
+      callFields: callFields || [],
     });
     return await user.save();
   }
@@ -919,7 +974,10 @@ export class AdminController {
     });
     if (!user) throw new ApiError(404, "User not found with this email");
     if (user.status === false) {
-      throw new ApiError(403, "Your account is inactive. Please contact support.");
+      throw new ApiError(
+        403,
+        "Your account is inactive. Please contact support.",
+      );
     }
 
     const isMatch = await user.comparePassword(password);

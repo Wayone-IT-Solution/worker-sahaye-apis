@@ -255,7 +255,16 @@ export class AdminController {
     next: NextFunction,
   ): Promise<any> {
     try {
-      const pipeline = [
+      // If filtering by role name (like ?role=call-person), we need to match after the lookup
+      const roleFilter = req.query.role as string;
+      const query = { ...req.query };
+      
+      // Remove role from main query so getPipeline doesn't try to match it against Admin.role (ObjectId)
+      if (roleFilter && typeof roleFilter === "string" && !mongoose.Types.ObjectId.isValid(roleFilter)) {
+        delete query.role;
+      }
+
+      const pipeline: any[] = [
         {
           $lookup: {
             from: "roles",
@@ -275,15 +284,23 @@ export class AdminController {
             role: "$roleDetails.name",
           },
         },
-        {
-          $project: {
-            password: 0,
-            roleDetails: 0,
-          },
-        },
       ];
 
-      const result = await adminService.getAll(req.query, pipeline);
+      // If we had a role filter, add it after the role name is joined
+      if (roleFilter && typeof roleFilter === "string" && !mongoose.Types.ObjectId.isValid(roleFilter)) {
+        pipeline.push({
+          $match: { role: { $regex: new RegExp(`^${roleFilter}$`, "i") } }
+        });
+      }
+
+      pipeline.push({
+        $project: {
+          password: 0,
+          roleDetails: 0,
+        },
+      });
+
+      const result = await adminService.getAll(query, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));

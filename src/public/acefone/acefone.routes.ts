@@ -17,6 +17,17 @@ acefoneRouter.post(
 );
 
 /**
+ * @route GET /api/acefone/stats
+ * @desc Get aggregated call stats for the dashboard
+ * @access Private (Admin)
+ */
+acefoneRouter.get(
+  "/stats",
+  authenticateToken,
+  asyncHandler(AcefoneController.getCallStats),
+);
+
+/**
  * @route GET /ivr/acefone/records
  * @desc Fetch call records from Acefone
  * @access Private (Admin)

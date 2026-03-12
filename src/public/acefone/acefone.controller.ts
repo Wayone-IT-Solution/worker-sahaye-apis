@@ -273,29 +273,40 @@ export class AcefoneController {
           $project: {
             _id: 1,
             uuid: 1,
+            call_id: 1,
+            ref_id: 1,
             call_to_number: 1,
             caller_id_number: 1,
+            customer_no_with_prefix: 1,
+            direction: 1,
+            call_status: 1,
+            callField: 1,
+            callType: 1,
             start_stamp: 1,
             answer_stamp: 1,
             end_stamp: 1,
-            billsec: 1,
             duration: 1,
-            call_status: 1,
-            call_id: 1,
-            ref_id: 1,
-            callField: 1,
-            callType: 1,
+            billsec: 1,
+            agent_ring_time: 1,
+            customer_ring_time: 1,
+            answered_agent_name: 1,
+            answered_agent_number: 1,
+            hangup_cause_description: 1,
+            hangup_cause_key: 1,
+            campaign_name: 1,
             recording_url: 1,
             createdAt: 1,
             user: {
               _id: "$user._id",
               fullName: "$user.fullName",
               mobile: "$user.mobile",
+              email: "$user.email",
             },
             agent: {
               _id: "$agent._id",
               name: "$agent.name",
               mobile: "$agent.mobile",
+              email: "$agent.email",
             },
           },
         },
@@ -422,6 +433,121 @@ export class AcefoneController {
         );
     } catch (error) {
       console.error("[AcefoneWebhook] Error processing webhook:", error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get aggregated call stats for the call dashboard
+   * Supports optional date range, agentId, callField filters
+   */
+  static async getCallStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const match: any = {};
+      const { startDate, endDate, agentId, callField } = req.query as any;
+
+      if (startDate || endDate) {
+        match.createdAt = {};
+        if (startDate) match.createdAt.$gte = new Date(`${startDate}T00:00:00.000Z`);
+        if (endDate) match.createdAt.$lte = new Date(`${endDate}T23:59:59.999Z`);
+      }
+      if (agentId) match.agentId = agentId;
+      if (callField) match.callField = callField;
+
+      const [overview, dailyTrend, agentStats, callFieldStats] = await Promise.all([
+        // Overview totals
+        AcefoneCall.aggregate([
+          { $match: match },
+          {
+            $group: {
+              _id: null,
+              totalCalls: { $sum: 1 },
+              answered: { $sum: { $cond: [{ $eq: ["$call_status", "answered"] }, 1, 0] } },
+              missed: { $sum: { $cond: [{ $in: ["$call_status", ["missed", "no-answer"]] }, 1, 0] } },
+              failed: { $sum: { $cond: [{ $not: { $in: ["$call_status", ["answered", "missed", "no-answer"]] } }, 1, 0] } },
+              totalDuration: { $sum: { $toDouble: "$duration" } },
+              avgDuration: { $avg: { $toDouble: "$duration" } },
+            },
+          },
+        ]),
+
+        // Daily trend
+        AcefoneCall.aggregate([
+          { $match: match },
+          {
+            $group: {
+              _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" }, day: { $dayOfMonth: "$createdAt" } },
+              total: { $sum: 1 },
+              answered: { $sum: { $cond: [{ $eq: ["$call_status", "answered"] }, 1, 0] } },
+              missed: { $sum: { $cond: [{ $in: ["$call_status", ["missed", "no-answer"]] }, 1, 0] } },
+            },
+          },
+          { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
+          {
+            $project: {
+              _id: 0,
+              date: { $dateToString: { format: "%Y-%m-%d", date: { $dateFromParts: { year: "$_id.year", month: "$_id.month", day: "$_id.day" } } } },
+              total: 1, answered: 1, missed: 1,
+            },
+          },
+        ]),
+
+        // Agent performance
+        AcefoneCall.aggregate([
+          { $match: match },
+          {
+            $group: {
+              _id: "$agentId",
+              total: { $sum: 1 },
+              answered: { $sum: { $cond: [{ $eq: ["$call_status", "answered"] }, 1, 0] } },
+              missed: { $sum: { $cond: [{ $in: ["$call_status", ["missed", "no-answer"]] }, 1, 0] } },
+              duration: { $sum: { $toDouble: "$duration" } },
+            },
+          },
+          { $lookup: { from: "admins", localField: "_id", foreignField: "_id", as: "agent" } },
+          { $unwind: { path: "$agent", preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              _id: 0, agentId: "$_id",
+              name: { $ifNull: ["$agent.name", "Unknown Agent"] },
+              mobile: "$agent.mobile",
+              total: 1, answered: 1, missed: 1, duration: 1,
+            },
+          },
+          { $sort: { total: -1 } },
+          { $limit: 20 },
+        ]),
+
+        // CallField breakdown
+        AcefoneCall.aggregate([
+          { $match: match },
+          {
+            $group: {
+              _id: "$callField",
+              total: { $sum: 1 },
+              answered: { $sum: { $cond: [{ $eq: ["$call_status", "answered"] }, 1, 0] } },
+            },
+          },
+          { $project: { _id: 0, callField: { $ifNull: ["$_id", "Unknown"] }, total: 1, answered: 1 } },
+          { $sort: { total: -1 } },
+        ]),
+      ]);
+
+      const o = overview[0] || {};
+      return res.status(200).json(
+        new ApiResponse(200, {
+          totalCalls: o.totalCalls || 0,
+          answered: o.answered || 0,
+          missed: o.missed || 0,
+          failed: o.failed || 0,
+          totalDuration: Math.round(o.totalDuration || 0),
+          avgDuration: Math.round(o.avgDuration || 0),
+          dailyTrend,
+          byAgent: agentStats,
+          byCallField: callFieldStats,
+        }, "Call stats fetched successfully"),
+      );
+    } catch (error) {
       next(error);
     }
   }

@@ -47,18 +47,18 @@ const getServiceAccessFlags = async (
       const enrolled = enrolledPlans[i];
       const enrolledObj = enrolled.toObject ? enrolled.toObject() : enrolled;
 
-      console.log(`Checking enrollment ${i}:`, {
-        hasEnrolled: !!enrolledObj,
-        hasPlan: !!enrolledObj?.plan,
-        hasExpiredAt: !!enrolledObj?.expiredAt,
-        expiredAt: enrolledObj?.expiredAt,
-        planData: enrolledObj?.plan
-          ? {
-              name: (enrolledObj.plan as any).name,
-              planType: (enrolledObj.plan as any).planType,
-            }
-          : null,
-      });
+      // console.log(`Checking enrollment ${i}:`, {
+      //   hasEnrolled: !!enrolledObj,
+      //   hasPlan: !!enrolledObj?.plan,
+      //   hasExpiredAt: !!enrolledObj?.expiredAt,
+      //   expiredAt: enrolledObj?.expiredAt,
+      //   planData: enrolledObj?.plan
+      //     ? {
+      //         name: (enrolledObj.plan as any).name,
+      //         planType: (enrolledObj.plan as any).planType,
+      //       }
+      //     : null,
+      // });
 
       if (
         enrolledObj &&

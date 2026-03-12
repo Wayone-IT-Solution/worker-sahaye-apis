@@ -18,6 +18,11 @@ export interface IAdmin extends Document {
   password: string;
   employeeCode: string;
   role: Schema.Types.ObjectId;
+  mobile?: string;
+  callTakenCount: number;
+  lastCallTakenAt?: Date;
+  /** allowable services the agent can handle */
+  callFields?: Array<"ESIC" | "EPFO" | "LOAN" | "LWF">;
   comparePassword(password: string): Promise<boolean>;
 }
 
@@ -33,13 +38,21 @@ const adminSchema = new Schema<IAdmin>(
       required: true,
       type: Schema.Types.ObjectId,
     },
+    mobile: { type: String },
+    callTakenCount: { type: Number, default: 0 },
+    lastCallTakenAt: { type: Date },
+    callFields: {
+      type: [String],
+      enum: ["ESIC", "EPFO", "LOAN", "LWF"],
+      default: [],
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // 🔐 Method to compare password during login
 adminSchema.methods.comparePassword = async function (
-  candidatePassword: string
+  candidatePassword: string,
 ): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };

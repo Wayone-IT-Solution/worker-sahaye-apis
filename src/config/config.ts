@@ -97,4 +97,8 @@ export const config = {
     forwardingPath:
       process.env.SERVETEL_FORWARDING_PATH || "/v1/call-forwarding",
   },
+  acefone: {
+    apiKey: process.env.ACEFONE_API_KEY || "",
+    baseUrl: process.env.ACEFONE_BASE_URL || "https://api.acefone.in/v1",
+  },
 };

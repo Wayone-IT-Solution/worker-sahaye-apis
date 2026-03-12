@@ -9,7 +9,7 @@ import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
 import { PersonalAssistant } from "../../modals/personalassistant.model";
 import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
-import { SubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import {  PlanType } from "../../modals/subscriptionplan.model";
 import SupportService from "../../modals/supportservice.model";
 import ServiceLocation from "../../modals/servicelocation.model";
 
@@ -267,21 +267,34 @@ export const getLoggedInUserBookings = async (req: Request, res: Response) => {
       .map((b: any) => b.serviceLocationId)
       .filter((id: any) => id);
     
-    // Fetch all service locations in one query
+    const supportServiceIds = bookingList
+      .map((b: any) => b.supportService)
+      .filter((id: any) => id);
+
+    // Fetch all service locations and support services in one query
     const serviceLocations = await ServiceLocation.find({ _id: { $in: serviceLocationIds } });
+    const supportServices = await SupportService.find({ _id: { $in: supportServiceIds } });
     
+    console.log(supportServices)
     // Create a map for quick lookup
     const locationMap: { [key: string]: any } = {};
     serviceLocations.forEach((loc: any) => {
       locationMap[loc._id.toString()] = loc;
     });
     
-    // Replace serviceLocationId with full object
+    // Create a map for support services
+    const supportServiceMap: { [key: string]: any } = {};
+    supportServices.forEach((service: any) => {
+      supportServiceMap[service._id.toString()] = service;
+    });
+    
+    // Replace serviceLocationId and supportService with full objects
     const enrichedBookings = bookingList.map((booking: any) => {
       const bookingObj = booking.toObject ? booking.toObject() : booking;
       return {
         ...bookingObj,
         serviceLocationId: locationMap[booking.serviceLocationId?.toString()] || booking.serviceLocationId,
+        supportService: supportServiceMap[booking.supportService?.toString()] || booking.supportService,
       };
     });
 

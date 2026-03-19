@@ -49,6 +49,7 @@ export enum HRMasterType {
   PRICE_TYPE = "priceType",
   SKILL_CERTIFICATE = "skillCertificate",
   SERVICES = "services",
+  PERKS_AND_BENEFITS = "perksAndBenefits",
 }
 
 export enum HRMasterStatus {

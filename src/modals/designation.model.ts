@@ -27,9 +27,6 @@ const DesignationSchema: Schema<IDesignation> = new Schema(
   { timestamps: true },
 );
 
-DesignationSchema.index({ order: 1 });
-DesignationSchema.index({ isActive: 1 });
-
 const Designation: Model<IDesignation> = mongoose.model<IDesignation>(
   "Designation",
   DesignationSchema,

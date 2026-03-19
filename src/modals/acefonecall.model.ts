@@ -167,7 +167,6 @@ const AcefoneCallSchema = new Schema<IAcefoneCall>(
 );
 
 // Indexes for efficient querying
-AcefoneCallSchema.index({ uuid: 1 });
 AcefoneCallSchema.index({ call_id: 1 });
 AcefoneCallSchema.index({ call_status: 1 });
 AcefoneCallSchema.index({ userId: 1 });

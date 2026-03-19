@@ -40,6 +40,15 @@ export enum HRMasterType {
   VISIBILITY = "visibility",
   RATING = "rating",
   JOB_TYPE = "jobType",
+  HIRING_NEEDS = "hiringNeeds",
+  PREFERENCE = "preference",
+  CONTRACT_DURATION = "contractDuration",
+  OTHER_INCENTIVES = "otherIncentives",
+  HR_LEVEL_2 = "hrLevel2",
+  RECRUITER_LEVEL = "recruiterLevel",
+  PRICE_TYPE = "priceType",
+  SKILL_CERTIFICATE = "skillCertificate",
+  SERVICES = "services",
 }
 
 export enum HRMasterStatus {

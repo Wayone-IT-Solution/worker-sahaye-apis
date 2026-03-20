@@ -338,6 +338,20 @@ export class JobController {
         industryId,
         subIndustryId,
       } = req.query;
+      const toArray = (value: unknown): string[] =>
+        String(value ?? "")
+          .split(/[|,]/)
+          .map((v) => v.trim())
+          .filter(Boolean);
+      const toObjectIds = (value: unknown): mongoose.Types.ObjectId[] =>
+        toArray(value)
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id));
+      const toRegexOr = (value: unknown) =>
+        toArray(value).map((token) => ({
+          $regex: token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          $options: "i",
+        }));
 
       const normalizedQuery: any = { ...req.query };
       if (normalizedQuery.userType === "agency") {
@@ -362,32 +376,62 @@ export class JobController {
 
       // Filter by category
       if (category) {
-        matchStage.category = new (require("mongoose")).Types.ObjectId(category as string);
+        const categoryIds = toObjectIds(category);
+        if (categoryIds.length === 1) {
+          matchStage.category = categoryIds[0];
+        } else if (categoryIds.length > 1) {
+          matchStage.category = { $in: categoryIds };
+        }
       }
 
       // Filter by industry
       if (industryId) {
-        matchStage.industryId = new (require("mongoose")).Types.ObjectId(industryId as string);
+        const industryIds = toObjectIds(industryId);
+        if (industryIds.length === 1) {
+          matchStage.industryId = industryIds[0];
+        } else if (industryIds.length > 1) {
+          matchStage.industryId = { $in: industryIds };
+        }
       }
 
       // Filter by sub-industry
       if (subIndustryId) {
-        matchStage.subIndustryId = new (require("mongoose")).Types.ObjectId(subIndustryId as string);
+        const subIndustryIds = toObjectIds(subIndustryId);
+        if (subIndustryIds.length === 1) {
+          matchStage.subIndustryId = subIndustryIds[0];
+        } else if (subIndustryIds.length > 1) {
+          matchStage.subIndustryId = { $in: subIndustryIds };
+        }
       }
 
       // Filter by city
       if (city) {
-        matchStage["location.city"] = { $regex: city as string, $options: "i" };
+        const cityFilters = toRegexOr(city);
+        if (cityFilters.length === 1) {
+          matchStage["location.city"] = cityFilters[0];
+        } else if (cityFilters.length > 1) {
+          matchStage["location.city"] = { $in: cityFilters };
+        }
       }
 
       // Filter by workMode
       if (workMode) {
-        matchStage.workMode = workMode;
+        const workModes = toArray(workMode);
+        if (workModes.length === 1) {
+          matchStage.workMode = workModes[0];
+        } else if (workModes.length > 1) {
+          matchStage.workMode = { $in: workModes };
+        }
       }
 
       // Filter by jobType
       if (jobType) {
-        matchStage.jobType = jobType;
+        const jobTypes = toArray(jobType);
+        if (jobTypes.length === 1) {
+          matchStage.jobType = jobTypes[0];
+        } else if (jobTypes.length > 1) {
+          matchStage.jobType = { $in: jobTypes };
+        }
       }
 
       // Filter by salary range
@@ -404,7 +448,12 @@ export class JobController {
 
       // Filter by experience level
       if (experience) {
-        matchStage.experienceLevel = experience;
+        const experienceLevels = toArray(experience);
+        if (experienceLevels.length === 1) {
+          matchStage.experienceLevel = experienceLevels[0];
+        } else if (experienceLevels.length > 1) {
+          matchStage.experienceLevel = { $in: experienceLevels };
+        }
       }
 
       const pipeline = [
@@ -426,16 +475,41 @@ export class JobController {
           },
         },
         // Filter by job role if provided
-        ...(jobRole ? [
-          {
-            $match: {
-              $or: [
-                { "jobRoleDetails._id": new (require("mongoose")).Types.ObjectId(jobRole as string) },
-                { "jobRoleDetails.name": { $regex: jobRole as string, $options: "i" } }
-              ]
-            }
-          }
-        ] : []),
+        ...(jobRole
+          ? [
+              (() => {
+                const jobRoleTokens = toArray(jobRole);
+                const roleIds = jobRoleTokens.filter((id) =>
+                  mongoose.Types.ObjectId.isValid(id)
+                );
+                const roleNames = jobRoleTokens.filter(
+                  (value) => !mongoose.Types.ObjectId.isValid(value)
+                );
+                const orFilters: any[] = [];
+
+                if (roleIds.length > 0) {
+                  orFilters.push({
+                    "jobRoleDetails._id": {
+                      $in: roleIds.map((id) => new mongoose.Types.ObjectId(id)),
+                    },
+                  });
+                }
+
+                for (const roleName of roleNames) {
+                  orFilters.push({
+                    "jobRoleDetails.name": {
+                      $regex: roleName,
+                      $options: "i",
+                    },
+                  });
+                }
+
+                return {
+                  $match: orFilters.length > 0 ? { $or: orFilters } : {},
+                };
+              })(),
+            ]
+          : []),
         {
           $lookup: {
             from: "users",
@@ -1923,6 +1997,20 @@ export class JobController {
     try {
       const currentUserId = (req as any).user?.id;
       const { city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
+      const toArray = (value: unknown): string[] =>
+        String(value ?? "")
+          .split(/[|,]/)
+          .map((v) => v.trim())
+          .filter(Boolean);
+      const toObjectIds = (value: unknown): mongoose.Types.ObjectId[] =>
+        toArray(value)
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id));
+      const toRegexOr = (value: unknown) =>
+        toArray(value).map((token) => ({
+          $regex: token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          $options: "i",
+        }));
 
       // Build match stage for contractor jobs
       const matchStage: any = {
@@ -1933,27 +2021,52 @@ export class JobController {
 
       // Filter by city
       if (city) {
-        matchStage["location.city"] = { $regex: city as string, $options: "i" };
+        const cityFilters = toRegexOr(city);
+        if (cityFilters.length === 1) {
+          matchStage["location.city"] = cityFilters[0];
+        } else if (cityFilters.length > 1) {
+          matchStage["location.city"] = { $in: cityFilters };
+        }
       }
 
       // Filter by industry
       if (industryId) {
-        matchStage.industryId = new mongoose.Types.ObjectId(industryId as string);
+        const industryIds = toObjectIds(industryId);
+        if (industryIds.length === 1) {
+          matchStage.industryId = industryIds[0];
+        } else if (industryIds.length > 1) {
+          matchStage.industryId = { $in: industryIds };
+        }
       }
 
       // Filter by sub-industry
       if (subIndustryId) {
-        matchStage.subIndustryId = new mongoose.Types.ObjectId(subIndustryId as string);
+        const subIndustryIds = toObjectIds(subIndustryId);
+        if (subIndustryIds.length === 1) {
+          matchStage.subIndustryId = subIndustryIds[0];
+        } else if (subIndustryIds.length > 1) {
+          matchStage.subIndustryId = { $in: subIndustryIds };
+        }
       }
 
       // Filter by workMode
       if (workMode) {
-        matchStage.workMode = workMode;
+        const workModes = toArray(workMode);
+        if (workModes.length === 1) {
+          matchStage.workMode = workModes[0];
+        } else if (workModes.length > 1) {
+          matchStage.workMode = { $in: workModes };
+        }
       }
 
       // Filter by jobType
       if (jobType) {
-        matchStage.jobType = jobType;
+        const jobTypes = toArray(jobType);
+        if (jobTypes.length === 1) {
+          matchStage.jobType = jobTypes[0];
+        } else if (jobTypes.length > 1) {
+          matchStage.jobType = { $in: jobTypes };
+        }
       }
 
       // Filter by salary range
@@ -1970,7 +2083,12 @@ export class JobController {
 
       // Filter by experience level
       if (experience) {
-        matchStage.experienceLevel = experience;
+        const experienceLevels = toArray(experience);
+        if (experienceLevels.length === 1) {
+          matchStage.experienceLevel = experienceLevels[0];
+        } else if (experienceLevels.length > 1) {
+          matchStage.experienceLevel = { $in: experienceLevels };
+        }
       }
 
       const pipeline = [

@@ -157,14 +157,18 @@ export class EducationFieldController {
     next: NextFunction
   ) {
     try {
+      const isAuthenticatedRequest = Boolean((req as any).user?.id);
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
       const educationId = req.query.educationId as string;
+      const statusQuery = req.query.status as string | undefined;
+      const effectiveStatus =
+        !isAuthenticatedRequest && !statusQuery ? "active" : statusQuery;
 
       let matchStage = buildMatchStage(
         {
-          status: req.query.status as string,
+          status: effectiveStatus,
           search: req.query.search as string,
           searchKey: req.query.searchKey as string,
         },

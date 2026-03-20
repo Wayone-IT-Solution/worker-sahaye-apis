@@ -48,6 +48,7 @@ export enum HRMasterType {
   RECRUITER_LEVEL = "recruiterLevel",
   PRICE_TYPE = "priceType",
   SKILL_CERTIFICATE = "skillCertificate",
+  DEPARTMENT = "department",
   SERVICES = "services",
   PERKS_AND_BENEFITS = "perksAndBenefits",
 }
@@ -94,8 +95,6 @@ const HRMaster: Model<IHRMaster> = mongoose.model<IHRMaster>(
 );
 
 export default HRMaster;
-
-
 
 
 

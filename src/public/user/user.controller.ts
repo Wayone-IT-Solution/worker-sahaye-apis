@@ -35,6 +35,7 @@ import {
   sanitizePayloadObject,
   normalizePayloadToArray,
 } from "../../utils/payloadSanitizer";
+import Industry, { IndustryStatus } from "../../modals/industry.model";
 
 const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
@@ -132,6 +133,45 @@ export class UserController {
       : null;
   }
 
+  private static escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  private static async resolveIndustryId(
+    input: unknown,
+    prefix = ""
+  ): Promise<string | undefined> {
+    if (input == null) return undefined;
+
+    let rawValue: unknown = input;
+    if (typeof input === "object" && input !== null) {
+      const obj = input as Record<string, unknown>;
+      rawValue = obj._id ?? obj.id ?? obj.name ?? "";
+    }
+
+    const candidate = String(rawValue ?? "").trim();
+    if (!candidate) return undefined;
+
+    if (mongoose.Types.ObjectId.isValid(candidate)) {
+      const byId = await Industry.findById(candidate).select("_id");
+      if (!byId) {
+        throw new ApiError(400, `${prefix}Invalid industry id`);
+      }
+      return byId._id.toString();
+    }
+
+    const byName = await Industry.findOne({
+      name: { $regex: `^${UserController.escapeRegex(candidate)}$`, $options: "i" },
+      status: IndustryStatus.ACTIVE,
+    }).select("_id");
+
+    if (!byName) {
+      throw new ApiError(400, `${prefix}Invalid industry value`);
+    }
+
+    return byName._id.toString();
+  }
+
   private static async createSingleUser(
     payload: any,
     rowNumber?: number
@@ -145,6 +185,10 @@ export class UserController {
     const fullName = String(normalizedPayload?.fullName ?? "").trim();
     const userType = UserController.normalizeUserType(normalizedPayload?.userType);
     const referralCode = String(normalizedPayload?.referralCode ?? "").trim();
+    const resolvedIndustryId = await UserController.resolveIndustryId(
+      normalizedPayload?.industry,
+      prefix
+    );
 
     const missingFields: string[] = [];
     if (!mobile) missingFields.push("mobile");
@@ -173,7 +217,7 @@ export class UserController {
       userType,
       mobile,
       category: normalizedPayload?.category,
-      industry: normalizedPayload?.industry,
+      industry: resolvedIndustryId,
       userPan: normalizedPayload?.userPan,
       userAadhar: normalizedPayload?.userAadhar,
       workerCategory: normalizedPayload?.workerCategory,
@@ -335,6 +379,9 @@ export class UserController {
   ): Promise<any> {
     try {
       const { id } = req.user;
+      const resolvedIndustryId = await UserController.resolveIndustryId(
+        req.body?.industry
+      );
       const {
         city,
         state,
@@ -368,6 +415,7 @@ export class UserController {
         preferences, // Get the entire preferences object as sent from frontend
         relocate,
         workerCategory,
+        ...(resolvedIndustryId ? { industry: resolvedIndustryId } : {}),
         primaryLocation: { city, state, pincode, address, country },
       };
 

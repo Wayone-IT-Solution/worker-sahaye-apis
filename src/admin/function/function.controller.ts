@@ -163,7 +163,7 @@ export class FunctionController {
     try {
       const query: any = {
         status: "active",
-        pagination: false,
+        pagination: "false",
         sortKey: "order",
         sortDir: "asc",
       };

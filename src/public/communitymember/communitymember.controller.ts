@@ -10,7 +10,7 @@ import {
 } from "../../modals/communitymember.model";
 import { User } from "../../modals/user.model";
 import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
-import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import { PlanType } from "../../modals/subscriptionplan.model";
 import { ForumPost } from "../../modals/forumpost.model";
 import { ForumComment } from "../../modals/forumcomment.model";
 import { Community, CommunityPrivacy } from "../../modals/community.model";
@@ -79,7 +79,7 @@ const getCommunityParticipationEligibility = async (userId: string) => {
   // Get user's active subscription plan
   const enrolledPlan = await EnrolledPlan.findOne({
     user: userId,
-    status: "active",
+    status: PlanEnrollmentStatus.ACTIVE,
   }).populate("plan");
 
   // If no active plan, user is on FREE plan - can view but not participate
@@ -131,13 +131,6 @@ export class CommunityMemberController {
         return res.status(403).json(
           new ApiError(403, participationEligibility.message)
         );
-      }
-
-      // Enforce subscription plan: only GROWTH or ENTERPRISE can join communities
-      const enrolledPlan = await EnrolledPlan.findOne({ user, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
-      const userPlanType = (enrolledPlan?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-      if (!enrolledPlan || !(userPlanType === PlanType.GROWTH || userPlanType === PlanType.ENTERPRISE)) {
-        return res.status(403).json(new ApiError(403, "Your subscription plan does not allow joining communities"));
       }
 
       const communityExist = await Community.findById(community);

@@ -15,7 +15,7 @@ export class PublicFunctionController {
     try {
       const query: any = {
         status: "active",
-        pagination: false,
+        pagination: "false",
       };
 
       // Allow optional departmentId filter
@@ -25,7 +25,7 @@ export class PublicFunctionController {
 
       // Allow optional limit
       if (req.query.limit) {
-        query.limit = parseInt(req.query.limit as string, 10);
+        query.limit = String(req.query.limit);
       }
 
       const pipelineOpts = { sort: { order: 1, name: 1 } } as any;

@@ -16,6 +16,143 @@ import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model
 
 const connectionService = new CommonService(ConnectionModel);
 
+const getUserDesignation = (user: any): string | null => {
+  const possibleValues = [
+    user?.profile?.designation,
+    user?.profile?.company?.designation,
+    user?.profile?.business?.type,
+  ];
+
+  const designation = possibleValues.find(
+    (value) => typeof value === "string" && value.trim().length > 0
+  );
+
+  return designation ? designation.trim() : null;
+};
+
+const getMutualConnectionsMeta = async (
+  currentUserId: string,
+  targetUserIds: string[]
+): Promise<{
+  counts: Map<string, number>;
+  previews: Map<string, string[]>;
+}> => {
+  const counts = new Map<string, number>();
+  const previews = new Map<string, string[]>();
+
+  const uniqueTargetUserIds = Array.from(
+    new Set(
+      targetUserIds
+        .map((id) => id?.toString())
+        .filter((id): id is string => Boolean(id && id !== currentUserId))
+    )
+  );
+
+  if (uniqueTargetUserIds.length === 0) {
+    return { counts, previews };
+  }
+
+  const acceptedConnectionsOfCurrentUser = await ConnectionModel.find({
+    status: ConnectionStatus.ACCEPTED,
+    $or: [{ requester: currentUserId }, { recipient: currentUserId }],
+  })
+    .select("requester recipient")
+    .lean();
+
+  const currentUserConnectedIds = new Set<string>();
+  for (const connection of acceptedConnectionsOfCurrentUser as any[]) {
+    const requesterId = connection?.requester?.toString();
+    const recipientId = connection?.recipient?.toString();
+
+    if (!requesterId || !recipientId) continue;
+    const connectedUserId =
+      requesterId === currentUserId ? recipientId : requesterId;
+    if (connectedUserId && connectedUserId !== currentUserId) {
+      currentUserConnectedIds.add(connectedUserId);
+    }
+  }
+
+  if (currentUserConnectedIds.size === 0) {
+    return { counts, previews };
+  }
+
+  const acceptedConnectionsForTargets = await ConnectionModel.find({
+    status: ConnectionStatus.ACCEPTED,
+    $or: [
+      {
+        requester: { $in: uniqueTargetUserIds },
+        recipient: { $in: Array.from(currentUserConnectedIds) },
+      },
+      {
+        recipient: { $in: uniqueTargetUserIds },
+        requester: { $in: Array.from(currentUserConnectedIds) },
+      },
+    ],
+  })
+    .select("requester recipient")
+    .lean();
+
+  const targetUserIdSet = new Set(uniqueTargetUserIds);
+  const mutualUserIdsByTarget = new Map<string, Set<string>>();
+
+  for (const connection of acceptedConnectionsForTargets as any[]) {
+    const requesterId = connection?.requester?.toString();
+    const recipientId = connection?.recipient?.toString();
+    if (!requesterId || !recipientId) continue;
+
+    let targetUserId: string | null = null;
+    let mutualUserId: string | null = null;
+
+    if (targetUserIdSet.has(requesterId) && currentUserConnectedIds.has(recipientId)) {
+      targetUserId = requesterId;
+      mutualUserId = recipientId;
+    } else if (
+      targetUserIdSet.has(recipientId) &&
+      currentUserConnectedIds.has(requesterId)
+    ) {
+      targetUserId = recipientId;
+      mutualUserId = requesterId;
+    }
+
+    if (!targetUserId || !mutualUserId) continue;
+    if (mutualUserId === currentUserId || mutualUserId === targetUserId) continue;
+
+    if (!mutualUserIdsByTarget.has(targetUserId)) {
+      mutualUserIdsByTarget.set(targetUserId, new Set<string>());
+    }
+    mutualUserIdsByTarget.get(targetUserId)!.add(mutualUserId);
+  }
+
+  const allMutualUserIds = Array.from(
+    new Set(
+      Array.from(mutualUserIdsByTarget.values()).flatMap((idsSet) =>
+        Array.from(idsSet)
+      )
+    )
+  );
+
+  const mutualUsers = allMutualUserIds.length
+    ? await User.find({ _id: { $in: allMutualUserIds } }).select("fullName").lean()
+    : [];
+
+  const mutualUserNameMap = new Map(
+    (mutualUsers as any[]).map((user) => [user._id.toString(), user.fullName])
+  );
+
+  for (const [targetUserId, mutualIdsSet] of mutualUserIdsByTarget.entries()) {
+    const mutualIds = Array.from(mutualIdsSet);
+    counts.set(targetUserId, mutualIds.length);
+
+    const previewNames = mutualIds
+      .map((id) => mutualUserNameMap.get(id))
+      .filter((name): name is string => Boolean(name && name.trim().length > 0))
+      .slice(0, 3);
+    previews.set(targetUserId, previewNames);
+  }
+
+  return { counts, previews };
+};
+
 // Create a new connection
 export const createConnection = async (
   req: Request,
@@ -263,18 +400,20 @@ export const getAllConnections = async (
     const numericLimit = parseInt(limit as string, 10) || 10;
     const skip = (numericPage - 1) * numericLimit;
 
-    let query = {};
+    let query: any = {};
     let populateFields: any[] = [];
+    const userSelectFields =
+      "fullName email profile.designation profile.company.designation profile.business.type";
     const keys = { _id: 1, requester: 1, recipient: 1, updatedAt: 1 };
 
     switch (type) {
       case "send-request":
         query = { requester: userId, status: ConnectionStatus.PENDING };
-        populateFields.push({ path: "recipient", select: "fullName email" });
+        populateFields.push({ path: "recipient", select: userSelectFields });
         break;
       case "pending":
         query = { recipient: userId, status: ConnectionStatus.PENDING };
-        populateFields.push({ path: "requester", select: "fullName email" });
+        populateFields.push({ path: "requester", select: userSelectFields });
         break;
       case "accepted":
         query = {
@@ -282,8 +421,8 @@ export const getAllConnections = async (
           status: ConnectionStatus.ACCEPTED,
         };
         populateFields.push(
-          { path: "requester", select: "fullName email" },
-          { path: "recipient", select: "fullName email" }
+          { path: "requester", select: userSelectFields },
+          { path: "recipient", select: userSelectFields }
         );
         break;
       case "removed":
@@ -292,8 +431,8 @@ export const getAllConnections = async (
           status: ConnectionStatus.REMOVED,
         };
         populateFields.push(
-          { path: "requester", select: "fullName email" },
-          { path: "recipient", select: "fullName email" }
+          { path: "requester", select: userSelectFields },
+          { path: "recipient", select: userSelectFields }
         );
         break;
     }
@@ -308,7 +447,8 @@ export const getAllConnections = async (
     const connections = await connectionQuery;
 
     // Step 1: Extract all user IDs (either requester or recipient)
-    const users = connections.map((conn) => {
+    const users = connections
+      .map((conn) => {
       const { requester, recipient, _id: connectionId, updatedAt } = conn;
       const isRequesterPopulated =
         requester && typeof requester === "object" && "fullName" in requester;
@@ -320,10 +460,17 @@ export const getAllConnections = async (
         if (requester._id.toString() === userId) user = recipient;
         else user = requester;
       } else user = isRecipientPopulated ? recipient : requester;
+      if (!user?._id) return null;
       return { user, connectionId, updatedAt };
-    });
+    })
+      .filter(Boolean) as Array<{ user: any; connectionId: any; updatedAt: Date }>;
 
     const userIdSet = new Set(users.map((u) => u.user._id.toString()));
+    const targetUserIds = Array.from(userIdSet);
+
+    const { counts: mutualCounts, previews: mutualPreviews } =
+      await getMutualConnectionsMeta(userId.toString(), targetUserIds);
+
     const profileFiles = await FileUpload.find({
       userId: { $in: Array.from(userIdSet) },
       tag: "profilePic",
@@ -340,6 +487,9 @@ export const getAllConnections = async (
         email: user.email,
         _id: connectionId,
         fullName: user.fullName,
+        designation: getUserDesignation(user),
+        mutualConnections: mutualCounts.get(user._id.toString()) || 0,
+        mutualPersons: mutualPreviews.get(user._id.toString()) || [],
         profilePic: profilePicMap.get(user._id.toString()) || null,
       })
     );
@@ -444,6 +594,16 @@ export const getSuggestedUsers = async (
           profilePic: { $arrayElemAt: ["$profilePicData.url", 0] },
         },
       },
+      {
+        $addFields: {
+          designation: {
+            $ifNull: [
+              "$profile.designation",
+              { $ifNull: ["$profile.company.designation", "$profile.business.type"] },
+            ],
+          },
+        },
+      },
 
       // Final projection with enriched profile fields
       {
@@ -455,6 +615,7 @@ export const getSuggestedUsers = async (
           profilePic: 1,
           primaryLocation: 1,
           totalConnections: 1,
+          designation: 1,
 
           // Worker profile
           "profile.designation": 1,
@@ -473,11 +634,34 @@ export const getSuggestedUsers = async (
       { $sort: { totalConnections: -1 } }, // final sort
     ]);
 
+    const suggestedUserIds = suggestions
+      .map((item: any) => (item?.userId || item?._id)?.toString())
+      .filter((id: any): id is string => Boolean(id));
+
+    const { counts: mutualCounts, previews: mutualPreviews } =
+      await getMutualConnectionsMeta(userId.toString(), suggestedUserIds);
+
+    const enrichedSuggestions = suggestions.map((suggestion: any) => {
+      const suggestedUserId = (suggestion?.userId || suggestion?._id)?.toString();
+      if (!suggestedUserId) return suggestion;
+
+      return {
+        ...suggestion,
+        designation:
+          typeof suggestion?.designation === "string" &&
+          suggestion.designation.trim().length > 0
+            ? suggestion.designation.trim()
+            : null,
+        mutualConnections: mutualCounts.get(suggestedUserId) || 0,
+        mutualPersons: mutualPreviews.get(suggestedUserId) || [],
+      };
+    });
+
     return res.status(200).json(
       new ApiResponse(
         200,
         {
-          results: suggestions,
+          results: enrichedSuggestions,
           pagination: {
             totalItems: total,
             currentPage: page,

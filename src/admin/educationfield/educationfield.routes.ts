@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { isAdmin, authenticateToken } from "../../middlewares/authMiddleware";
+import {
+  authenticateToken,
+  authenticateTokenOptional,
+} from "../../middlewares/authMiddleware";
 import {
   createEducationField,
   getAllEducationFields,
@@ -13,8 +16,8 @@ const router = Router();
 
 // Admin routes
 router.post("/", authenticateToken, asyncHandler(createEducationField));
-router.get("/", authenticateToken, asyncHandler(getAllEducationFields));
-router.get("/:id", authenticateToken, asyncHandler(getEducationFieldById));
+router.get("/", authenticateTokenOptional, asyncHandler(getAllEducationFields));
+router.get("/:id", authenticateTokenOptional, asyncHandler(getEducationFieldById));
 router.put("/:id", authenticateToken, asyncHandler(updateEducationField));
 router.delete("/:id", authenticateToken, asyncHandler(deleteEducationField));
 

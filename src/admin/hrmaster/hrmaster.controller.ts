@@ -1,11 +1,23 @@
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
-import HRMaster from "../../modals/hrmaster.model";
+import HRMaster, { HRMasterType } from "../../modals/hrmaster.model";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import { normalizePayloadToArray } from "../../utils/payloadSanitizer";
 
 const hrMasterService = new CommonService(HRMaster);
+const allowedHrMasterTypes = new Set<string>(Object.values(HRMasterType));
+
+const parseRequestedTypes = (rawType: unknown): string[] => {
+  if (!rawType) return [];
+
+  const values = Array.isArray(rawType) ? rawType : [rawType];
+
+  return values
+    .flatMap((item) => String(item).split(","))
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+};
 
 export class HRMasterController {
   static async createHRMaster(req: Request, res: Response, next: NextFunction) {
@@ -27,6 +39,14 @@ export class HRMasterController {
             new ApiError(
               400,
               `Row ${index + 1}: "name" and "type" are required`
+            )
+          );
+        }
+        if (!allowedHrMasterTypes.has(type)) {
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Row ${index + 1}: invalid "type" "${type}". Use one of: ${Object.values(HRMasterType).join(", ")}`
             )
           );
         }
@@ -65,7 +85,30 @@ export class HRMasterController {
   ) {
     try {
       const query: any = { ...req.query };
+      const requestedTypes = parseRequestedTypes(query.type);
       const isAuthenticatedRequest = Boolean((req as any).user?.id);
+
+      if (requestedTypes.length) {
+        const invalidTypes = requestedTypes.filter(
+          (type) => !allowedHrMasterTypes.has(type)
+        );
+
+        if (invalidTypes.length) {
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Invalid HR master type: ${invalidTypes.join(", ")}. Allowed types: ${Object.values(HRMasterType).join(", ")}`
+            )
+          );
+        }
+
+        if (requestedTypes.length === 1) {
+          query.type = requestedTypes[0];
+        } else {
+          delete query.type;
+          query.type__in = requestedTypes.join(",");
+        }
+      }
 
       if (!isAuthenticatedRequest && query.status === undefined) {
         query.status = "active";
@@ -106,6 +149,19 @@ export class HRMasterController {
     next: NextFunction,
   ) {
     try {
+      if (req.body?.type !== undefined) {
+        const nextType = String(req.body.type).trim();
+        if (!allowedHrMasterTypes.has(nextType)) {
+          return res.status(400).json(
+            new ApiError(
+              400,
+              `Invalid "type" "${nextType}". Allowed types: ${Object.values(HRMasterType).join(", ")}`
+            )
+          );
+        }
+        req.body.type = nextType;
+      }
+
       const result = await hrMasterService.updateById(req.params.id, req.body);
       if (!result)
         return res

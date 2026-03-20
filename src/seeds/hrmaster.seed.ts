@@ -18,6 +18,14 @@ const baseSeeds: Array<{
   { type: HRMasterType.SERVICE_TYPE, name: "Recruitment", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.SERVICE_TYPE, name: "HR Consulting", status: HRMasterStatus.ACTIVE },
 
+  // Virtual HR Service Type
+  { type: HRMasterType.VIRTUAL_HR_SERVICE_TYPE, name: "Virtual HR", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.VIRTUAL_HR_SERVICE_TYPE, name: "HR Consulting", status: HRMasterStatus.ACTIVE },
+
+  // Virtual Recruiter Service Type
+  { type: HRMasterType.VIRTUAL_RECRUITER_SERVICE_TYPE, name: "Recruitment", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.VIRTUAL_RECRUITER_SERVICE_TYPE, name: "Talent Acquisition", status: HRMasterStatus.ACTIVE },
+
   // HR Level
   { type: HRMasterType.HR_LEVEL, name: "Executive", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.HR_LEVEL, name: "Manager", status: HRMasterStatus.ACTIVE },
@@ -45,12 +53,36 @@ const baseSeeds: Array<{
   { type: HRMasterType.EMPLOYMENT_TYPE, name: "Internship", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.EMPLOYMENT_TYPE, name: "Freelance", status: HRMasterStatus.ACTIVE },
 
+  // On Demand Employment Type
+  { type: HRMasterType.ON_DEMAND_EMPLOYMENT_TYPE, name: "Full-time", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.ON_DEMAND_EMPLOYMENT_TYPE, name: "Part-time", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.ON_DEMAND_EMPLOYMENT_TYPE, name: "Contract", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.ON_DEMAND_EMPLOYMENT_TYPE, name: "Temporary", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.ON_DEMAND_EMPLOYMENT_TYPE, name: "Freelance", status: HRMasterStatus.ACTIVE },
+
+  // Min Wage Offered
+  { type: HRMasterType.MIN_WAGE_OFFERED, name: "15000", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.MIN_WAGE_OFFERED, name: "20000", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.MIN_WAGE_OFFERED, name: "25000", status: HRMasterStatus.ACTIVE },
+
   // Job Duration
   { type: HRMasterType.JOB_DURATION, name: "Short-term", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.JOB_DURATION, name: "Long-term", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.JOB_DURATION, name: "Project-based", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.JOB_DURATION, name: "Permanent", status: HRMasterStatus.ACTIVE },
   { type: HRMasterType.JOB_DURATION, name: "Seasonal", status: HRMasterStatus.ACTIVE },
+
+  // Business Type (Pre-screened Agency)
+  { type: HRMasterType.BUSINESS_TYPE, name: "Staffing Agency", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.BUSINESS_TYPE, name: "Recruitment Consultancy", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.BUSINESS_TYPE, name: "Manpower Supplier", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.BUSINESS_TYPE, name: "Facility Management", status: HRMasterStatus.ACTIVE },
+
+  // Pre-screened Agency Service
+  { type: HRMasterType.PRE_SCREENED_AGENCY_SERVICE, name: "Temporary Staffing", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.PRE_SCREENED_AGENCY_SERVICE, name: "Permanent Hiring", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.PRE_SCREENED_AGENCY_SERVICE, name: "Payroll Management", status: HRMasterStatus.ACTIVE },
+  { type: HRMasterType.PRE_SCREENED_AGENCY_SERVICE, name: "Compliance Support", status: HRMasterStatus.ACTIVE },
 
   // Experience
   { type: HRMasterType.EXPERIENCE, name: "Fresher", status: HRMasterStatus.ACTIVE },

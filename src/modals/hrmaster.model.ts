@@ -3,10 +3,16 @@ import mongoose, { Document, Model, Schema } from "mongoose";
 export enum HRMasterType {
   HR_LEVEL = "hrLevel",
   SERVICE_TYPE = "serviceType",
+  VIRTUAL_HR_SERVICE_TYPE = "virtualHRServiceType",
+  VIRTUAL_RECRUITER_SERVICE_TYPE = "virtualRecruiterServiceType",
   PREFERRED_HR_ROLE = "preferredHrRole",
   COMMUNICATION_MODE = "communicationMode",
   EMPLOYMENT_TYPE = "employmentType",
+  ON_DEMAND_EMPLOYMENT_TYPE = "onDemandEmploymentType",
+  MIN_WAGE_OFFERED = "minWageOffered",
   JOB_DURATION = "jobDuration",
+  BUSINESS_TYPE = "businessType",
+  PRE_SCREENED_AGENCY_SERVICE = "preScreenedAgencyService",
   BADGE = "badge",
   EXPERIENCE = "experience",
   JOB_SHIFT = "JobShift",
@@ -95,8 +101,6 @@ const HRMaster: Model<IHRMaster> = mongoose.model<IHRMaster>(
 );
 
 export default HRMaster;
-
-
 
 
 

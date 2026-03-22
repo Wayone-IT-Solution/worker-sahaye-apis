@@ -12,9 +12,9 @@ export enum JobType {
 }
 
 export enum WorkMode {
-  REMOTE = "remote",
-  HYBRID = "hybrid",
-  ON_SITE = "on-site",
+  REMOTE = "Remote",
+  HYBRID = "Hybrid",
+  ON_SITE = "On-site",
   FLEXIBLE = "flexible",
 }
 
@@ -68,7 +68,7 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
     },
     jobRole: {
       required: true,
-      ref: "JobCategory",
+      ref: "Function",
       type: Schema.Types.ObjectId,
     },
     industryId: {
@@ -107,7 +107,7 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
     },
     isWillingToRelocate: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // 🔍 Filter & join optimization
@@ -132,5 +132,5 @@ UserPreferenceSchema.index({ createdAt: -1 });
 
 export const UserPreference = mongoose.model<IUserPreference>(
   "UserPreference",
-  UserPreferenceSchema
+  UserPreferenceSchema,
 );

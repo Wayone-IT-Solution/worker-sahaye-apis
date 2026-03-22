@@ -1,21 +1,23 @@
 import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
-import { Job, JobStatus } from "../../modals/job.model";
-import { User, UserType as AccountUserType } from "../../modals/user.model";
 import ApiResponse from "../../utils/ApiResponse";
+import { Job, JobStatus } from "../../modals/job.model";
 import { NextFunction, Request, Response } from "express";
 import { UserType } from "../../modals/notification.model";
 import { CommonService } from "../../services/common.services";
 import { UserPreference } from "../../modals/userpreference.model";
 import { JobApplication } from "../../modals/jobapplication.model";
 import { sendDualNotification } from "../../services/notification.service";
+import { User, UserType as AccountUserType } from "../../modals/user.model";
 import { getJobListingUsage as fetchJobListingUsage } from "../../middlewares/jobListingLimitMiddleware";
-import { SubscriptionPlan, ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
+import {
+  PlanType,
+  ISubscriptionPlan,
+} from "../../modals/subscriptionplan.model";
 import { getMonthKey } from "../../utils/date";
 import { JobView } from "../../modals/jobView.model";
-import { UserSubscriptionService } from "../../services/userSubscription.service";
 import { sanitizePayloadObject } from "../../utils/payloadSanitizer";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const JobService = new CommonService(Job);
 
@@ -63,7 +65,8 @@ export class JobController {
       data.skillsRequired = data.skillsRequired
         .filter((skill: any) => {
           if (typeof skill === "string") return skill.trim() !== "";
-          if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+          if (typeof skill === "object" && skill.name)
+            return skill.name.trim() !== "";
           return false;
         })
         .map((skill: any) => {
@@ -79,7 +82,11 @@ export class JobController {
     }
 
     // Extract imageUrl from S3 middleware array if it's an array
-    if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
+    if (
+      data.imageUrl &&
+      Array.isArray(data.imageUrl) &&
+      data.imageUrl.length > 0
+    ) {
       data.imageUrl = data.imageUrl[0].url;
     }
 
@@ -90,8 +97,10 @@ export class JobController {
     if (data.locationState) location.state = data.locationState;
     if (data.locationCountry) location.country = data.locationCountry;
     if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
-    if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
-    if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+    if (data.locationRemoteFriendly !== undefined)
+      location.isRemoteFriendly = data.locationRemoteFriendly;
+    if (data.locationAllowsRelocation !== undefined)
+      location.allowsRelocation = data.locationAllowsRelocation;
 
     if (Object.keys(location).length > 0) {
       data.location = location;
@@ -113,7 +122,8 @@ export class JobController {
       const userId = (req as any).user.id;
 
       // Fetch user's highest priority active enrollment plan
-      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+      const enrollment =
+        await UserSubscriptionService.getHighestPriorityPlan(userId);
       if (!enrollment) {
         throw new ApiError(403, "No active subscription plan found");
       }
@@ -150,7 +160,7 @@ export class JobController {
           if (draftCount >= draftLimit) {
             throw new ApiError(
               403,
-              `Draft job limit reached. Your plan allows only ${draftLimit} draft jobs`
+              `Draft job limit reached. Your plan allows only ${draftLimit} draft jobs`,
             );
           }
         }
@@ -183,19 +193,21 @@ export class JobController {
         jobStatus === JobStatus.DRAFT
           ? result.toObject()
           : {
-            ...result.toObject(),
-            jobListingUsage: jobListingLimit ? {
-              limit: jobListingLimit.limit,
-              usedThisMonth: jobListingLimit.used + 1,
-              remaining:
-                jobListingLimit.limit !== null
-                  ? Math.max(
-                    jobListingLimit.limit - (jobListingLimit.used + 1),
-                    0
-                  )
-                  : null,
-            } : undefined,
-          };
+              ...result.toObject(),
+              jobListingUsage: jobListingLimit
+                ? {
+                    limit: jobListingLimit.limit,
+                    usedThisMonth: jobListingLimit.used + 1,
+                    remaining:
+                      jobListingLimit.limit !== null
+                        ? Math.max(
+                            jobListingLimit.limit - (jobListingLimit.used + 1),
+                            0,
+                          )
+                        : null,
+                  }
+                : undefined,
+            };
 
       return res
         .status(201)
@@ -208,7 +220,7 @@ export class JobController {
   static async createBulkJobsForOwner(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { ownerId } = req.params;
@@ -216,16 +228,27 @@ export class JobController {
         return res.status(400).json(new ApiError(400, "Invalid owner id."));
       }
 
-      const owner = await User.findById(ownerId).select("_id userType status").lean();
+      const owner = await User.findById(ownerId)
+        .select("_id userType status")
+        .lean();
       if (!owner) {
         return res.status(404).json(new ApiError(404, "Owner user not found."));
       }
 
       const ownerType = String(owner.userType || "").toLowerCase();
-      if (![AccountUserType.EMPLOYER, AccountUserType.CONTRACTOR].includes(ownerType as AccountUserType)) {
+      if (
+        ![AccountUserType.EMPLOYER, AccountUserType.CONTRACTOR].includes(
+          ownerType as AccountUserType,
+        )
+      ) {
         return res
           .status(400)
-          .json(new ApiError(400, "Bulk job upload is allowed only for employer or contractor users."));
+          .json(
+            new ApiError(
+              400,
+              "Bulk job upload is allowed only for employer or contractor users.",
+            ),
+          );
       }
 
       if (!Array.isArray(req.body) || req.body.length === 0) {
@@ -243,13 +266,21 @@ export class JobController {
         const title = String(normalized?.title ?? "").trim();
         const description = String(normalized?.description ?? "").trim();
         if (!title || !description) {
-          return res.status(400).json(
-            new ApiError(400, `Row ${rowNumber}: title and description are required.`)
-          );
+          return res
+            .status(400)
+            .json(
+              new ApiError(
+                400,
+                `Row ${rowNumber}: title and description are required.`,
+              ),
+            );
         }
 
-        const requestedUserType = String(normalized?.userType ?? "").trim().toLowerCase();
-        let mappedJobUserType = requestedUserType === "contractor" ? "contractor" : "worker";
+        const requestedUserType = String(normalized?.userType ?? "")
+          .trim()
+          .toLowerCase();
+        let mappedJobUserType =
+          requestedUserType === "contractor" ? "contractor" : "worker";
 
         // Contractor owners can only post jobs for workers.
         if (ownerType === AccountUserType.CONTRACTOR) {
@@ -262,9 +293,14 @@ export class JobController {
           requestedUserType &&
           !["worker", "contractor"].includes(requestedUserType)
         ) {
-          return res.status(400).json(
-            new ApiError(400, `Row ${rowNumber}: userType must be worker or contractor.`)
-          );
+          return res
+            .status(400)
+            .json(
+              new ApiError(
+                400,
+                `Row ${rowNumber}: userType must be worker or contractor.`,
+              ),
+            );
         }
 
         const status =
@@ -290,31 +326,32 @@ export class JobController {
         }
       }
 
-      return res.status(201).json(
-        new ApiResponse(
-          201,
-          createdJobs,
-          `${createdJobs.length} jobs created successfully for ${ownerType}.`
-        )
-      );
+      return res
+        .status(201)
+        .json(
+          new ApiResponse(
+            201,
+            createdJobs,
+            `${createdJobs.length} jobs created successfully for ${ownerType}.`,
+          ),
+        );
     } catch (err) {
       next(err);
     }
   }
 
-
-
   static async uploadJobUpdated(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const imageUrlArray = req?.body?.imageUrl;
       // Extract the URL from the first element if it's an array
-      const imageUrl = Array.isArray(imageUrlArray) && imageUrlArray.length > 0
-        ? imageUrlArray[0].url
-        : imageUrlArray;
+      const imageUrl =
+        Array.isArray(imageUrlArray) && imageUrlArray.length > 0
+          ? imageUrlArray[0].url
+          : imageUrlArray;
       return res
         .status(201)
         .json(new ApiResponse(201, imageUrl, "Created successfully"));
@@ -361,11 +398,25 @@ export class JobController {
       // If user is logged in and is a contractor, enforce plan check
       const currentUser = (req as any).user;
       if (currentUser && currentUser.role === "contractor") {
-        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(currentUser.id);
+        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(
+          currentUser.id,
+        );
         // If no enrollment or plan is Free/Basic, do not show data
-        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-        if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
-          return res.status(403).json(new ApiError(403, "Your subscription plan does not allow viewing job listings"));
+        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)
+          ?.planType as PlanType | undefined;
+        if (
+          !enrollment ||
+          planType === PlanType.FREE ||
+          planType === PlanType.BASIC
+        ) {
+          return res
+            .status(403)
+            .json(
+              new ApiError(
+                403,
+                "Your subscription plan does not allow viewing job listings",
+              ),
+            );
         }
       }
 
@@ -458,7 +509,7 @@ export class JobController {
 
       const pipeline = [
         {
-          $match: matchStage
+          $match: matchStage,
         },
         {
           $lookup: {
@@ -480,10 +531,10 @@ export class JobController {
               (() => {
                 const jobRoleTokens = toArray(jobRole);
                 const roleIds = jobRoleTokens.filter((id) =>
-                  mongoose.Types.ObjectId.isValid(id)
+                  mongoose.Types.ObjectId.isValid(id),
                 );
                 const roleNames = jobRoleTokens.filter(
-                  (value) => !mongoose.Types.ObjectId.isValid(value)
+                  (value) => !mongoose.Types.ObjectId.isValid(value),
                 );
                 const orFilters: any[] = [];
 
@@ -542,7 +593,12 @@ export class JobController {
                   as: "planDetails",
                 },
               },
-              { $unwind: { path: "$planDetails", preserveNullAndEmptyArrays: true } },
+              {
+                $unwind: {
+                  path: "$planDetails",
+                  preserveNullAndEmptyArrays: true,
+                },
+              },
               { $project: { planType: "$planDetails.planType" } },
               { $limit: 1 },
             ],
@@ -669,17 +725,26 @@ export class JobController {
           },
         },
         // Full-text search on title and description if search param provided
-        ...(search ? [
-          {
-            $match: {
-              $or: [
-                { title: { $regex: search as string, $options: "i" } },
-                { description: { $regex: search as string, $options: "i" } },
-                { shortDescription: { $regex: search as string, $options: "i" } }
-              ]
-            }
-          }
-        ] : []),
+        ...(search
+          ? [
+              {
+                $match: {
+                  $or: [
+                    { title: { $regex: search as string, $options: "i" } },
+                    {
+                      description: { $regex: search as string, $options: "i" },
+                    },
+                    {
+                      shortDescription: {
+                        $regex: search as string,
+                        $options: "i",
+                      },
+                    },
+                  ],
+                },
+              },
+            ]
+          : []),
         {
           $project: {
             _id: 1,
@@ -754,7 +819,7 @@ export class JobController {
               _id: "$jobRoleDetails._id",
               name: "$jobRoleDetails.name",
               slug: "$jobRoleDetails.slug",
-              description: "$jobRoleDetails.description"
+              description: "$jobRoleDetails.description",
             },
             trades: {
               $map: {
@@ -846,7 +911,7 @@ export class JobController {
   static async getAllUserWiseJobs(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id: user } = (req as any).user;
@@ -968,7 +1033,7 @@ export class JobController {
       ];
       const result = await JobService.getAll(
         { ...req.query, postedBy: user },
-        pipeline
+        pipeline,
       );
       return res
         .status(200)
@@ -978,11 +1043,7 @@ export class JobController {
     }
   }
 
-  static async getMyJobs(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getMyJobs(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: user } = (req as any).user;
       const { userType } = req.query; // Filter by worker or contractor
@@ -1151,7 +1212,11 @@ export class JobController {
               $map: {
                 input: "$tradesDetails",
                 as: "t",
-                in: { _id: "$$t._id", name: "$$t.name", description: "$$t.description" },
+                in: {
+                  _id: "$$t._id",
+                  name: "$$t.name",
+                  description: "$$t.description",
+                },
               },
             },
           },
@@ -1168,7 +1233,7 @@ export class JobController {
 
       const result = await JobService.getAll(
         { ...queryObj, ...(userType && { userType }) },
-        pipeline
+        pipeline,
       );
       return res
         .status(200)
@@ -1181,7 +1246,7 @@ export class JobController {
   static async getAllSuggestedJobsByUser(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const userId = (req as any)?.user?.id;
@@ -1194,7 +1259,7 @@ export class JobController {
       ]);
 
       const appliedJobIds = applications.map(
-        (app) => new mongoose.Types.ObjectId(app.job)
+        (app) => new mongoose.Types.ObjectId(app.job),
       );
       const matchStage: Record<string, any> = {
         _id: { $nin: appliedJobIds },
@@ -1321,22 +1386,21 @@ export class JobController {
               totalPages: Math.ceil(total / limit),
             },
           },
-          "Suggested jobs fetched successfully"
-        )
+          "Suggested jobs fetched successfully",
+        ),
       );
     } catch (err: any) {
       console.log("❌ Error in getAllSuggestedJobsByUser:", err);
       return next(
         err instanceof ApiError
           ? err
-          : new ApiError(500, "Failed to fetch suggested jobs")
+          : new ApiError(500, "Failed to fetch suggested jobs"),
       );
     }
   }
 
   static async getJobById(req: Request, res: Response, next: NextFunction) {
     try {
-
       const pipeline = [
         {
           $lookup: {
@@ -1477,29 +1541,17 @@ export class JobController {
             creatorName: "$userDetails.fullName",
             category: {
               _id: {
-                $ifNull: [
-                  "$categoryInfo._id",
-                  "$category"
-                ]
+                $ifNull: ["$categoryInfo._id", "$category"],
               },
               name: {
-                $ifNull: [
-                  "$categoryInfo.name",
-                  null
-                ]
+                $ifNull: ["$categoryInfo.name", null],
               },
               type: {
-                $ifNull: [
-                  "$categoryInfo.type",
-                  null
-                ]
+                $ifNull: ["$categoryInfo.type", null],
               },
               description: {
-                $ifNull: [
-                  "$categoryInfo.description",
-                  null
-                ]
-              }
+                $ifNull: ["$categoryInfo.description", null],
+              },
             },
             nature: {
               _id: "$natureDetails._id",
@@ -1513,16 +1565,16 @@ export class JobController {
                     input: "$tradesDetails",
                     as: "t",
                     in: { _id: "$$t._id", name: "$$t.name" },
-                  }
+                  },
                 },
                 {
                   $map: {
                     input: "$trades",
                     as: "t",
                     in: { _id: "$$t", name: null },
-                  }
-                }
-              ]
+                  },
+                },
+              ],
             },
             industryDetails: {
               _id: "$industryDetails._id",
@@ -1537,14 +1589,12 @@ export class JobController {
       ];
       let result: any = await JobService.getAll(
         { ...req.query, _id: req.params.id },
-        pipeline
+        pipeline,
       );
       result = result?.result?.[0];
 
       if (!result) {
-        return res
-          .status(404)
-          .json(new ApiError(404, "Job not found"));
+        return res.status(404).json(new ApiError(404, "Job not found"));
       }
 
       const currentUser = (req as any).user;
@@ -1559,7 +1609,7 @@ export class JobController {
 
         // Fetch active plan enrollment (contractor / employer only)
         const enrollment = await UserSubscriptionService.getHighestPriorityPlan(
-          currentUser.id
+          currentUser.id,
         );
 
         if (!enrollment || !enrollment.plan) {
@@ -1584,7 +1634,7 @@ export class JobController {
             if (usedViews >= limit) {
               throw new ApiError(
                 403,
-                "Monthly job view limit reached. Upgrade your plan to continue."
+                "Monthly job view limit reached. Upgrade your plan to continue.",
               );
             }
           }
@@ -1635,16 +1685,28 @@ export class JobController {
 
       // Handle imageUrl if it was uploaded
       if (data.imageUrl) {
-        if (Array.isArray(data.imageUrl) && data.imageUrl.length > 0 && data.imageUrl[0]?.url) {
+        if (
+          Array.isArray(data.imageUrl) &&
+          data.imageUrl.length > 0 &&
+          data.imageUrl[0]?.url
+        ) {
           // URL array from S3 middleware
           data.imageUrl = data.imageUrl[0].url;
         } else if (typeof data.imageUrl === "object" && data.imageUrl?.url) {
           // Single object with url property
           data.imageUrl = data.imageUrl.url;
-        } else if (typeof data.imageUrl === "string" && data.imageUrl && !data.imageUrl.startsWith("http") && !data.imageUrl.startsWith("/")) {
+        } else if (
+          typeof data.imageUrl === "string" &&
+          data.imageUrl &&
+          !data.imageUrl.startsWith("http") &&
+          !data.imageUrl.startsWith("/")
+        ) {
           // If it's a non-URL string (like "img"), don't update it - keep the existing one
           delete data.imageUrl;
-        } else if (typeof data.imageUrl === "string" && (data.imageUrl.startsWith("http") || data.imageUrl.startsWith("/"))) {
+        } else if (
+          typeof data.imageUrl === "string" &&
+          (data.imageUrl.startsWith("http") || data.imageUrl.startsWith("/"))
+        ) {
           // Valid URL string, keep it
         } else {
           // Any other case, remove imageUrl from update
@@ -1672,7 +1734,8 @@ export class JobController {
           .filter((skill: any) => {
             // Filter out empty strings and null/undefined values
             if (typeof skill === "string") return skill.trim() !== "";
-            if (typeof skill === "object" && skill.name) return skill.name.trim() !== "";
+            if (typeof skill === "object" && skill.name)
+              return skill.name.trim() !== "";
             return false;
           })
           .map((skill: any) => {
@@ -1681,7 +1744,7 @@ export class JobController {
               return {
                 name: skill.trim(),
                 level: "intermediate",
-                required: false
+                required: false,
               };
             }
             return skill;
@@ -1694,9 +1757,12 @@ export class JobController {
       if (data.locationCity) location.city = data.locationCity;
       if (data.locationState) location.state = data.locationState;
       if (data.locationCountry) location.country = data.locationCountry;
-      if (data.locationPostalCode) location.postalCode = data.locationPostalCode;
-      if (data.locationRemoteFriendly !== undefined) location.isRemoteFriendly = data.locationRemoteFriendly;
-      if (data.locationAllowsRelocation !== undefined) location.allowsRelocation = data.locationAllowsRelocation;
+      if (data.locationPostalCode)
+        location.postalCode = data.locationPostalCode;
+      if (data.locationRemoteFriendly !== undefined)
+        location.isRemoteFriendly = data.locationRemoteFriendly;
+      if (data.locationAllowsRelocation !== undefined)
+        location.allowsRelocation = data.locationAllowsRelocation;
 
       // Only update location if we have any location data
       if (Object.keys(location).length > 0) {
@@ -1743,7 +1809,7 @@ export class JobController {
   static async updateJobStatus(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id } = (req as any).user;
@@ -1752,9 +1818,7 @@ export class JobController {
         return res.status(400).json(new ApiError(400, "Status is required"));
 
       const normalizedStatus =
-        status === JobStatus.PENDING_APPROVAL
-          ? JobStatus.UNDER_REVIEW
-          : status;
+        status === JobStatus.PENDING_APPROVAL ? JobStatus.UNDER_REVIEW : status;
 
       const allowedStatuses = new Set(Object.values(JobStatus));
       if (!allowedStatuses.has(normalizedStatus)) {
@@ -1762,7 +1826,7 @@ export class JobController {
       }
 
       const existingJob = await Job.findById(req.params.id).select(
-        "_id title status postedBy history approvedBy"
+        "_id title status postedBy history approvedBy",
       );
       if (!existingJob) {
         return res
@@ -1802,7 +1866,9 @@ export class JobController {
 
         const [jobDoc, userDoc]: any = await Promise.all([
           Job.findById(req.params.id).select("status title postedBy"),
-          User.findById(result.postedBy).select("fullName email mobile userType"),
+          User.findById(result.postedBy).select(
+            "fullName email mobile userType",
+          ),
         ]);
         if (userDoc) {
           await sendDualNotification({
@@ -1878,7 +1944,7 @@ export class JobController {
   static async getJobWithHistory(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const jobId = req.params.id;
@@ -1896,7 +1962,7 @@ export class JobController {
 
       job.history = (job.history || []).sort(
         (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       return res
         .status(200)
@@ -1909,7 +1975,7 @@ export class JobController {
   static async getJobListingUsage(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { user } = req as any;
@@ -1923,8 +1989,8 @@ export class JobController {
           .json(
             new ApiError(
               403,
-              "Job listing usage is only available to employers and contractors"
-            )
+              "Job listing usage is only available to employers and contractors",
+            ),
           );
       }
 
@@ -1933,40 +1999,36 @@ export class JobController {
       return res
         .status(200)
         .json(
-          new ApiResponse(200, usage, "Job listing usage fetched successfully")
+          new ApiResponse(200, usage, "Job listing usage fetched successfully"),
         );
     } catch (err) {
       next(err);
     }
   }
 
-  static async getJobCities(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getJobCities(req: Request, res: Response, next: NextFunction) {
     try {
       const cities = await Job.aggregate([
         {
           $match: {
             // status: "open",
-            "location.city": { $nin: [null, ""] }
-          }
+            "location.city": { $nin: [null, ""] },
+          },
         },
         {
           $group: {
-            _id: { $toLower: "$location.city" }
-          }
+            _id: { $toLower: "$location.city" },
+          },
         },
         {
-          $sort: { _id: 1 }
+          $sort: { _id: 1 },
         },
         {
           $project: {
             city: "$_id",
-            _id: 0
-          }
-        }
+            _id: 0,
+          },
+        },
       ]);
 
       if (!cities || cities.length === 0) {
@@ -1975,15 +2037,13 @@ export class JobController {
           .json(new ApiResponse(200, [], "No cities found with job listings"));
       }
 
-      return res
-        .status(200)
-        .json(
-          new ApiResponse(
-            200,
-            cities.map(c => c.city),
-            "Cities fetched successfully"
-          )
-        );
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          cities.map((c) => c.city),
+          "Cities fetched successfully",
+        ),
+      );
     } catch (err) {
       next(err);
     }
@@ -1992,11 +2052,21 @@ export class JobController {
   static async getAllContractorJobs(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const currentUserId = (req as any).user?.id;
-      const { city, workMode, jobType, minSalary, maxSalary, experience, search, industryId, subIndustryId } = req.query;
+      const {
+        city,
+        workMode,
+        jobType,
+        minSalary,
+        maxSalary,
+        experience,
+        search,
+        industryId,
+        subIndustryId,
+      } = req.query;
       const toArray = (value: unknown): string[] =>
         String(value ?? "")
           .split(/[|,]/)
@@ -2016,7 +2086,9 @@ export class JobController {
       const matchStage: any = {
         status: "open",
         userType: "contractor",
-        ...(currentUserId && { postedBy: { $ne: new mongoose.Types.ObjectId(currentUserId) } })
+        ...(currentUserId && {
+          postedBy: { $ne: new mongoose.Types.ObjectId(currentUserId) },
+        }),
       };
 
       // Filter by city
@@ -2093,7 +2165,7 @@ export class JobController {
 
       const pipeline = [
         {
-          $match: matchStage
+          $match: matchStage,
         },
         {
           $lookup: {
@@ -2127,7 +2199,12 @@ export class JobController {
                   as: "planDetails",
                 },
               },
-              { $unwind: { path: "$planDetails", preserveNullAndEmptyArrays: true } },
+              {
+                $unwind: {
+                  path: "$planDetails",
+                  preserveNullAndEmptyArrays: true,
+                },
+              },
               { $project: { planType: "$planDetails.planType" } },
               { $limit: 1 },
             ],
@@ -2215,17 +2292,26 @@ export class JobController {
           },
         },
         // Full-text search on title and description if search param provided
-        ...(search ? [
-          {
-            $match: {
-              $or: [
-                { title: { $regex: search as string, $options: "i" } },
-                { description: { $regex: search as string, $options: "i" } },
-                { shortDescription: { $regex: search as string, $options: "i" } }
-              ]
-            }
-          }
-        ] : []),
+        ...(search
+          ? [
+              {
+                $match: {
+                  $or: [
+                    { title: { $regex: search as string, $options: "i" } },
+                    {
+                      description: { $regex: search as string, $options: "i" },
+                    },
+                    {
+                      shortDescription: {
+                        $regex: search as string,
+                        $options: "i",
+                      },
+                    },
+                  ],
+                },
+              },
+            ]
+          : []),
         {
           $project: {
             _id: 1,
@@ -2363,7 +2449,9 @@ export class JobController {
       const result = await JobService.getAll(req.query, pipeline);
       return res
         .status(200)
-        .json(new ApiResponse(200, result, "Contractor jobs fetched successfully"));
+        .json(
+          new ApiResponse(200, result, "Contractor jobs fetched successfully"),
+        );
     } catch (err) {
       next(err);
     }

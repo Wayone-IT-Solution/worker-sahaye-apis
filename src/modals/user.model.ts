@@ -59,7 +59,13 @@ export interface IUser extends Document {
   primaryLocation?: ILocation;
   gender?: "male" | "female" | "other" | "prefer_not_to_say";
   userAadhar?: string;
+  aadhaarVerified?: boolean;
+  aadhaarVerificationData?: Record<string, unknown> | null;
   userPan?: string;
+  panNumber?: string;
+  panVerified?: boolean;
+  panVerificationData?: Record<string, unknown> | null;
+  gstVerified?: boolean;
   profile: {
     // Worker
     designation?: string;
@@ -373,9 +379,33 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: false,
     },
+    aadhaarVerified: {
+      type: Boolean,
+      default: false,
+    },
+    aadhaarVerificationData: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    panNumber: {
+      type: String,
+      required: false,
+    },
     userPan: {
       type: String,
       required: false,
+    },
+    panVerified: {
+      type: Boolean,
+      default: false,
+    },
+    panVerificationData: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    gstVerified: {
+      type: Boolean,
+      default: false,
     },
     profileCompletion: {
       type: Number,

@@ -205,6 +205,7 @@ export interface IJob extends Document {
   subIndustryId?: Types.ObjectId; // Reference to sub-industry document
   workSchedule: IWorkSchedule;
   experienceLevel: ExperienceLevel;
+  estimatedDuration?: string;
 
   // Skills & Requirements
   skillsRequired?: ISkillRequirement[];
@@ -363,6 +364,7 @@ const JobSchema = new Schema<IJob>(
       default: ExperienceLevel.ENTRY,
       enum: Object.values(ExperienceLevel),
     },
+    estimatedDuration: String,
     industry: {
       index: true,
       type: String,

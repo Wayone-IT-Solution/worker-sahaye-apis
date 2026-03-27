@@ -72,6 +72,63 @@ export const getReviewStats = async (courseId: string) => {
   }
 };
 
+export const getRecentReviews = async (courseId: string, limit = 3) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return [];
+    }
+
+    const matchQuery = { courseId: new mongoose.Types.ObjectId(courseId) };
+    const recentReviews = await CourseReview.aggregate([
+      { $match: matchQuery },
+      { $sort: { createdAt: -1 } },
+      { $limit: Math.max(limit, 1) },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "reviewer",
+        },
+      },
+      {
+        $unwind: {
+          path: "$reviewer",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          rating: 1,
+          comment: 1,
+          isVerified: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          reviewerName: {
+            $ifNull: ["$reviewer.fullName", "Learner"],
+          },
+          reviewerTitle: {
+            $ifNull: [
+              "$reviewer.profile.designation",
+              {
+                $ifNull: ["$reviewer.profile.company.designation", ""],
+              },
+            ],
+          },
+          reviewerType: {
+            $ifNull: ["$reviewer.userType", ""],
+          },
+        },
+      },
+    ]);
+
+    return recentReviews;
+  } catch (error) {
+    console.log("Failed to fetch recent course reviews:", error);
+    return [];
+  }
+};
+
 export class CourseReviewController {
   static async createCourseReview(
     req: Request,

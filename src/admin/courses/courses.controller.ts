@@ -7,7 +7,10 @@ import { NextFunction, Request, Response } from "express";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import { CommonService } from "../../services/common.services";
-import { getReviewStats } from "../../public/coursereview/coursereview.controller";
+import {
+  getRecentReviews,
+  getReviewStats,
+} from "../../public/coursereview/coursereview.controller";
 import {
   sanitizePayloadObject,
   normalizePayloadToArray,
@@ -738,6 +741,7 @@ export class CourseController {
         return res.status(404).json(new ApiError(404, "course not found"));
 
       const reviewsData = await getReviewStats(req.params.id.toString());
+      const recentReviews = await getRecentReviews(req.params.id.toString(), 3);
       result = JSON.parse(JSON.stringify(result));
 
       // Get user's subscription benefits for personalized pricing
@@ -757,6 +761,7 @@ export class CourseController {
       const data = {
         ...result,
         ...reviewsData,
+        recentReviews,
         ...getEnrollmentWindowMeta(result),
         originalPrice: result.amount,
         yourPrice,

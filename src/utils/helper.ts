@@ -119,9 +119,12 @@ export const getPipeline = (
       return safeObjectId(value);
     }
 
-    // Array (comma-separated)
-    if (typeof value === "string" && value.includes(",")) {
-      return value.split(",").map((v) => parseValue(v.trim()));
+    // Array (comma- or pipe-separated)
+    if (typeof value === "string" && /[,|]/.test(value)) {
+      return value
+        .split(/[,|]/)
+        .map((v) => parseValue(v.trim()))
+        .filter((v) => !isEmpty(v));
     }
 
     return value;
@@ -194,8 +197,10 @@ export const getPipeline = (
       if (i === keys.length - 1) {
         // Last key - apply the value
         if (operator === "eq") {
-          // For string values, use case-insensitive regex
-          if (typeof value === "string" && operator === "eq") {
+          // Multi-value filters should behave like $in.
+          if (Array.isArray(value)) {
+            current[k] = { $in: value };
+          } else if (typeof value === "string" && operator === "eq") {
             current[k] = { $regex: new RegExp(`^${value}$`, "i") };
           } else {
             current[k] = value;

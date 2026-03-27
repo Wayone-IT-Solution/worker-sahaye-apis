@@ -11,6 +11,17 @@ const safeObjectId = (id: any) => {
   }
 };
 
+const parseQueryValue = (value: any) => {
+  if (value === null || value === undefined || value === "") return undefined;
+  if (typeof value === "string" && /[,|]/.test(value)) {
+    return value
+      .split(/[,|]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value;
+};
+
 export const buildMatchStage = (
   params: {
     status?: string;
@@ -29,19 +40,34 @@ export const buildMatchStage = (
 
   // Add exact match filters
   if (params.status) {
-    matchStage.status = params.status;
+    const parsedStatus = parseQueryValue(params.status);
+    matchStage.status = Array.isArray(parsedStatus)
+      ? { $in: parsedStatus }
+      : parsedStatus;
   }
   if (params.industryId) {
-    matchStage.industryId = safeObjectId(params.industryId);
+    const parsedIndustry = parseQueryValue(params.industryId);
+    matchStage.industryId = Array.isArray(parsedIndustry)
+      ? { $in: parsedIndustry.map(safeObjectId) }
+      : safeObjectId(parsedIndustry);
   }
   if (params.serviceId) {
-    matchStage.serviceId = safeObjectId(params.serviceId);
+    const parsedService = parseQueryValue(params.serviceId);
+    matchStage.serviceId = Array.isArray(parsedService)
+      ? { $in: parsedService.map(safeObjectId) }
+      : safeObjectId(parsedService);
   }
   if (params.categoryId) {
-    matchStage.category = safeObjectId(params.categoryId);
+    const parsedCategory = parseQueryValue(params.categoryId);
+    matchStage.category = Array.isArray(parsedCategory)
+      ? { $in: parsedCategory.map(safeObjectId) }
+      : safeObjectId(parsedCategory);
   }
   if (params.headerId) {
-    matchStage.header = safeObjectId(params.headerId);
+    const parsedHeader = parseQueryValue(params.headerId);
+    matchStage.header = Array.isArray(parsedHeader)
+      ? { $in: parsedHeader.map(safeObjectId) }
+      : safeObjectId(parsedHeader);
   }
 
   // Search functionality with custom field mapping

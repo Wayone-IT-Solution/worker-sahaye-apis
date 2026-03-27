@@ -369,6 +369,10 @@ export class PreInterviewedContractorController {
           userName: "$userDetails.fullName",
           userProfile: "$userDetails.profile",
           profilePicUrl: "$profilePicFile.url",
+          fastResponder: { $ifNull: ["$userDetails.fastResponder", 0] },
+          hasEarlyAccessBadge: {
+            $ifNull: ["$userDetails.hasEarlyAccessBadge", false],
+          },
           hasInviteSent: { $gt: [{ $size: "$inviteEngagement" }, 0] },
           hasViewProfileSent: {
             $gt: [{ $size: "$viewProfileEngagement" }, 0],

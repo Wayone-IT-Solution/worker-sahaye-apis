@@ -172,6 +172,30 @@ export class UserController {
     return byName._id.toString();
   }
 
+  private static normalizeUserProfileResponse(user: any) {
+    const plainUser =
+      typeof user?.toObject === "function" ? user.toObject() : { ...user };
+
+    if (plainUser.panNumber == null && plainUser.userPan != null) {
+      plainUser.panNumber = plainUser.userPan;
+    }
+    if (plainUser.userPan == null && plainUser.panNumber != null) {
+      plainUser.userPan = plainUser.panNumber;
+    }
+
+    plainUser.panVerified = plainUser.panVerified ?? false;
+    if (plainUser.panVerificationData == null) {
+      plainUser.panVerificationData = null;
+    }
+    plainUser.aadhaarVerified = plainUser.aadhaarVerified ?? false;
+    if (plainUser.aadhaarVerificationData == null) {
+      plainUser.aadhaarVerificationData = null;
+    }
+    plainUser.gstVerified = plainUser.gstVerified ?? false;
+
+    return plainUser;
+  }
+
   private static async createSingleUser(
     payload: any,
     rowNumber?: number
@@ -218,7 +242,13 @@ export class UserController {
       mobile,
       category: normalizedPayload?.category,
       industry: resolvedIndustryId,
-      userPan: normalizedPayload?.userPan,
+      userPan: normalizedPayload?.userPan ?? normalizedPayload?.panNumber,
+      panNumber: normalizedPayload?.panNumber ?? normalizedPayload?.userPan,
+      panVerified: Boolean(normalizedPayload?.panVerified),
+      panVerificationData: normalizedPayload?.panVerificationData,
+      aadhaarVerified: Boolean(normalizedPayload?.aadhaarVerified),
+      aadhaarVerificationData: normalizedPayload?.aadhaarVerificationData,
+      gstVerified: Boolean(normalizedPayload?.gstVerified),
       userAadhar: normalizedPayload?.userAadhar,
       workerCategory: normalizedPayload?.workerCategory,
       natureOfWork: normalizedPayload?.natureOfWork,
@@ -396,6 +426,14 @@ export class UserController {
         relocate,
         email,
         mobile,
+        userAadhar,
+        panNumber,
+        userPan,
+        panVerified,
+        panVerificationData,
+        aadhaarVerified,
+        aadhaarVerificationData,
+        gstVerified,
         workerCategory,
       } = req.body;
 
@@ -418,6 +456,36 @@ export class UserController {
         ...(resolvedIndustryId ? { industry: resolvedIndustryId } : {}),
         primaryLocation: { city, state, pincode, address, country },
       };
+
+      if (typeof panNumber !== "undefined" || typeof userPan !== "undefined") {
+        const normalizedPan = panNumber ?? userPan;
+        data.panNumber = normalizedPan;
+        data.userPan = normalizedPan;
+      }
+
+      if (typeof userAadhar !== "undefined") {
+        data.userAadhar = userAadhar;
+      }
+
+      if (typeof panVerified !== "undefined") {
+        data.panVerified = Boolean(panVerified);
+      }
+
+      if (typeof panVerificationData !== "undefined") {
+        data.panVerificationData = panVerificationData;
+      }
+
+      if (typeof aadhaarVerified !== "undefined") {
+        data.aadhaarVerified = Boolean(aadhaarVerified);
+      }
+
+      if (typeof aadhaarVerificationData !== "undefined") {
+        data.aadhaarVerificationData = aadhaarVerificationData;
+      }
+
+      if (typeof gstVerified !== "undefined") {
+        data.gstVerified = Boolean(gstVerified);
+      }
 
       // Check if email was updated - if yes, set isEmailVerified to false
       if (email && email !== currentUser.email) {
@@ -993,7 +1061,7 @@ export class UserController {
         success: true,
         message: "OTP verified successfully. Login complete.",
         token,
-        user,
+        user: UserController.normalizeUserProfileResponse(user),
       });
     } catch (error) {
       next(error);
@@ -1077,7 +1145,7 @@ export class UserController {
         success: true,
         message: "OTP verified successfully. Login complete.",
         token,
-        user,
+        user: UserController.normalizeUserProfileResponse(user),
       });
     } catch (error) {
       next(error);
@@ -1134,7 +1202,7 @@ export class UserController {
       return res.status(200).json({
         success: true,
         message: "Email verified successfully",
-        user,
+        user: UserController.normalizeUserProfileResponse(user),
       });
     } catch (error) {
       next(error);
@@ -1256,7 +1324,7 @@ export class UserController {
 
       const responseData: any = {
         ...data,
-        ...user.toObject(),
+        ...UserController.normalizeUserProfileResponse(user),
         endorsementRole: role,
         profilePicUrl: profilePic?.url || null,
         ...(endorsement ? endorsement.toObject() : {}),
@@ -1288,7 +1356,7 @@ export class UserController {
       }).sort({ createdAt: -1 });
 
       const responseData: any = {
-        ...user.toObject(),
+        ...UserController.normalizeUserProfileResponse(user),
         profilePicUrl: profilePic?.url || null,
       };
       return res
@@ -1399,7 +1467,7 @@ export class UserController {
 
       // Add profilePicUrl to user object
       const userWithProfilePic = {
-        ...result?.toObject(),
+        ...UserController.normalizeUserProfileResponse(result),
         profilePicUrl: profilePic?.url || null,
       };
 

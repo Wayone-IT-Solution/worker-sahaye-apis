@@ -1,23 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export enum JobType {
-  CONTRACT = "contract",
-  FULL_TIME = "full-time",
-  PART_TIME = "part-time",
-  FREELANCE = "freelance",
-  TEMPORARY = "temporary",
-  VOLUNTEER = "volunteer",
-  INTERNSHIP = "internship",
-  CONSULTING = "consulting",
-}
-
-export enum WorkMode {
-  REMOTE = "Remote",
-  HYBRID = "Hybrid",
-  ON_SITE = "On-site",
-  FLEXIBLE = "flexible",
-}
-
 export enum SalaryPeriod {
   DAILY = "daily",
   HOURLY = "hourly",
@@ -27,23 +9,10 @@ export enum SalaryPeriod {
   PROJECT_BASED = "project-based",
 }
 
-export enum ExperienceLevel {
-  VP = "vp",
-  MID = "mid",
-  LEAD = "lead",
-  ENTRY = "entry",
-  JUNIOR = "junior",
-  SENIOR = "senior",
-  C_LEVEL = "c-level",
-  DIRECTOR = "director",
-  PRINCIPAL = "principal",
-  EXECUTIVE = "executive",
-}
-
 export interface IUserPreference extends Document {
   preferredLocations: string[];
   userId: mongoose.Types.ObjectId;
-  jobRole: mongoose.Types.ObjectId;
+  jobRoles: mongoose.Types.ObjectId[];
   industryId?: mongoose.Types.ObjectId;
   subIndustryId?: mongoose.Types.ObjectId;
   salaryExpectation: {
@@ -52,8 +21,8 @@ export interface IUserPreference extends Document {
   };
   updatedAt: Date;
   createdAt: Date;
-  jobType: string;
-  workModes: WorkMode;
+  jobTypes: string[];
+  workModes: string[];
   isWillingToRelocate: boolean;
   experienceLevel: string;
 }
@@ -66,20 +35,19 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
       required: true,
       type: Schema.Types.ObjectId,
     },
-    jobRole: {
+    jobRoles: {
       required: true,
       ref: "Function",
-      type: Schema.Types.ObjectId,
+      type: [Schema.Types.ObjectId],
+      default: [],
     },
     industryId: {
       ref: "Industry",
       type: Schema.Types.ObjectId,
-      index: true,
     },
     subIndustryId: {
       ref: "SubIndustry",
       type: Schema.Types.ObjectId,
-      index: true,
     },
     preferredLocations: { type: [String], default: [] },
     salaryExpectation: {
@@ -90,45 +58,33 @@ const UserPreferenceSchema: Schema = new Schema<IUserPreference>(
         enum: Object.values(SalaryPeriod),
       },
     },
-    jobType: {
-      type: String,
-      default: JobType.FULL_TIME,
+    jobTypes: {
+      type: [String],
+      default: [],
     },
     workModes: {
-      index: true,
-      type: String,
-      default: WorkMode.ON_SITE,
-      enum: Object.values(WorkMode),
+      type: [String],
+      default: [],
     },
     experienceLevel: {
-      index: true,
       type: String,
-      default: ExperienceLevel.ENTRY,
+      default: "",
     },
     isWillingToRelocate: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 
-// 🔍 Filter & join optimization
-UserPreferenceSchema.index({ jobRole: 1 }); // useful for filtering or joining with JobCategory
-
-// 🏭 Industry-based filtering (already indexed on fields)
-
-// 📍 Location-based filtering
-UserPreferenceSchema.index({ preferredLocations: 1 }); // useful for searching by preferred cities
-
-// 🧠 Work preference filters
-UserPreferenceSchema.index({ jobType: 1 });
-UserPreferenceSchema.index({ isWillingToRelocate: 1 });
-
-// 💰 Salary expectation filter
-UserPreferenceSchema.index({ "salaryExpectation.frequency": 1 });
+// Indexes (removed duplicates)
+UserPreferenceSchema.index({ preferredLocations: 1 });
+UserPreferenceSchema.index({ jobTypes: 1 });
+UserPreferenceSchema.index({ workModes: 1 });
+UserPreferenceSchema.index({ experienceLevel: 1 });
 UserPreferenceSchema.index({ "salaryExpectation.amount": 1 });
-
-// 📅 For time-based queries (recent updates etc.)
+UserPreferenceSchema.index({ "salaryExpectation.frequency": 1 });
 UserPreferenceSchema.index({ updatedAt: -1 });
 UserPreferenceSchema.index({ createdAt: -1 });
+UserPreferenceSchema.index({ jobRoles: 1 });
 
 export const UserPreference = mongoose.model<IUserPreference>(
   "UserPreference",

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
@@ -6,11 +7,35 @@ import { UserPreference } from "../../modals/userpreference.model";
 
 const userPreferenceService = new CommonService(UserPreference);
 
+// ✅ Normalize multi-select fields
+function processMultiSelectFields(data: any): any {
+  const processed = { ...data };
+  const arrayFields = ["workModes", "jobTypes", "preferredLocations"]; // ✅ FIXED
+
+  arrayFields.forEach((field) => {
+    const value = processed[field];
+    if (value !== undefined && value !== null) {
+      if (Array.isArray(value)) {
+        processed[field] = value.filter(
+          (item: any) => item && String(item).trim().length > 0,
+        );
+      } else if (typeof value === "string" && value.trim().length > 0) {
+        processed[field] = [value.trim()];
+      } else {
+        processed[field] = [];
+      }
+    }
+  });
+
+  return processed;
+}
+
 export class UserPreferenceController {
+  // ✅ GET ALL
   static async getAllUserPreferences(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const pipeline = [
@@ -23,34 +48,41 @@ export class UserPreferenceController {
           },
         },
         { $unwind: "$userDetails" },
+
         {
           $lookup: {
-            from: "jobcategories",
-            localField: "jobRole",
+            from: "jobcategories", // ✅ FIXED (removed \n)
+            localField: "jobRoles",
             foreignField: "_id",
             as: "jobRoleDetails",
           },
         },
-        { $unwind: "$jobRoleDetails" },
+
         {
           $project: {
             _id: 1,
-            jobType: 1,
+            jobTypes: 1, // ✅ FIXED
             updatedAt: 1,
             createdAt: 1,
             workModes: 1,
             experienceLevel: 1,
             preferredLocations: 1,
             isWillingToRelocate: 1,
+
             "userDetails.email": 1,
             "userDetails.mobile": 1,
-            "jobRoleDetails.name": 1,
-            "jobRoleDetails.type": 1,
             "userDetails.fullName": 1,
+
+            jobRoleDetails: {
+              name: 1,
+              type: 1,
+            },
           },
         },
       ];
+
       const result = await userPreferenceService.getAll(req.query, pipeline);
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -59,21 +91,22 @@ export class UserPreferenceController {
     }
   }
 
+  // ✅ GET BY ID
   static async getUserPreferenceById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
-      const result = await userPreferenceService.getById(req.params.id);
-      if (!result)
+      const preference = await UserPreference.findById(req.params.id)
+        .populate("userId", "fullName email mobile")
+        .populate("jobRoles", "name type description");
+
+      if (!preference) {
         return res
           .status(404)
-          .json(new ApiError(404, "user preference not found"));
-
-      const preference = await UserPreference.findOne({ _id: req.params.id })
-        .populate("userId", "fullName email mobile")
-        .populate("jobRole", "name type description");
+          .json(new ApiError(404, "User preference not found"));
+      }
 
       return res
         .status(200)
@@ -83,50 +116,55 @@ export class UserPreferenceController {
     }
   }
 
+  // ✅ CREATE / UPDATE
   static async updateUserPreferenceById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { id: user } = (req as any).user;
-      const existingPref = await UserPreference.findOne({ userId: user });
 
-      if (!existingPref) {
-        const data = { ...req.body, userId: user };
-        const result = await userPreferenceService.create(data);
-        if (!result)
-          return res
-            .status(400)
-            .json(new ApiError(400, "Failed to create user Preferences"));
-        return res
-          .status(201)
-          .json(new ApiResponse(201, result, "Created successfully"));
+      let bodyData = { ...req.body };
+
+      // ✅ Convert jobRoles to ObjectId
+      if (Array.isArray(bodyData.jobRoles)) {
+        bodyData.jobRoles = bodyData.jobRoles
+          .map((id: string) => new mongoose.Types.ObjectId(id))
+          .filter(Boolean);
       }
+
+      bodyData = processMultiSelectFields(bodyData);
+
       const updatedPref = await UserPreference.findOneAndUpdate(
         { userId: user },
-        { $set: req.body },
-        { new: true }
+        { $set: bodyData },
+        { new: true, upsert: true }, // ✅ auto create if not exists
       );
+
       return res
         .status(200)
-        .json(new ApiResponse(200, updatedPref, "Updated successfully"));
+        .json(new ApiResponse(200, updatedPref, "Saved successfully"));
     } catch (err) {
       next(err);
     }
   }
 
+  // ✅ DELETE
   static async deleteUserPreferenceById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await userPreferenceService.deleteById(req.params.id);
-      if (!result)
+
+      if (!result) {
         return res
           .status(404)
           .json(new ApiError(404, "Failed to delete user preference"));
+      }
+
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Deleted successfully"));
@@ -135,31 +173,28 @@ export class UserPreferenceController {
     }
   }
 
+  // ✅ UNIQUE LOCATIONS
   static async getAllUniquePreferredLocations(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const pipeline = [
         { $unwind: "$preferredLocations" },
-
-        // normalize to lowercase and trim
         {
           $project: {
-            location: { $toLower: { $trim: { input: "$preferredLocations" } } }
-          }
+            location: {
+              $toLower: { $trim: { input: "$preferredLocations" } },
+            },
+          },
         },
-
-        // group to get unique values (case-insensitive)
         {
           $group: {
             _id: null,
-            locations: { $addToSet: "$location" }
-          }
+            locations: { $addToSet: "$location" },
+          },
         },
-
-        // convert each location to title case
         {
           $project: {
             _id: 0,
@@ -169,17 +204,23 @@ export class UserPreferenceController {
                 as: "loc",
                 in: {
                   $concat: [
-                    { $toUpper: { $substrCP: ["$$loc", 0, 1] } }, // first letter uppercase
-                    { $substrCP: ["$$loc", 1, { $strLenCP: "$$loc" }] } // rest lowercase
-                  ]
-                }
-              }
-            }
-          }
+                    { $toUpper: { $substrCP: ["$$loc", 0, 1] } },
+                    {
+                      $substrCP: ["$$loc", 1, { $strLenCP: "$$loc" }],
+                    },
+                  ],
+                },
+              },
+            },
+          },
         },
-
-        // optional: sort alphabetically
-        { $project: { locations: { $sortArray: { input: "$locations", sortBy: 1 } } } }
+        {
+          $project: {
+            locations: {
+              $sortArray: { input: "$locations", sortBy: 1 },
+            },
+          },
+        },
       ];
 
       const result = await UserPreference.aggregate(pipeline);
@@ -187,10 +228,15 @@ export class UserPreferenceController {
 
       return res
         .status(200)
-        .json(new ApiResponse(200, locations, "Unique preferred locations fetched successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            locations,
+            "Unique preferred locations fetched successfully",
+          ),
+        );
     } catch (err) {
       next(err);
     }
   }
-
 }

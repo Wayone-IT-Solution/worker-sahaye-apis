@@ -479,9 +479,9 @@ export class JobController {
       if (jobType) {
         const jobTypes = toArray(jobType);
         if (jobTypes.length === 1) {
-          matchStage.jobType = jobTypes[0];
+          matchStage.jobTypes = jobTypes[0];
         } else if (jobTypes.length > 1) {
-          matchStage.jobType = { $in: jobTypes };
+          matchStage.jobTypes = { $in: jobTypes };
         }
       }
 
@@ -514,7 +514,7 @@ export class JobController {
         {
           $lookup: {
             from: "jobroles",
-            localField: "attributes.jobRole",
+            localField: "attributes.jobRoles",
             foreignField: "_id",
             as: "jobRoleDetails",
           },
@@ -1267,12 +1267,25 @@ export class JobController {
       };
 
       // Apply filters from preferences
-      if (preferences?.jobType) matchStage.jobType = preferences.jobType;
+      if (preferences?.jobTypes) matchStage.jobTypes = preferences.jobTypes;
       if (preferences?.workModes) matchStage.workMode = preferences.workModes;
       if (preferences?.experienceLevel)
         matchStage.experienceLevel = preferences.experienceLevel;
-      if (preferences?.jobRole)
-        matchStage.category = new mongoose.Types.ObjectId(preferences.jobRole);
+      if (
+        preferences?.jobRoles &&
+        Array.isArray(preferences.jobRoles) &&
+        preferences.jobRoles.length > 0
+      ) {
+        matchStage.attributes = {
+          $elemMatch: {
+            jobRoles: {
+              $in: preferences.jobRoles.map(
+                (id) => new mongoose.Types.ObjectId(id),
+              ),
+            },
+          },
+        };
+      }
       if (
         Array.isArray(preferences?.preferredLocations) &&
         preferences.preferredLocations.length > 0
@@ -2135,9 +2148,9 @@ export class JobController {
       if (jobType) {
         const jobTypes = toArray(jobType);
         if (jobTypes.length === 1) {
-          matchStage.jobType = jobTypes[0];
+          matchStage.jobTypes = jobTypes[0];
         } else if (jobTypes.length > 1) {
-          matchStage.jobType = { $in: jobTypes };
+          matchStage.jobTypes = { $in: jobTypes };
         }
       }
 

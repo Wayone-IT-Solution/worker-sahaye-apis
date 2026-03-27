@@ -52,7 +52,7 @@ router.delete(
 // 📍 State Routes
 // ==============================
 router.post("/state", authenticateToken, asyncHandler(createState));
-router.get("/state", authenticateToken, asyncHandler(getAllStates));
+router.get("/state", asyncHandler(getAllStates));
 router.get("/state/:id", authenticateToken, asyncHandler(getStateById));
 router.put("/state/:id", authenticateToken, asyncHandler(updateStateById));
 router.delete("/state/:id", authenticateToken, asyncHandler(deleteStateById));
@@ -61,7 +61,7 @@ router.delete("/state/:id", authenticateToken, asyncHandler(deleteStateById));
 // 🏙️ City Routes
 // ==============================
 router.post("/city", authenticateToken, asyncHandler(createCity));
-router.get("/city", authenticateToken, asyncHandler(getAllCity));
+router.get("/city", asyncHandler(getAllCity));
 router.get("/city/:id", authenticateToken, asyncHandler(getCityById));
 router.put("/city/:id", authenticateToken, asyncHandler(updateCityById));
 router.delete("/city/:id", authenticateToken, asyncHandler(deleteCityById));

@@ -107,6 +107,7 @@ import notificationRoutes from "../public/notification/notification.routes";
 import paymentRoutes from "../public/payment/payment.routes";
 import subscriptionRoutes from "../public/subscription/subscription.routes";
 import promotionRoutes from "../public/promotion/promotion.routes";
+import contactUsRoutes from "../public/contactus/contactus.routes";
 import acefoneRouter from "../public/acefone/acefone.routes";
 
 // Create main router
@@ -165,6 +166,7 @@ router.use("/user", userRoutes);
 router.use("/ivr", IVRCallRoutes);
 router.use("/feature", featureRoutes);
 router.use("/message", messageRoutes);
+router.use("/contactus", contactUsRoutes);
 router.use("/invite", engagementRoutes);
 router.use("/jobsaved", jobSavedRoutes);
 router.use("/saveitems", saveItemRoutes);

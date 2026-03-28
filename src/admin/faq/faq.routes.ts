@@ -11,6 +11,7 @@ const {
   updateFaqById,
   deleteFaqById,
   getUserFaqs,
+  getUserFaqCategories,
   getUserFaqById,
   getUserFaqsByCategory,
   
@@ -71,6 +72,9 @@ router.delete("/category/:id", authenticateToken, isAdmin, asyncHandler(deleteFa
 
 // Get FAQs filtered by user type (PUBLIC)
 router.get("/", asyncHandler(getUserFaqs));
+
+// Get FAQ categories filtered by user type (PUBLIC)
+router.get("/categories", asyncHandler(getUserFaqCategories));
 
 // Get FAQ by ID (User view - with visibility check) (PUBLIC)
 router.get("/user/:id", asyncHandler(getUserFaqById));

@@ -5,9 +5,38 @@ import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
 import { CommonService } from "../../services/common.services";
 import mongoose from "mongoose";
+import {
+  normalizeFaqRole,
+  normalizeFaqRoleList,
+  parseStringList,
+} from "../../utils/faq";
 
 const faqService = new CommonService(Faq);
 const faqCategoryService = new CommonService(FaqCategory);
+
+const buildFaqVisibilityFilter = (userType?: string | null) => {
+  const role = normalizeFaqRole(userType);
+
+  if (role === "all") {
+    return { visibilityFor: "all" as const };
+  }
+
+  return {
+    $or: [{ visibilityFor: "all" }, { visibilityFor: role }],
+  };
+};
+
+const buildCategoryVisibilityFilter = (userType?: string | null) => {
+  const role = normalizeFaqRole(userType);
+
+  if (role === "all") {
+    return { visibleFor: "all" };
+  }
+
+  return {
+    visibleFor: { $in: [role, "all"] },
+  };
+};
 
 export class FaqController {
   /**
@@ -41,7 +70,7 @@ export class FaqController {
         question,
         answer,
         category,
-        visibilityFor: visibilityFor || "all",
+        visibilityFor: normalizeFaqRole(visibilityFor),
         pageSlug,
         isActive: isActive !== undefined ? isActive : true,
       };
@@ -163,6 +192,9 @@ export class FaqController {
   ) {
     try {
       const { name, description } = req.body;
+      const visibleFor = normalizeFaqRoleList(
+        req.body.visibleFor ?? req.body.userTypes ?? req.body.roles
+      );
 
       if (!name) {
         return res
@@ -170,7 +202,7 @@ export class FaqController {
           .json(new ApiError(400, "Category name is required"));
       }
 
-      const categoryData = { name, description };
+      const categoryData = { name, description, visibleFor };
       const result = await faqCategoryService.create(categoryData);
 
       return res
@@ -286,52 +318,90 @@ export class FaqController {
     next: NextFunction
   ) {
     try {
-      const { userType, page = 1, limit = 10, sortKey = "createdAt", sortDir = "desc" } = req.query;
-      
-      // Build filter query - get all active FAQs first
+      const {
+        userType,
+        page = 1,
+        limit = 10,
+        sortKey = "createdAt",
+        sortDir = "desc",
+        categoryIds,
+        pagination = "true",
+      } = req.query;
+
       let filter: any = { isActive: true };
 
-      // Apply visibility filter based on userType
-      if (userType && userType !== "all") {
-        // Show FAQs that are visible to "all" OR to the specific user type
-        filter.$or = [
-          { visibilityFor: "all" },
-          { visibilityFor: userType }
-        ];
-      } else {
-        // If userType is "all" or not provided, show only "all" visibility FAQs
-        filter.visibilityFor = "all";
+      Object.assign(filter, buildFaqVisibilityFilter(String(userType || "all")));
+
+      const selectedCategoryIds = parseStringList(categoryIds);
+      if (selectedCategoryIds.length > 0) {
+        filter.category = { $in: selectedCategoryIds };
       }
 
-      // Parse pagination parameters
-      const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
-      const limitNumber = Math.max(parseInt(limit as string, 10) || 10, 1);
-      const skipCount = (pageNumber - 1) * limitNumber;
+      const usePagination = String(pagination).toLowerCase() !== "false";
+      const pageNumber = usePagination ? Math.max(parseInt(page as string, 10) || 1, 1) : 1;
+      const limitNumber = usePagination ? Math.max(parseInt(limit as string, 10) || 10, 1) : 0;
+      const skipCount = usePagination ? (pageNumber - 1) * limitNumber : 0;
 
-      // Parse sort parameters
       const sortObj: any = {};
       sortObj[sortKey as string] = sortDir === "asc" ? 1 : -1;
 
-      // Get total count for pagination
       const totalItems = await Faq.countDocuments(filter);
-      const totalPages = Math.ceil(totalItems / limitNumber);
+      const totalPages = usePagination && limitNumber > 0 ? Math.ceil(totalItems / limitNumber) : 1;
 
-      // Populate category details with pagination
-      const result = await Faq.find(filter)
-        .populate("category", "name description")
-        .sort(sortObj)
-        .skip(skipCount)
-        .limit(limitNumber)
+      let query = Faq.find(filter)
+        .populate("category", "name description visibleFor")
+        .sort(sortObj);
+
+      if (usePagination) {
+        query = query.skip(skipCount).limit(limitNumber);
+      }
+
+      const result = await query.lean();
+
+      const visibleCategories = await FaqCategory.find(
+        buildCategoryVisibilityFilter(String(userType || "all"))
+      )
+        .sort({ name: 1 })
         .lean();
+
+      const faqCounts = await Faq.aggregate([
+        {
+          $match: {
+            isActive: true,
+            ...buildFaqVisibilityFilter(String(userType || "all")),
+          },
+        },
+        {
+          $group: {
+            _id: "$category",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const countMap = new Map<string, number>();
+      faqCounts.forEach((item) => {
+        countMap.set(String(item._id), item.count);
+      });
+
+      const categories = visibleCategories
+        .map((category: any) => ({
+          ...category,
+          faqCount: countMap.get(String(category._id)) ?? 0,
+        }))
+        .filter((category: any) => category.faqCount > 0);
 
       const response = {
         result,
-        pagination: {
-          totalItems,
-          totalPages,
-          currentPage: pageNumber,
-          itemsPerPage: limitNumber,
-        },
+        categories,
+        pagination: usePagination
+          ? {
+              totalItems,
+              totalPages,
+              currentPage: pageNumber,
+              itemsPerPage: limitNumber,
+            }
+          : null,
       };
 
       return res
@@ -360,15 +430,7 @@ export class FaqController {
 
       // Find FAQ with visibility check
       let filter: any = { _id: faqId, isActive: true };
-
-      if (userType && userType !== "all") {
-        filter.$or = [
-          { visibilityFor: "all" },
-          { visibilityFor: userType }
-        ];
-      } else {
-        filter.visibilityFor = "all";
-      }
+      Object.assign(filter, buildFaqVisibilityFilter(String(userType || "all")));
 
       const result = await Faq.findOne(filter)
         .populate("category", "name description")
@@ -397,7 +459,13 @@ export class FaqController {
   ) {
     try {
       const { categoryId } = req.params;
-      const { userType, page = 1, limit = 10, sortKey = "createdAt", sortDir = "desc" } = req.query;
+      const {
+        userType,
+        page = 1,
+        limit = 10,
+        sortKey = "createdAt",
+        sortDir = "desc",
+      } = req.query;
 
       if (!mongoose.Types.ObjectId.isValid(categoryId)) {
         return res.status(400).json(new ApiError(400, "Invalid Category ID"));
@@ -405,15 +473,7 @@ export class FaqController {
 
       // Build filter query
       let filter: any = { category: categoryId, isActive: true };
-
-      if (userType && userType !== "all") {
-        filter.$or = [
-          { visibilityFor: "all" },
-          { visibilityFor: userType }
-        ];
-      } else {
-        filter.visibilityFor = "all";
-      }
+      Object.assign(filter, buildFaqVisibilityFilter(String(userType || "all")));
 
       // Parse pagination parameters
       const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
@@ -453,5 +513,58 @@ export class FaqController {
       next(err);
     }
   }
-}
 
+  static async getUserFaqCategories(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { userType } = req.query;
+      const role = normalizeFaqRole(String(userType || "all"));
+
+      const categoryFilter =
+        role === "all"
+          ? { visibleFor: "all" }
+          : { visibleFor: { $in: [role, "all"] } };
+
+      const categories = await FaqCategory.find(categoryFilter)
+        .sort({ name: 1 })
+        .lean();
+
+      const faqVisibilityFilter = buildFaqVisibilityFilter(role);
+      const counts = await Faq.aggregate([
+        {
+          $match: {
+            isActive: true,
+            ...faqVisibilityFilter,
+          },
+        },
+        {
+          $group: {
+            _id: "$category",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const countMap = new Map<string, number>();
+      counts.forEach((item) => {
+        countMap.set(String(item._id), item.count);
+      });
+
+      const result = categories
+        .map((category: any) => ({
+          ...category,
+          faqCount: countMap.get(String(category._id)) ?? 0,
+        }))
+        .filter((category: any) => category.faqCount > 0);
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, result, "FAQ Categories fetched successfully"));
+    } catch (err) {
+      next(err);
+    }
+  }
+}

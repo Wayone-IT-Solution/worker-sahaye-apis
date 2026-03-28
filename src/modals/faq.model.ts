@@ -1,4 +1,5 @@
 import { IFaqCategory } from "./faqcategory.model";
+import { FaqRole } from "../utils/faq";
 import mongoose, { Schema, Document, model } from "mongoose";
 
 /**
@@ -6,7 +7,7 @@ import mongoose, { Schema, Document, model } from "mongoose";
  * "all" = Show to all users (general/public)
  * "brand", "influencer", "videographer", "user" = Show only to specific user types
  */
-export type FaqVisibility = "all" | "worker" | "contractor" | "employer";
+export type FaqVisibility = FaqRole;
 
 /**
  * FAQ Schema & Interface

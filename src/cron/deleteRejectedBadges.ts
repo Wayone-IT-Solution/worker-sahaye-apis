@@ -29,7 +29,7 @@ const models: Record<string, any> = {
     "Trained by Worker Sahaye": TrainedWorker,
     "Pre-Interviewed Candidate": PreInterviewed,
     "Best Facility Practices": BestPracticesFacility,
-    "Pre-Screened Contractor": PreInterviewedContractor,
+    "Pre-Screened Agency": PreInterviewedContractor,
 };
 
 cron.schedule("0 0 * * *", async () => {

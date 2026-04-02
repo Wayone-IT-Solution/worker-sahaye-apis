@@ -1,14 +1,6 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-export enum ComplianceEventType {
-  PF = "PF Return",
-  OTHER = "Other",
-  GST = "GST Return",
-  ESI = "ESI Filing",
-  HOLIDAY = "Holiday",
-  GENERAL = "General",
-  POLICY_UPDATE = "Policy Update",
-}
+
 
 export enum RecurrencePattern {
   NONE = "None",
@@ -30,7 +22,7 @@ export interface IComplianceCalendar extends Document {
   document?: string;
   customLabel?: string;
   recurrence: RecurrencePattern;
-  eventType: ComplianceEventType;
+  eventType: string;
 }
 
 const ComplianceCalendarSchema = new Schema<IComplianceCalendar>(
@@ -48,8 +40,8 @@ const ComplianceCalendarSchema = new Schema<IComplianceCalendar>(
     },
     eventType: {
       type: String,
-      enum: Object.values(ComplianceEventType),
-      default: ComplianceEventType.GENERAL,
+      trim: true,      
+      required: true,
       index: true,
     },
     customLabel: {

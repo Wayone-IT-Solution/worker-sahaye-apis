@@ -59,8 +59,11 @@ const getCandidateBrandingEligibility = async (userId: string | null) => {
   }
 
   // Get user's highest priority active subscription plan
-  const { UserSubscriptionService } = require("../../services/userSubscription.service");
-  const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+  const {
+    UserSubscriptionService,
+  } = require("../../services/userSubscription.service");
+  const enrollment =
+    await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, return FREE plan eligibility
   if (!enrollment) {
@@ -120,14 +123,18 @@ const getCandidateBrandingEligibility = async (userId: string | null) => {
 
 export class UserController {
   private static normalizeUserType(input: unknown): UserType | null {
-    const value = String(input ?? "").trim().toLowerCase();
+    const value = String(input ?? "")
+      .trim()
+      .toLowerCase();
     return (Object.values(UserType) as string[]).includes(value)
       ? (value as UserType)
       : null;
   }
 
   private static normalizeUserStatus(input: unknown): UserStatus | null {
-    const value = String(input ?? "").trim().toLowerCase();
+    const value = String(input ?? "")
+      .trim()
+      .toLowerCase();
     return (Object.values(UserStatus) as string[]).includes(value)
       ? (value as UserStatus)
       : null;
@@ -139,7 +146,7 @@ export class UserController {
 
   private static async resolveIndustryId(
     input: unknown,
-    prefix = ""
+    prefix = "",
   ): Promise<string | undefined> {
     if (input == null) return undefined;
 
@@ -161,7 +168,10 @@ export class UserController {
     }
 
     const byName = await Industry.findOne({
-      name: { $regex: `^${UserController.escapeRegex(candidate)}$`, $options: "i" },
+      name: {
+        $regex: `^${UserController.escapeRegex(candidate)}$`,
+        $options: "i",
+      },
       status: IndustryStatus.ACTIVE,
     }).select("_id");
 
@@ -198,7 +208,7 @@ export class UserController {
 
   private static async createSingleUser(
     payload: any,
-    rowNumber?: number
+    rowNumber?: number,
   ): Promise<any> {
     const prefix = rowNumber ? `Row ${rowNumber}: ` : "";
     const normalizedPayload = sanitizePayloadObject(payload);
@@ -207,11 +217,13 @@ export class UserController {
       .toLowerCase();
     const mobile = String(normalizedPayload?.mobile ?? "").trim();
     const fullName = String(normalizedPayload?.fullName ?? "").trim();
-    const userType = UserController.normalizeUserType(normalizedPayload?.userType);
+    const userType = UserController.normalizeUserType(
+      normalizedPayload?.userType,
+    );
     const referralCode = String(normalizedPayload?.referralCode ?? "").trim();
     const resolvedIndustryId = await UserController.resolveIndustryId(
       normalizedPayload?.industry,
-      prefix
+      prefix,
     );
 
     const missingFields: string[] = [];
@@ -222,7 +234,7 @@ export class UserController {
     if (missingFields.length) {
       throw new ApiError(
         400,
-        `${prefix}Missing required fields: ${missingFields.join(", ")}`
+        `${prefix}Missing required fields: ${missingFields.join(", ")}`,
       );
     }
 
@@ -271,7 +283,7 @@ export class UserController {
     if (mobileExist) {
       throw new ApiError(
         400,
-        `${prefix}A ${mobileExist.userType} account with this phone number already exists.`
+        `${prefix}A ${mobileExist.userType} account with this phone number already exists.`,
       );
     }
 
@@ -280,7 +292,7 @@ export class UserController {
       if (emailExist) {
         throw new ApiError(
           400,
-          `${prefix}A ${emailExist.userType} account with this email address already exists.`
+          `${prefix}A ${emailExist.userType} account with this email address already exists.`,
         );
       }
     }
@@ -308,7 +320,12 @@ export class UserController {
         if (!rows.length) {
           return res
             .status(400)
-            .json(new ApiError(400, "Missing required fields: mobile, fullName, userType"));
+            .json(
+              new ApiError(
+                400,
+                "Missing required fields: mobile, fullName, userType",
+              ),
+            );
         }
 
         const seenMobiles = new Set<string>();
@@ -318,13 +335,20 @@ export class UserController {
           const row = rows[index] || {};
           const rowNumber = index + 1;
           const mobile = String(row?.mobile ?? "").trim();
-          const email = String(row?.email ?? "").trim().toLowerCase();
+          const email = String(row?.email ?? "")
+            .trim()
+            .toLowerCase();
 
           if (mobile) {
             if (seenMobiles.has(mobile)) {
               return res
                 .status(400)
-                .json(new ApiError(400, `Row ${rowNumber}: Duplicate mobile in upload payload`));
+                .json(
+                  new ApiError(
+                    400,
+                    `Row ${rowNumber}: Duplicate mobile in upload payload`,
+                  ),
+                );
             }
             seenMobiles.add(mobile);
           }
@@ -333,7 +357,12 @@ export class UserController {
             if (seenEmails.has(email)) {
               return res
                 .status(400)
-                .json(new ApiError(400, `Row ${rowNumber}: Duplicate email in upload payload`));
+                .json(
+                  new ApiError(
+                    400,
+                    `Row ${rowNumber}: Duplicate email in upload payload`,
+                  ),
+                );
             }
             seenEmails.add(email);
           }
@@ -343,7 +372,7 @@ export class UserController {
         for (let index = 0; index < rows.length; index += 1) {
           const created = await UserController.createSingleUser(
             rows[index],
-            index + 1
+            index + 1,
           );
           createdUsers.push(created);
         }
@@ -354,20 +383,24 @@ export class UserController {
             new ApiResponse(
               201,
               createdUsers,
-              `${createdUsers.length} users created successfully`
-            )
+              `${createdUsers.length} users created successfully`,
+            ),
           );
       }
 
       const newUser = await UserController.createSingleUser(req.body);
-      const createdUserType = String(newUser?.userType || req.body?.userType || "user");
-      return res.status(201).json(
-        new ApiResponse(
-          201,
-          newUser,
-          `${createdUserType.charAt(0).toUpperCase() + createdUserType.slice(1)} created successfully`
-        )
+      const createdUserType = String(
+        newUser?.userType || req.body?.userType || "user",
       );
+      return res
+        .status(201)
+        .json(
+          new ApiResponse(
+            201,
+            newUser,
+            `${createdUserType.charAt(0).toUpperCase() + createdUserType.slice(1)} created successfully`,
+          ),
+        );
     } catch (error) {
       next(error);
     }
@@ -379,9 +412,7 @@ export class UserController {
       const targetUserId = req.params.id || authUser?.id;
 
       if (!targetUserId) {
-        return res
-          .status(400)
-          .json(new ApiError(400, "User ID is required"));
+        return res.status(400).json(new ApiError(400, "User ID is required"));
       }
 
       // Prevent admin token from deleting itself using generic self-delete route.
@@ -405,12 +436,12 @@ export class UserController {
   static async updateUser(
     req: Request | any,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { id } = req.user;
       const resolvedIndustryId = await UserController.resolveIndustryId(
-        req.body?.industry
+        req.body?.industry,
       );
       const {
         city,
@@ -440,9 +471,7 @@ export class UserController {
       // Fetch the current user to check for email/mobile changes
       const currentUser = await User.findById(id);
       if (!currentUser) {
-        return res.status(404).json(
-          new ApiError(404, "User not found")
-        );
+        return res.status(404).json(new ApiError(404, "User not found"));
       }
 
       const data: any = {
@@ -504,7 +533,8 @@ export class UserController {
 
       // Update fast responder score if it's a worker
       if (result.userType === UserType.WORKER) {
-        const { updateFastResponderScore } = await import("../../services/fastResponder.service");
+        const { updateFastResponderScore } =
+          await import("../../services/fastResponder.service");
         await updateFastResponderScore(result._id);
       }
 
@@ -517,9 +547,10 @@ export class UserController {
           new ApiResponse(
             200,
             result,
-            `${userType.charAt(0).toUpperCase() + userType.slice(1)
-            } updated successfully`
-          )
+            `${
+              userType.charAt(0).toUpperCase() + userType.slice(1)
+            } updated successfully`,
+          ),
         );
     } catch (error) {
       next(error);
@@ -529,7 +560,7 @@ export class UserController {
   static async getAllUsers(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user?.id);
@@ -677,20 +708,20 @@ export class UserController {
         // Add filter stage based on engagementType query parameter
         ...(engagementType
           ? [
-            {
-              $match:
-                engagementType === "invite"
-                  ? { inviteEngagement: { $ne: [] } }
-                  : engagementType === "viewprofile"
-                    ? { viewProfileEngagement: { $ne: [] } }
-                    : engagementType === "contactunlock"
-                      ? { contactUnlockEngagement: { $ne: [] } }
-                      : engagementType === "saveprofile" ||
-                        engagementType === "saved"
-                        ? { saveProfileEngagement: { $ne: [] } }
-                        : {},
-            },
-          ]
+              {
+                $match:
+                  engagementType === "invite"
+                    ? { inviteEngagement: { $ne: [] } }
+                    : engagementType === "viewprofile"
+                      ? { viewProfileEngagement: { $ne: [] } }
+                      : engagementType === "contactunlock"
+                        ? { contactUnlockEngagement: { $ne: [] } }
+                        : engagementType === "saveprofile" ||
+                            engagementType === "saved"
+                          ? { saveProfileEngagement: { $ne: [] } }
+                          : {},
+              },
+            ]
           : []),
         {
           $lookup: {
@@ -750,7 +781,12 @@ export class UserController {
                 "$latestEnrollmentDetails.assignedByName",
                 {
                   $cond: [
-                    { $eq: ["$latestEnrollmentDetails.gateway", PlanPaymentGateway.ADMIN_ASSIGN] },
+                    {
+                      $eq: [
+                        "$latestEnrollmentDetails.gateway",
+                        PlanPaymentGateway.ADMIN_ASSIGN,
+                      ],
+                    },
                     "Admin",
                     {
                       $cond: [
@@ -769,11 +805,11 @@ export class UserController {
         {
           $sort: {
             hasEarlyAccessBadge: -1, // Early access badge holders first
-            hasPremiumPlan: -1,       // Then premium users
-            profileCompletion: -1,    // Then by profile completion
-            createdAt: -1,            // Then by newest
-          }
-        }
+            hasPremiumPlan: -1, // Then premium users
+            profileCompletion: -1, // Then by profile completion
+            createdAt: -1, // Then by newest
+          },
+        },
       ];
 
       const result = await userService.getAll(restQuery, pipeline);
@@ -799,26 +835,32 @@ export class UserController {
   static async updateUserStatusByAdmin(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { id } = req.params;
       const adminId = (req as any)?.user?.id;
-      const normalizedStatus = UserController.normalizeUserStatus(req.body?.status);
+      const normalizedStatus = UserController.normalizeUserStatus(
+        req.body?.status,
+      );
       const reasonRaw = req.body?.reason;
       const reason = String(reasonRaw ?? "").trim();
 
       if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json(new ApiError(400, "Valid user ID is required"));
+        return res
+          .status(400)
+          .json(new ApiError(400, "Valid user ID is required"));
       }
 
       if (!normalizedStatus) {
-        return res.status(400).json(
-          new ApiError(
-            400,
-            `Invalid status. Allowed values: ${Object.values(UserStatus).join(", ")}`
-          )
-        );
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              `Invalid status. Allowed values: ${Object.values(UserStatus).join(", ")}`,
+            ),
+          );
       }
 
       const user = await User.findById(id);
@@ -829,7 +871,12 @@ export class UserController {
       if (adminId && id === adminId) {
         return res
           .status(400)
-          .json(new ApiError(400, "You cannot update your own user status from this API"));
+          .json(
+            new ApiError(
+              400,
+              "You cannot update your own user status from this API",
+            ),
+          );
       }
 
       user.status = normalizedStatus;
@@ -837,7 +884,9 @@ export class UserController {
       user.statusUpdatedAt = new Date();
       user.statusUpdatedBy = adminId || undefined;
 
-      const statusHistory = Array.isArray(user.statusHistory) ? user.statusHistory : [];
+      const statusHistory = Array.isArray(user.statusHistory)
+        ? user.statusHistory
+        : [];
       statusHistory.push({
         status: normalizedStatus,
         reason: reason || undefined,
@@ -858,8 +907,8 @@ export class UserController {
             statusUpdatedAt: user.statusUpdatedAt,
             statusUpdatedBy: user.statusUpdatedBy,
           },
-          "User status updated successfully"
-        )
+          "User status updated successfully",
+        ),
       );
     } catch (error) {
       next(error);
@@ -877,17 +926,24 @@ export class UserController {
         });
       }
       const user = await User.findOne(
-        mobile ? { mobile, userType } : { email, userType }
+        mobile ? { mobile, userType } : { email, userType },
       );
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
+          message:
+            "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
       // Check if mobile is one of the test numbers
       let otpCode: string;
-      if (mobile && (mobile == "9354697528" || mobile == "9999999999" || mobile == "8958600187" || mobile == "7848465648")) {
+      if (
+        mobile &&
+        (mobile == "9354697528" ||
+          mobile == "9999999999" ||
+          mobile == "8958600187" ||
+          mobile == "7848465648")
+      ) {
         otpCode = "123456";
       } else {
         otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -898,7 +954,7 @@ export class UserController {
       const savedOtp = await Otp.findOneAndUpdate(
         mobile ? { mobile } : { email },
         { otp: otpCode, expiresAt, verified: false, mobile, email },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true },
       );
       if (email) {
         // Send OTP via email
@@ -909,10 +965,12 @@ export class UserController {
           text: `Your OTP is ${otpCode}`,
         });
       } else if (mobile) {
-
         const msg91Response: any = await sendMsg91Otp(mobile, otpCode);
 
-        if (msg91Response?.type === "error" || msg91Response?.message?.includes("error")) {
+        if (
+          msg91Response?.type === "error" ||
+          msg91Response?.message?.includes("error")
+        ) {
           return res.status(500).json({
             success: false,
             message: `Failed to send OTP: ${msg91Response?.message}`,
@@ -932,7 +990,7 @@ export class UserController {
   static async generateAdminOtp(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { mobile } = req.body;
@@ -948,7 +1006,8 @@ export class UserController {
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "No user account was found for the entered mobile number or email. Please check the details and try again.",
+          message:
+            "No user account was found for the entered mobile number or email. Please check the details and try again.",
         });
       }
 
@@ -971,7 +1030,7 @@ export class UserController {
           otp: otpCode,
           verified: false,
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true },
       );
 
       await sendMsg91Otp(mobile, otpCode);
@@ -985,11 +1044,10 @@ export class UserController {
     }
   }
 
-
   static async verifyOtp(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { mobile, email, otp, userType } = req.body;
@@ -1068,12 +1126,10 @@ export class UserController {
     }
   }
 
-
-
   static async verifyAdminOtp(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { mobile, otp } = req.body;
@@ -1155,7 +1211,7 @@ export class UserController {
   static async verifyEmailOtp(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { email, otp } = req.body;
@@ -1212,7 +1268,7 @@ export class UserController {
   static async getUserById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const userId = req.params.id;
@@ -1235,18 +1291,18 @@ export class UserController {
         connections.map((conn) =>
           conn.requester.toString() === selfId
             ? conn.recipient.toString()
-            : conn.requester.toString()
+            : conn.requester.toString(),
         );
 
       const userFriendIds = getFriendIds(userConnections, userId);
       const requesterFriendIds = getFriendIds(
         requesterConnections,
-        requestedUser
+        requestedUser,
       );
 
       // Step 3: Find mutual friend IDs
       const mutualFriendIds = userFriendIds.filter((id) =>
-        requesterFriendIds.includes(id)
+        requesterFriendIds.includes(id),
       );
       const mutualFriendCount = mutualFriendIds.length;
 
@@ -1342,7 +1398,7 @@ export class UserController {
   static async getUserForAdminById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const userId = req.params.id;
@@ -1370,7 +1426,7 @@ export class UserController {
   static async getCurrentUser(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       let enrollmentCourses: any;
@@ -1378,24 +1434,21 @@ export class UserController {
       const { id: userId } = (req as any).user;
       const result = await userService.getById(userId);
 
-      enrollmentCourses = await Enrollment.find(
-        {
-          user: userId,
-          status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
-        }
-      );
+      enrollmentCourses = await Enrollment.find({
+        user: userId,
+        status: EnrollmentStatus.ACTIVE || EnrollmentStatus.COMPLETED,
+      });
 
-      enrollSubscriptionPlans = await EnrolledPlan.find(
-        {
-          user: userId,
-          status: {
-            $in: [PlanEnrollmentStatus.ACTIVE],
-          },
-        }
-      ).populate("plan");
+      enrollSubscriptionPlans = await EnrolledPlan.find({
+        user: userId,
+        status: {
+          $in: [PlanEnrollmentStatus.ACTIVE],
+        },
+      }).populate("plan");
 
       // Check if user has active plan
-      const hasActivePlan = enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
+      const hasActivePlan =
+        enrollSubscriptionPlans && enrollSubscriptionPlans.length > 0;
 
       // Get subscription plan type for flags using highest priority plan
       let subscriptionPlanType = PlanType.FREE;
@@ -1404,8 +1457,11 @@ export class UserController {
       };
 
       // Get the highest priority plan
-      const { UserSubscriptionService } = require("../../services/userSubscription.service");
-      const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
+      const {
+        UserSubscriptionService,
+      } = require("../../services/userSubscription.service");
+      const enrollment =
+        await UserSubscriptionService.getHighestPriorityPlan(userId);
 
       if (enrollment && enrollment.plan) {
         subscriptionPlanType = (enrollment.plan as any).planType;
@@ -1416,14 +1472,21 @@ export class UserController {
         // Build subscription flags based on user type and plan type
         if (userType === "worker") {
           // Worker plan flags: FREE, BASIC, PREMIUM
-          subscriptionInfo.isBasicPlan = subscriptionPlanType === PlanType.BASIC;
-          subscriptionInfo.isPremiumPlan = subscriptionPlanType === PlanType.PREMIUM;
-          subscriptionInfo.hasBasicOrPremium = subscriptionPlanType === PlanType.BASIC || subscriptionPlanType === PlanType.PREMIUM;
+          subscriptionInfo.isBasicPlan =
+            subscriptionPlanType === PlanType.BASIC;
+          subscriptionInfo.isPremiumPlan =
+            subscriptionPlanType === PlanType.PREMIUM;
+          subscriptionInfo.hasBasicOrPremium =
+            subscriptionPlanType === PlanType.BASIC ||
+            subscriptionPlanType === PlanType.PREMIUM;
         } else if (userType === "employer" || userType === "contractor") {
           // Employer/Contractor plan flags: FREE, BASIC, GROWTH, ENTERPRISE
-          subscriptionInfo.isBasicPlan = subscriptionPlanType === PlanType.BASIC;
-          subscriptionInfo.isGrowthPlan = subscriptionPlanType === PlanType.GROWTH;
-          subscriptionInfo.isEnterprisePlan = subscriptionPlanType === PlanType.ENTERPRISE;
+          subscriptionInfo.isBasicPlan =
+            subscriptionPlanType === PlanType.BASIC;
+          subscriptionInfo.isGrowthPlan =
+            subscriptionPlanType === PlanType.GROWTH;
+          subscriptionInfo.isEnterprisePlan =
+            subscriptionPlanType === PlanType.ENTERPRISE;
 
           // Convenience flags for checking tier thresholds
           subscriptionInfo.hasBasicOrAbove =
@@ -1435,7 +1498,8 @@ export class UserController {
             subscriptionPlanType === PlanType.GROWTH ||
             subscriptionPlanType === PlanType.ENTERPRISE;
 
-          subscriptionInfo.hasEnterprise = subscriptionPlanType === PlanType.ENTERPRISE;
+          subscriptionInfo.hasEnterprise =
+            subscriptionPlanType === PlanType.ENTERPRISE;
         }
       } else {
         // Free plan flags for all user types
@@ -1443,7 +1507,10 @@ export class UserController {
           subscriptionInfo.isBasicPlan = false;
           subscriptionInfo.isPremiumPlan = false;
           subscriptionInfo.hasBasicOrPremium = false;
-        } else if (result?.userType === "employer" || result?.userType === "contractor") {
+        } else if (
+          result?.userType === "employer" ||
+          result?.userType === "contractor"
+        ) {
           subscriptionInfo.isBasicPlan = false;
           subscriptionInfo.isGrowthPlan = false;
           subscriptionInfo.isEnterprisePlan = false;
@@ -1456,8 +1523,10 @@ export class UserController {
       // Fetch documents from FileUpload model
       const documents = await FileUpload.find(
         { userId },
-        { url: 1, tag: 1, originalName: 1, uploadedAt: 1, _id: 1 }
-      ).sort({ uploadedAt: -1 }).lean();
+        { url: 1, tag: 1, originalName: 1, uploadedAt: 1, _id: 1 },
+      )
+        .sort({ uploadedAt: -1 })
+        .lean();
 
       // Fetch profilePic from FileUpload model
       const profilePic = await FileUpload.findOne({
@@ -1471,22 +1540,20 @@ export class UserController {
         profilePicUrl: profilePic?.url || null,
       };
 
-      return res
-        .status(200)
-        .json(
-          new ApiResponse(
-            200,
-            {
-              user: userWithProfilePic,
-              enrollmentCourses,
-              enrollSubscriptionPlans,
-              documents,
-              hasActivePlan,
-              subscriptionInfo,
-            },
-            `User fetched successfully`
-          )
-        );
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            user: userWithProfilePic,
+            enrollmentCourses,
+            enrollSubscriptionPlans,
+            documents,
+            hasActivePlan,
+            subscriptionInfo,
+          },
+          `User fetched successfully`,
+        ),
+      );
     } catch (error) {
       next(error); // Pass errors to the error handling middleware
     }
@@ -1519,7 +1586,7 @@ export class UserController {
         User.distinct("primaryLocation.state"),
         User.distinct("primaryLocation.pincode"),
         User.distinct("primaryLocation.availability.status"),
-        User.distinct("primaryLocation.availability.preferredWorkType")
+        User.distinct("primaryLocation.availability.preferredWorkType"),
       ]);
       const [
         preferredLocations,
@@ -1527,7 +1594,7 @@ export class UserController {
         frequency,
         jobType,
         workModes,
-        experienceLevel
+        experienceLevel,
       ] = await Promise.all([
         UserPreference.distinct("preferredLocations"),
         UserPreference.distinct("salaryExpectation.amount"),
@@ -1561,7 +1628,7 @@ export class UserController {
           },
           availability: {
             status: availabilityStatus.filter(Boolean),
-            preferredWorkType: preferredWorkType.filter(Boolean)
+            preferredWorkType: preferredWorkType.filter(Boolean),
           },
           employmentPreferences: {
             jobType: jobType.filter(Boolean),
@@ -1569,7 +1636,7 @@ export class UserController {
             workModes: workModes.filter(Boolean),
             experienceLevel: experienceLevel.filter(Boolean),
             salaryExpectation: salaryExpectation.filter(Boolean),
-          }
+          },
         },
       });
     } catch (error) {
@@ -1585,42 +1652,49 @@ export class UserController {
   static async grantEarlyAccessBadge(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { userId } = req.params;
       const { duration } = req.body; // Optional: duration in days (0 = permanent)
 
       if (!userId) {
-        return res.status(400).json(
-          new ApiError(400, "User ID is required")
-        );
+        return res.status(400).json(new ApiError(400, "User ID is required"));
       }
 
       const user = await User.findById(userId);
       if (!user) {
-        return res.status(404).json(
-          new ApiError(404, "User not found")
-        );
+        return res.status(404).json(new ApiError(404, "User not found"));
       }
 
       // Only allow for EMPLOYER, CONTRACTOR, or AGENT
-      if (![UserType.EMPLOYER, UserType.CONTRACTOR].includes(user.userType as UserType)) {
-        return res.status(400).json(
-          new ApiError(400, `Early Access Badge is only for Employers and Contractors.User type is: ${user.userType} `)
-        );
+      if (
+        ![UserType.EMPLOYER, UserType.CONTRACTOR].includes(
+          user.userType as UserType,
+        )
+      ) {
+        return res
+          .status(400)
+          .json(
+            new ApiError(
+              400,
+              `Early Access Badge is only for Employers and Contractors.User type is: ${user.userType} `,
+            ),
+          );
       }
 
       user.hasEarlyAccessBadge = true;
       await user.save();
 
-      return res.status(200).json(
-        new ApiResponse(
-          200,
-          user,
-          `Early Access Badge granted to ${user.fullName} `
-        )
-      );
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            user,
+            `Early Access Badge granted to ${user.fullName} `,
+          ),
+        );
     } catch (error) {
       next(error);
     }
@@ -1630,34 +1704,32 @@ export class UserController {
   static async revokeEarlyAccessBadge(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
       const { userId } = req.params;
 
       if (!userId) {
-        return res.status(400).json(
-          new ApiError(400, "User ID is required")
-        );
+        return res.status(400).json(new ApiError(400, "User ID is required"));
       }
 
       const user = await User.findById(userId);
       if (!user) {
-        return res.status(404).json(
-          new ApiError(404, "User not found")
-        );
+        return res.status(404).json(new ApiError(404, "User not found"));
       }
 
       user.hasEarlyAccessBadge = false;
       await user.save();
 
-      return res.status(200).json(
-        new ApiResponse(
-          200,
-          user,
-          `Early Access Badge revoked from ${user.fullName} `
-        )
-      );
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            user,
+            `Early Access Badge revoked from ${user.fullName} `,
+          ),
+        );
     } catch (error) {
       next(error);
     }
@@ -1667,19 +1739,22 @@ export class UserController {
   static async getEarlyAccessBadgeUsers(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<any> {
     try {
-      const users = await User.find({ hasEarlyAccessBadge: true })
-        .select("fullName email mobile userType hasPremiumPlan hasEarlyAccessBadge createdAt");
-
-      return res.status(200).json(
-        new ApiResponse(
-          200,
-          users,
-          `Found ${users.length} users with Early Access Badge`
-        )
+      const users = await User.find({ hasEarlyAccessBadge: true }).select(
+        "fullName email mobile userType hasPremiumPlan hasEarlyAccessBadge createdAt",
       );
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            users,
+            `Found ${users.length} users with Early Access Badge`,
+          ),
+        );
     } catch (error) {
       next(error);
     }
@@ -1688,7 +1763,7 @@ export class UserController {
   static async getCandidateBrandingStatus(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const userId = (req as any).user?.id;
@@ -1714,17 +1789,18 @@ export class UserController {
               skilledCandidate: eligibility.skilledCandidate,
               trainedByWorkerSahay: eligibility.trainedByWorkerSahay,
               preInterviewedCandidate: eligibility.preInterviewedCandidate,
-              profileFeaturedToEmployers: eligibility.profileFeaturedToEmployers,
+              profileFeaturedToEmployers:
+                eligibility.profileFeaturedToEmployers,
             },
             summary: {
               totalEligible: Object.values(eligibility).filter(
-                (v) => typeof v === "boolean" && v
+                (v) => typeof v === "boolean" && v,
               ).length,
               message: this.getBrandingMessage(eligibility.planType),
             },
           },
-          "Candidate branding eligibility fetched successfully"
-        )
+          "Candidate branding eligibility fetched successfully",
+        ),
       );
     } catch (error) {
       next(error);

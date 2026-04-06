@@ -15,6 +15,14 @@ const {
   deletePersonalAssistantById,
   getPersonalAssistanceBenefits,
   bookPersonalAssistance,
+  getDashboardOverview,
+  getAssistantsWithSlots,
+  getTodaySlots,
+  getSlotsByDateRange,
+  get7DaysSlots,
+  get30DaysSlots,
+  getTopSupportServices,
+  getBookingStats,
 } = PersonalAssistantController;
 
 const router = express.Router();
@@ -24,6 +32,63 @@ router.get("/benefits/my", authenticateToken, asyncHandler(getPersonalAssistance
 
 // Book personal assistance with subscription-based pricing
 router.post("/book/service", authenticateToken, asyncHandler(bookPersonalAssistance));
+
+// Dashboard Analytics Routes
+router.get(
+  "/dashboard/overview",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getDashboardOverview)
+);
+
+router.get(
+  "/dashboard/assistants-with-slots",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getAssistantsWithSlots)
+);
+
+router.get(
+  "/dashboard/today-slots",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getTodaySlots)
+);
+
+router.get(
+  "/dashboard/slots-by-range",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getSlotsByDateRange)
+);
+
+router.get(
+  "/dashboard/7days-slots",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(get7DaysSlots)
+);
+
+router.get(
+  "/dashboard/30days-slots",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(get30DaysSlots)
+);
+
+router.get(
+  "/dashboard/top-services",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getTopSupportServices)
+);
+
+router.get(
+  "/dashboard/booking-stats",
+  authenticateToken,
+  isAdmin,
+  asyncHandler(getBookingStats)
+);
 
 router
   .post(

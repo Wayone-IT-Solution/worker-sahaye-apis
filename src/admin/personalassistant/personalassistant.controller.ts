@@ -7,6 +7,8 @@ import { PersonalAssistant } from "../../modals/personalassistant.model";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import { Booking } from "../../modals/booking.model";
+import { Slot } from "../../modals/slot.model";
+import SupportService from "../../modals/supportservice.model";
 
 const PersonalAssistantService = new CommonService(PersonalAssistant);
 
@@ -17,38 +19,24 @@ export class PersonalAssistantController {
     next: NextFunction
   ) {
     try {
-      const duplicate = await PersonalAssistant.findOne({
-        $or: [
-          { email: req.body.email },
-          { phoneNumber: req.body.phoneNumber },
-          { name: req.body.name },
-        ],
-      });
       const profileImageUrl = req?.body?.profileImageUrl[0]?.url;
-      if (!profileImageUrl)
-        return res
-          .status(403)
-          .json(new ApiError(403, "Profile Image is Required."));
-      if (duplicate) {
-        return res
-          .status(409)
-          .json(
-            new ApiError(
-              409,
-              "Personal Assistant with same name, email, or phoneNumber already exists."
-            )
-          );
-      }
       const location = {
         city: req.body.city,
         state: req.body.state,
         pinCode: req.body.pinCode,
         country: req.body.country,
       };
+      const paInformation = {
+        fullName: req.body.paFullName,
+        email: req.body.paEmail,
+        phoneNumber: req.body.paPhoneNumber,
+        address: req.body.paAddress,
+      };
       const result = await PersonalAssistantService.create({
         ...req.body,
         location,
         profileImageUrl,
+        paInformation,
       });
       if (!result) {
         return res
@@ -122,7 +110,13 @@ export class PersonalAssistantController {
         pinCode: req.body.pinCode,
         country: req.body.country,
       };
-      const profileImageUrl = req?.body?.profileImageUrl[0]?.url;
+      const paInformation = {
+        fullName: req.body.paFullName,
+        email: req.body.paEmail,
+        phoneNumber: req.body.paPhoneNumber,
+        address: req.body.paAddress,
+      };
+      const profileImageUrl = req?.body?.profileImageUrl && Array.isArray(req.body.profileImageUrl) && req.body.profileImageUrl[0]?.url;
       const record = await PersonalAssistantService.getById(id);
       if (!record) {
         return res.status(404).json(new ApiError(404, "Assistant not found."));
@@ -139,6 +133,7 @@ export class PersonalAssistantController {
         ...req.body,
         location,
         profileImageUrl: imageUrl || profileImageUrl,
+        paInformation,
       });
       if (!result) {
         return res
@@ -423,5 +418,503 @@ export class PersonalAssistantController {
       next(err);
     }
   }
+
+  // Dashboard Analytics Methods
+  static async getDashboardOverview(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const [totalAssistants, totalSlots, totalBookings, totalRevenue, todayBookings] = await Promise.all([
+        PersonalAssistant.countDocuments(),
+        Slot.aggregate([{ $group: { _id: null, count: { $sum: { $size: "$timeslots" } } } }]),
+        Booking.countDocuments(),
+        Booking.aggregate([
+          { $group: { _id: null, totalRevenue: { $sum: "$totalAmount" } } },
+        ]),
+        Booking.countDocuments({
+          createdAt: {
+            $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            $lt: new Date(new Date().setHours(23, 59, 59, 999)),
+          },
+        }),
+      ]);
+
+      const overview = {
+        totalAssistants,
+        totalSlots: totalSlots[0]?.count || 0,
+        totalBookings,
+        totalRevenue: totalRevenue[0]?.totalRevenue || 0,
+        todayBookings,
+      };
+
+      return res.status(200).json(
+        new ApiResponse(200, overview, "Dashboard overview fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getAssistantsWithSlots(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      // Extract filter parameters from query
+      const { search, status, verified, city, startDate, endDate, sortBy = "totalBookings" } = req.query;
+      
+      // Build match stage for filtering
+      const matchStage: any = {};
+      
+      // Search by name, email, paKey
+      if (search) {
+        matchStage.$or = [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { paKey: { $regex: search, $options: "i" } },
+        ];
+      }
+      
+      // Filter by status
+      if (status !== undefined) {
+        matchStage.isActive = status === "active" ? true : false;
+      }
+      
+      // Filter by verified
+      if (verified !== undefined) {
+        matchStage.verified = verified === "true" ? true : false;
+      }
+      
+      // Filter by city
+      if (city) {
+        matchStage["location.city"] = { $in: [city] };
+      }
+      
+      // Filter by date range
+      if (startDate || endDate) {
+        matchStage.createdAt = {};
+        if (startDate) {
+          matchStage.createdAt.$gte = new Date(startDate as string);
+        }
+        if (endDate) {
+          const endDateObj = new Date(endDate as string);
+          endDateObj.setHours(23, 59, 59, 999);
+          matchStage.createdAt.$lte = endDateObj;
+        }
+      }
+      
+      // Build sort stage
+      const sortStage: any = {};
+      switch(sortBy) {
+        case "name":
+          sortStage.name = 1;
+          break;
+        case "revenue":
+          sortStage.totalRevenue = -1;
+          break;
+        case "slots":
+          sortStage.totalSlots = -1;
+          break;
+        case "newest":
+          sortStage.createdAt = -1;
+          break;
+        case "oldest":
+          sortStage.createdAt = 1;
+          break;
+        default:
+          sortStage.totalBookings = -1;
+      }
+      
+      const assistants = await PersonalAssistant.aggregate([
+        {
+          $lookup: {
+            from: "slots",
+            localField: "_id",
+            foreignField: "user",
+            as: "slotInfo",
+          },
+        },
+        {
+          $addFields: {
+            totalSlots: {
+              $sum: { $map: { input: "$slotInfo", as: "slot", in: { $size: "$$slot.timeslots" } } },
+            },
+            bookedSlots: {
+              $sum: {
+                $map: {
+                  input: "$slotInfo",
+                  as: "slot",
+                  in: {
+                    $size: {
+                      $filter: { input: "$$slot.timeslots", as: "ts", cond: "$$ts.isBooked" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "bookings",
+            localField: "_id",
+            foreignField: "assistant",
+            as: "bookings",
+          },
+        },
+        {
+          $addFields: {
+            totalBookings: { $size: "$bookings" },
+            totalRevenue: { $sum: "$bookings.totalAmount" },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            email: 1,
+            phoneNumber: 1,
+            profileImageUrl: 1,
+            paKey: 1,
+            paInformation: 1,
+            location: 1,
+            isActive: 1,
+            verified: 1,
+            createdAt: 1,
+            totalSlots: 1,
+            bookedSlots: 1,
+            availableSlots: { $subtract: ["$totalSlots", "$bookedSlots"] },
+            totalBookings: 1,
+            totalRevenue: 1,
+          },
+        },
+        // Apply filters if any exist
+        ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
+        { $sort: sortStage },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, assistants, "Assistants with slots fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getTodaySlots(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const todaySlots = await Slot.aggregate([
+        {
+          $lookup: {
+            from: "personalassistants",
+            localField: "user",
+            foreignField: "_id",
+            as: "assistant",
+          },
+        },
+        { $unwind: "$assistant" },
+        {
+          $project: {
+            assistant: "$assistant",
+            timeslots: {
+              $filter: {
+                input: "$timeslots",
+                as: "slot",
+                cond: {
+                  $and: [
+                    { $gte: ["$$slot.date", today] },
+                    { $lt: ["$$slot.date", tomorrow] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            totalSlots: { $size: "$timeslots" },
+            bookedSlots: {
+              $size: { $filter: { input: "$timeslots", as: "ts", cond: "$$ts.isBooked" } },
+            },
+          },
+        },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, todaySlots, "Today's slots fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getSlotsByDateRange(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json(
+          new ApiError(400, "Start date and end date are required")
+        );
+      }
+
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      end.setHours(23, 59, 59, 999);
+
+      const slotsByRange = await Slot.aggregate([
+        {
+          $lookup: {
+            from: "personalassistants",
+            localField: "user",
+            foreignField: "_id",
+            as: "assistant",
+          },
+        },
+        { $unwind: "$assistant" },
+        {
+          $project: {
+            assistant: "$assistant",
+            timeslots: {
+              $filter: {
+                input: "$timeslots",
+                as: "slot",
+                cond: {
+                  $and: [
+                    { $gte: ["$$slot.date", start] },
+                    { $lte: ["$$slot.date", end] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            totalSlots: { $size: "$timeslots" },
+            bookedSlots: {
+              $size: { $filter: { input: "$timeslots", as: "ts", cond: "$$ts.isBooked" } },
+            },
+          },
+        },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, slotsByRange, "Slots by date range fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async get7DaysSlots(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sevenDaysLater = new Date(today);
+      sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+
+      const sevenDaysData = await Slot.aggregate([
+        {
+          $lookup: {
+            from: "personalassistants",
+            localField: "user",
+            foreignField: "_id",
+            as: "assistant",
+          },
+        },
+        { $unwind: "$assistant" },
+        {
+          $project: {
+            assistant: "$assistant",
+            timeslots: {
+              $filter: {
+                input: "$timeslots",
+                as: "slot",
+                cond: {
+                  $and: [
+                    { $gte: ["$$slot.date", today] },
+                    { $lt: ["$$slot.date", sevenDaysLater] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            totalSlots: { $size: "$timeslots" },
+            bookedSlots: {
+              $size: { $filter: { input: "$timeslots", as: "ts", cond: "$$ts.isBooked" } },
+            },
+          },
+        },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, sevenDaysData, "7 days slots fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async get30DaysSlots(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const thirtyDaysLater = new Date(today);
+      thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+
+      const thirtyDaysData = await Slot.aggregate([
+        {
+          $lookup: {
+            from: "personalassistants",
+            localField: "user",
+            foreignField: "_id",
+            as: "assistant",
+          },
+        },
+        { $unwind: "$assistant" },
+        {
+          $project: {
+            assistant: "$assistant",
+            timeslots: {
+              $filter: {
+                input: "$timeslots",
+                as: "slot",
+                cond: {
+                  $and: [
+                    { $gte: ["$$slot.date", today] },
+                    { $lt: ["$$slot.date", thirtyDaysLater] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            totalSlots: { $size: "$timeslots" },
+            bookedSlots: {
+              $size: { $filter: { input: "$timeslots", as: "ts", cond: "$$ts.isBooked" } },
+            },
+          },
+        },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, thirtyDaysData, "30 days slots fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getTopSupportServices(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const topServices = await Booking.aggregate([
+        {
+          $group: {
+            _id: "$supportService",
+            totalBookings: { $sum: 1 },
+            totalRevenue: { $sum: "$totalAmount" },
+          },
+        },
+        { $sort: { totalBookings: -1 } },
+        { $limit: 10 },
+        {
+          $lookup: {
+            from: "supportservices",
+            localField: "_id",
+            foreignField: "_id",
+            as: "service",
+          },
+        },
+        { $unwind: "$service" },
+        {
+          $project: {
+            _id: 1,
+            serviceName: "$service.serviceName",
+            totalBookings: 1,
+            totalRevenue: 1,
+          },
+        },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, topServices, "Top support services fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getBookingStats(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const stats = await Booking.aggregate([
+        {
+          $facet: {
+            byStatus: [
+              { $group: { _id: "$status", count: { $sum: 1 } } },
+            ],
+            byPaymentStatus: [
+              { $group: { _id: "$paymentStatus", count: { $sum: 1 } } },
+            ],
+            dailyBookings: [
+              {
+                $group: {
+                  _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                  count: { $sum: 1 },
+                  revenue: { $sum: "$totalAmount" },
+                },
+              },
+              { $sort: { _id: -1 } },
+              { $limit: 30 },
+            ],
+          },
+        },
+      ]);
+
+      return res.status(200).json(
+        new ApiResponse(200, stats[0], "Booking stats fetched successfully")
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
 }
+
 

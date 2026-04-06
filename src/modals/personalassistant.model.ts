@@ -1,17 +1,27 @@
 import mongoose, { Schema, Document, Types, model } from "mongoose";
+import { getNextYearlyUniqueCode } from "../utils/yearlyUniqueCode";
 
 /** Gender Options */
 export type Gender = "male" | "female" | "other";
 
 /** Embedded location */
 interface ILocation {
-  city?: string;
+  city?: string[];
   state?: string;
   country?: string;
   pinCode?: string;
 }
 
+/** PA Information (Assistant Personal Details - only visible to admin) */
+interface IPAInformation {
+  fullName?: string;
+  email?: string;
+  phoneNumber?: string;
+  address?: string;
+}
+
 export interface IPersonalAssistant extends Document {
+  paKey?: string;
   name: string;
   email: string;
   gender?: Gender;
@@ -26,10 +36,16 @@ export interface IPersonalAssistant extends Document {
   location?: ILocation;
   profileImageUrl?: string;
   role: Schema.Types.ObjectId;
+  paInformation?: IPAInformation;
 }
 
 const PersonalAssistantSchema = new Schema<IPersonalAssistant>(
   {
+    paKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     name: {
       type: String,
       required: true,
@@ -38,7 +54,6 @@ const PersonalAssistantSchema = new Schema<IPersonalAssistant>(
     email: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
     },
     phoneNumber: {
@@ -48,7 +63,10 @@ const PersonalAssistantSchema = new Schema<IPersonalAssistant>(
     profileImageUrl: String,
     address: String,
     location: {
-      city: String,
+      city: {
+        type: [String],
+        default: [],
+      },
       state: String,
       country: String,
       pinCode: String,
@@ -75,9 +93,33 @@ const PersonalAssistantSchema = new Schema<IPersonalAssistant>(
       type: [String],
       default: [],
     },
+    paInformation: {
+      fullName: String,
+      email: String,
+      phoneNumber: String,
+      address: String,
+    },
   },
   { timestamps: true }
 );
+
+// Generate paKey before validation
+PersonalAssistantSchema.pre("validate", async function (next) {
+  try {
+    if (!this.isNew) return next();
+    
+    // Generate paKey if not present
+    if (!this.paKey) {
+      this.paKey = await getNextYearlyUniqueCode("WSPA", "personalassistant");
+      // Set name field to paKey
+      this.name = this.paKey;
+    }
+    
+    return next();
+  } catch (error) {
+    return next(error as any);
+  }
+});
 
 export const PersonalAssistant = model<IPersonalAssistant>(
   "PersonalAssistant",

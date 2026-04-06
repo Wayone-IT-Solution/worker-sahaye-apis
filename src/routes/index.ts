@@ -53,6 +53,7 @@ import skillsRoutes from "../admin/skills/skills.routes";
 import educationRoutes from "../admin/education/education.routes";
 import educationFieldRoutes from "../admin/educationfield/educationfield.routes";
 import functionRoutes from "../admin/function/function.routes";
+import festivalRoutes from "../admin/festival/festival.routes";
 
 // PUBLIC FOLDER
 import jobRoutes from "../public/job/job.routes";
@@ -149,6 +150,7 @@ router.use("/skills", skillsRoutes);
 router.use("/education", educationRoutes);
 router.use("/educationfield", educationFieldRoutes);
 router.use("/function", functionRoutes);
+router.use("/festival", festivalRoutes);
 router.use("/planfeature", planfeatureRoutes);
 router.use("/jobcategory", jobCategoryRoutes);
 router.use("/designation", designationRoutes);

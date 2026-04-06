@@ -628,7 +628,18 @@ userSchema.index({
 userSchema.pre("validate", async function (next) {
   try {
     if (!this.isNew || this.userKey) return next();
-    this.userKey = await getNextYearlyUniqueCode("WSU", "user");
+    
+    // Map userType to type character for userKey format
+    let typeChar = "W"; // Default to Worker
+    if (this.userType === UserType.EMPLOYER) {
+      typeChar = "E";
+    } else if (this.userType === UserType.CONTRACTOR) {
+      typeChar = "A";
+    }
+    
+    // Generate userKey with new format: WS{type}{year_short}{serial}
+    const prefix = `WS${typeChar}`;
+    this.userKey = await getNextYearlyUniqueCode(prefix, "user");
     return next();
   } catch (error) {
     return next(error as any);

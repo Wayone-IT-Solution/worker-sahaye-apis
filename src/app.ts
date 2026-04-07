@@ -40,8 +40,8 @@ if (config.security.rateLimitEnabled) {
 }
 
 // Middleware for parsing JSON and URL-encoded bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
 // Logging Middleware
 import mongoose from "mongoose";

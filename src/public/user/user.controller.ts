@@ -245,6 +245,26 @@ export class UserController {
       throw new ApiError(400, `${prefix}Email is required for this user type`);
     }
 
+    // Check if mobile already exists
+    const mobileExist = await User.findOne({ mobile }).lean();
+    if (mobileExist) {
+      throw new ApiError(
+        400,
+        `${prefix}Account with mobile "${mobile}" already exists`,
+      );
+    }
+
+    // Check if email already exists (for employer/contractor)
+    if (email) {
+      const emailExist = await User.findOne({ email }).lean();
+      if (emailExist) {
+        throw new ApiError(
+          400,
+          `${prefix}Account with email "${email}" already exists`,
+        );
+      }
+    }
+
     const userData: any = {
       status: normalizedPayload?.status,
       profile: normalizedPayload?.profile,
@@ -279,31 +299,17 @@ export class UserController {
       userData.isEmailVerified = false;
     }
 
-    const mobileExist = await User.findOne({ mobile });
-    if (mobileExist) {
-      throw new ApiError(
-        400,
-        `${prefix}A ${mobileExist.userType} account with this phone number already exists.`,
-      );
-    }
-
-    if (email) {
-      const emailExist = await User.findOne({ email });
-      if (emailExist) {
-        throw new ApiError(
-          400,
-          `${prefix}A ${emailExist.userType} account with this email address already exists.`,
-        );
-      }
-    }
-
     if (referralCode) {
-      const referrer = await User.findOne({ referralCode });
+      const referrer = await User.findOne({ referralCode }).lean();
       if (!referrer) throw new ApiError(400, `${prefix}Invalid referral code`);
 
       userData.referredBy = referrer._id;
       userData.referredCode = referralCode;
-      await referrer.updateOne({ $inc: { pointsEarned: 50 } });
+      await User.findByIdAndUpdate(
+        referrer._id,
+        { $inc: { pointsEarned: 50 } },
+        { new: false, lean: true },
+      );
     }
 
     const newUser: any = await userService.create(userData);
@@ -330,6 +336,8 @@ export class UserController {
 
         const seenMobiles = new Set<string>();
         const seenEmails = new Set<string>();
+        const createdUsers: any[] = [];
+        const failedRows: Array<{ rowNumber: number; error: string }> = [];
 
         for (let index = 0; index < rows.length; index += 1) {
           const row = rows[index] || {};
@@ -339,51 +347,68 @@ export class UserController {
             .trim()
             .toLowerCase();
 
+          // Check for duplicates within current batch
           if (mobile) {
             if (seenMobiles.has(mobile)) {
-              return res
-                .status(400)
-                .json(
-                  new ApiError(
-                    400,
-                    `Row ${rowNumber}: Duplicate mobile in upload payload`,
-                  ),
-                );
+              failedRows.push({
+                rowNumber,
+                error: `Duplicate mobile "${mobile}" in upload payload`,
+              });
+              continue;
             }
             seenMobiles.add(mobile);
           }
 
           if (email) {
             if (seenEmails.has(email)) {
-              return res
-                .status(400)
-                .json(
-                  new ApiError(
-                    400,
-                    `Row ${rowNumber}: Duplicate email in upload payload`,
-                  ),
-                );
+              failedRows.push({
+                rowNumber,
+                error: `Duplicate email "${email}" in upload payload`,
+              });
+              continue;
             }
             seenEmails.add(email);
           }
+
+          // Try to create user, skip on error
+          try {
+            const created = await UserController.createSingleUser(
+              rows[index],
+              rowNumber,
+            );
+            createdUsers.push(created);
+          } catch (error: any) {
+            const errorMessage =
+              error?.message || error?.toString() || "Unknown error";
+            failedRows.push({
+              rowNumber,
+              error: errorMessage
+                .replace(/^Row \d+: /, "")
+                .replace(/^Error: /, ""),
+            });
+          }
         }
 
-        const createdUsers: any[] = [];
-        for (let index = 0; index < rows.length; index += 1) {
-          const created = await UserController.createSingleUser(
-            rows[index],
-            index + 1,
-          );
-          createdUsers.push(created);
-        }
+        const summary = {
+          total: rows.length,
+          created: createdUsers.length,
+          failed: failedRows.length,
+          successRate: `${((createdUsers.length / rows.length) * 100).toFixed(1)}%`,
+        };
 
         return res
           .status(201)
           .json(
             new ApiResponse(
               201,
-              createdUsers,
-              `${createdUsers.length} users created successfully`,
+              {
+                users: createdUsers,
+                failed: failedRows.slice(0, 50), // Return first 50 errors
+                summary,
+              },
+              failedRows.length === 0
+                ? `${createdUsers.length} users created successfully`
+                : `${createdUsers.length} users created (${failedRows.length} rows skipped)`,
             ),
           );
       }

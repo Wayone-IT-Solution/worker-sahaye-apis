@@ -270,13 +270,24 @@ export const getPipeline = (
   // 🔎 ADVANCED SEARCH
   // ==========================================
   if (search && searchkey) {
-    const keys = searchkey
-      .split(",")
-      .map((k: string) => k.trim())
-      .filter(Boolean);
+    // Handle searchkey as either string or array (from duplicate query params)
+    let keysArray: string[] = [];
+    
+    if (Array.isArray(searchkey)) {
+      // Multiple searchkey params - flatten and deduplicate
+      keysArray = searchkey
+        .map((k: string) => String(k).trim())
+        .filter(Boolean);
+    } else if (typeof searchkey === "string") {
+      // Single searchkey param - split by comma
+      keysArray = searchkey
+        .split(",")
+        .map((k: string) => k.trim())
+        .filter(Boolean);
+    }
 
-    if (keys.length > 0) {
-      const searchConditions = keys.map((k: any) => ({
+    if (keysArray.length > 0) {
+      const searchConditions = keysArray.map((k: string) => ({
         [k]: { $regex: search, $options: "i" },
       }));
 

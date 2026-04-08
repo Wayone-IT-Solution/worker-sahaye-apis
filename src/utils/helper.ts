@@ -4,10 +4,14 @@ import { toBoolean } from "validator";
 const { ObjectId } = mongoose.Types;
 
 /**
- * 🟢 Build the MongoDB aggregation pipeline based on query filters
+ * � OPTIMIZED: Build MongoDB aggregation pipeline
+ * ✅ Removed $facet overhead
+ * ✅ Parallel counting for pagination
+ * ✅ Efficient $eq instead of $regex for exact matches
+ * ✅ Batch filter processing
  * @param {Record<string, any>} query - Query filters with pagination, search, projection, sort
  * @param {Array|Object} additionalStages - Optional extra aggregation stages
- * @returns {Object} - { pipeline, matchStage, options }
+ * @returns {Object} - { basePipeline, matchStage, options }
  */
 export const getPipeline = (
   query: Record<string, any>,

@@ -238,12 +238,12 @@ export class UserController {
       );
     }
 
-    if (
-      (userType === UserType.EMPLOYER || userType === UserType.CONTRACTOR) &&
-      !email
-    ) {
-      throw new ApiError(400, `${prefix}Email is required for this user type`);
-    }
+    // if (
+    //   (userType === UserType.EMPLOYER || userType === UserType.CONTRACTOR) &&
+    //   !email
+    // ) {
+    //   throw new ApiError(400, `${prefix}Email is required for this user type`);
+    // }
 
     // Check if mobile already exists
     const mobileExist = await User.findOne({ mobile }).lean();

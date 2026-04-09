@@ -2,6 +2,56 @@ import { toBoolean } from "validator";
 import ApiError from "../utils/ApiError";
 import { getPipeline } from "../utils/helper";
 import { Model, Document, UpdateQuery } from "mongoose";
+import { logger } from "../config/logger";
+
+const parsePositiveInt = (value: any, fallback: number): number => {
+  const parsed = Number.parseInt(String(value), 10);
+  if (Number.isNaN(parsed) || parsed < 1) return fallback;
+  return parsed;
+};
+
+const toDebugBoolean = (value: any): boolean => {
+  if (typeof value === "boolean") return value;
+  if (value === undefined || value === null || value === "") return false;
+  return toBoolean(String(value));
+};
+
+const safeJSONStringify = (value: unknown): string => {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+};
+
+const NON_FILTER_QUERY_KEYS = new Set([
+  "page",
+  "limit",
+  "pagination",
+  "countMode",
+  "search",
+  "searchkey",
+  "searchOperator",
+  "searchMode",
+  "multiSort",
+  "sortDir",
+  "sortKey",
+  "fields",
+  "exclude",
+  "exists",
+  "notExists",
+  "applyCollation",
+  "debug",
+  "debugPipeline",
+  "requestId",
+  "traceId",
+]);
+
+const getFilterKeys = (query: Record<string, any>): string[] =>
+  Object.keys(query ?? {}).filter((key) => !NON_FILTER_QUERY_KEYS.has(key));
+
+const getStageNames = (pipeline: any[]): string[] =>
+  (pipeline ?? []).map((stage: Record<string, any>) => Object.keys(stage ?? {})[0] || "unknown");
 
 export class CommonService<T extends Document> {
   private model: Model<T>;
@@ -39,56 +89,144 @@ export class CommonService<T extends Document> {
     }
   }
 
-  /**
-   * ✅ FULLY OPTIMIZED getAll function
-   * - 60% faster with parallel counting
-   * - No more $facet overhead
-   * - Efficient pagination with separate count
-   * - Batch processing for large datasets
-   */
   async getAll(query: any = {}, optionsToBeExtract?: any) {
+    const modelName = this.model.modelName || "UnknownModel";
+    const traceRef = String(query?.traceId || query?.requestId || "n/a");
+    const debugEnabled =
+      toDebugBoolean(query?.debugPipeline) ||
+      toDebugBoolean(query?.debug) ||
+      toDebugBoolean(process.env.COMMON_SERVICE_DEBUG);
+    const startedAt = process.hrtime.bigint();
+
     try {
-      const usePagination = toBoolean(query.pagination ?? "true");
-      const page = Math.max(parseInt(query.page, 10) || 1, 1);
-      const limit = Math.max(parseInt(query.limit, 10) || 10, 1);
-
-      // ✅ Get pipeline and matchStage
-      const { pipeline, matchStage } = getPipeline(query, optionsToBeExtract);
-
-      // ✅ Extract base stages (remove facet if exists)
-      const basePipeline = pipeline.filter(
-        (stage) => !stage.$facet && !stage.$project
+      const { pipeline, options, countPipeline } = getPipeline(
+        query,
+        optionsToBeExtract
       );
+      const usePagination = toBoolean(String(query.pagination ?? "true"));
+      const page = parsePositiveInt(query.page, 1);
+      const limit = parsePositiveInt(query.limit, 10);
 
-      // ✅ Add pagination stages AFTER filtering
-      const dataPipeline = [
-        ...basePipeline,
-        { $skip: (page - 1) * limit },
-        { $limit: limit },
-      ];
-
-      // ✅ Execute count and fetch in PARALLEL - huge performance boost!
-      const [data, totalItems] = await Promise.all([
-        this.model.aggregate(dataPipeline),
-        usePagination ? this.model.countDocuments(matchStage) : Promise.resolve(null),
-      ]);
-
-      // If no pagination, just return data
-      if (!usePagination) {
-        return data;
+      if (debugEnabled) {
+        logger.info(
+          `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Query summary | ${safeJSONStringify({
+            pagination: usePagination,
+            page,
+            limit,
+            filterKeys: getFilterKeys(query),
+            search: query?.search ?? "",
+            searchkey: query?.searchkey ?? "",
+            searchOperator: query?.searchOperator ?? "or",
+            searchMode: query?.searchMode ?? "contains",
+            additionalStagesCount: Array.isArray(optionsToBeExtract)
+              ? optionsToBeExtract.length
+              : optionsToBeExtract
+                ? 1
+                : 0,
+          })}`
+        );
+        logger.info(
+          `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Pipeline stages | ${safeJSONStringify(
+            getStageNames(pipeline)
+          )}`
+        );
       }
 
-      const totalPages = totalItems ? Math.ceil(totalItems / limit) : 0;
-      return {
-        result: data || [],
-        pagination: {
-          totalItems: totalItems || 0,
-          totalPages,
-          currentPage: page,
-          itemsPerPage: limit,
-        },
-      };
+      // Optimization: run data query and count query in parallel
+      const aggregateStartedAt = process.hrtime.bigint();
+
+      let data: any[];
+      let totalItems: number = 0;
+
+      if (usePagination) {
+        const effectiveCountPipeline =
+          Array.isArray(countPipeline) && countPipeline.length > 0
+            ? countPipeline
+            : [{ $count: "total" }];
+
+        if (debugEnabled) {
+          logger.info(
+            `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Count pipeline stages | ${safeJSONStringify(
+              getStageNames(effectiveCountPipeline)
+            )}`
+          );
+        }
+
+        const [result, count] = await Promise.all([
+          this.model.aggregate(pipeline, options),
+          this.model.aggregate(effectiveCountPipeline, options),
+        ]);
+
+        data = Array.isArray(result) ? result : [];
+        totalItems = count?.[0]?.total ?? 0;
+      } else {
+        data = await this.model.aggregate(pipeline, options);
+      }
+
+      const aggregateDurationMs =
+        Number(process.hrtime.bigint() - aggregateStartedAt) / 1_000_000;
+      const totalDurationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+
+      if (totalDurationMs > 1000) {
+        logger.warn(
+          `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Slow query detected (${totalDurationMs.toFixed(
+            2
+          )} ms)`
+        );
+      }
+
+      // Handle pagination
+      if (usePagination) {
+        const totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 0;
+
+        if (debugEnabled) {
+          logger.info(
+            `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Search debug | ${safeJSONStringify({
+              search: query?.search ?? "",
+              searchkey: query?.searchkey ?? "",
+              searchOperator: query?.searchOperator ?? "or",
+              searchMode: query?.searchMode ?? "contains",
+            })}`
+          );
+          logger.info(
+            `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Aggregation result | ${safeJSONStringify({
+              returnedItems: data.length,
+              totalItems,
+              totalPages,
+              aggregateDurationMs: Number(aggregateDurationMs.toFixed(2)),
+              totalDurationMs: Number(totalDurationMs.toFixed(2)),
+            })}`
+          );
+        }
+
+        return {
+          result: data,
+          pagination: {
+            totalItems,
+            totalPages,
+            currentPage: page,
+            itemsPerPage: limit,
+          },
+        };
+      }
+
+      if (debugEnabled) {
+        logger.info(
+          `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Non-paginated result | ${safeJSONStringify({
+            resultCount: Array.isArray(data) ? data.length : 0,
+            aggregateDurationMs: Number(aggregateDurationMs.toFixed(2)),
+            totalDurationMs: Number(totalDurationMs.toFixed(2)),
+          })}`
+        );
+      }
+
+      return data;
     } catch (error: any) {
+      if (debugEnabled) {
+        logger.error(
+          `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Failed | ${error?.message || error}`
+        );
+      }
       throw new ApiError(500, error.message || "Failed to fetch data");
     }
   }

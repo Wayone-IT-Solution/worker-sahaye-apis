@@ -589,10 +589,120 @@ export class UserController {
   ): Promise<any> {
     try {
       const currentUserId = new mongoose.Types.ObjectId((req as any).user?.id);
-      const { engagementType: rawEngagementType, ...restQuery } = req.query;
+      const { engagementType: rawEngagementType, ...restQuery } =
+        req.query as Record<string, any>;
       const engagementType = (rawEngagementType as string)?.toLowerCase();
+      const normalizedQuery: Record<string, any> = { ...restQuery };
 
-      const pipeline: any[] = [
+      const parseSearchKeys = (searchKeyParam: any): string[] => {
+        if (!searchKeyParam) return [];
+        if (Array.isArray(searchKeyParam)) {
+          return Array.from(
+            new Set(
+              searchKeyParam
+                .flatMap((v) => String(v).split(","))
+                .map((v) => v.trim())
+                .filter(Boolean),
+            ),
+          );
+        }
+        return Array.from(
+          new Set(
+            String(searchKeyParam)
+              .split(",")
+              .map((v) => v.trim())
+              .filter(Boolean),
+          ),
+        );
+      };
+      const parseSearchValues = (searchParam: any): string[] => {
+        if (!searchParam) return [];
+        if (Array.isArray(searchParam)) {
+          return searchParam
+            .map((v) => String(v).trim())
+            .filter(Boolean);
+        }
+        const value = String(searchParam).trim();
+        return value ? [value] : [];
+      };
+      const hasValue = (val: any): boolean =>
+        val !== undefined && val !== null && String(val).trim() !== "";
+      const isEnumKey = (key: string): boolean =>
+        key === "userType" || key === "status";
+
+      const searchValues = parseSearchValues(normalizedQuery.search);
+      const searchKeysAll = parseSearchKeys(normalizedQuery.searchkey);
+
+      // If duplicate search params arrive as aligned arrays, map enum keys to direct filters.
+      // Example:
+      // search=worker&searchkey=userType&search=rishabh&searchkey=fullName
+      if (
+        searchValues.length > 1 &&
+        searchValues.length === searchKeysAll.length
+      ) {
+        const remainingSearchValues: string[] = [];
+        const remainingSearchKeys: string[] = [];
+
+        searchKeysAll.forEach((key, idx) => {
+          const value = searchValues[idx];
+          if (!value) return;
+          if (isEnumKey(key) && !hasValue(normalizedQuery[key])) {
+            normalizedQuery[key] = value.toLowerCase();
+          } else {
+            remainingSearchKeys.push(key);
+            remainingSearchValues.push(value);
+          }
+        });
+
+        if (remainingSearchValues.length === 0) {
+          delete normalizedQuery.search;
+          delete normalizedQuery.searchkey;
+          delete normalizedQuery.searchOperator;
+          delete normalizedQuery.searchMode;
+        } else if (remainingSearchValues.length === 1) {
+          normalizedQuery.search = remainingSearchValues[0];
+          normalizedQuery.searchkey = remainingSearchKeys[0];
+        } else {
+          normalizedQuery.search = remainingSearchValues;
+          normalizedQuery.searchkey = remainingSearchKeys;
+          if (!hasValue(normalizedQuery.searchOperator)) {
+            normalizedQuery.searchOperator = "and";
+          }
+        }
+      }
+
+      // Fast-path: promote exact enum search (ex: search=worker&searchkey=userType) to indexed filter
+      const searchText =
+        typeof normalizedQuery.search === "string"
+          ? normalizedQuery.search.trim()
+          : "";
+      const searchKeys = parseSearchKeys(normalizedQuery.searchkey);
+      const canPromoteSearchToDirectFilter =
+        !engagementType &&
+        !!searchText &&
+        searchKeys.length === 1 &&
+        isEnumKey(searchKeys[0]);
+
+      if (canPromoteSearchToDirectFilter) {
+        const targetField = searchKeys[0];
+        normalizedQuery[targetField] = searchText.toLowerCase();
+        delete normalizedQuery.search;
+        delete normalizedQuery.searchkey;
+        delete normalizedQuery.searchOperator;
+        delete normalizedQuery.searchMode;
+      }
+
+      // Keep stable admin ordering only when client has not requested custom sorting.
+      const hasClientSortRequest =
+        hasValue(normalizedQuery.multiSort) ||
+        hasValue(normalizedQuery.sortKey) ||
+        hasValue(normalizedQuery.sortDir);
+      if (!hasClientSortRequest) {
+        normalizedQuery.multiSort =
+          "hasEarlyAccessBadge:desc,hasPremiumPlan:desc,profileCompletion:desc,createdAt:desc";
+      }
+
+      const enrichmentStages: any[] = [
         {
           $lookup: {
             from: "fileuploads",
@@ -620,7 +730,7 @@ export class UserController {
             preserveNullAndEmptyArrays: true,
           },
         },
-        // Check if invite engagement exists
+        // ✅ OPTIMIZATION: Single consolidated lookup for ALL engagement types
         {
           $lookup: {
             from: "engagements",
@@ -632,80 +742,45 @@ export class UserController {
                     $and: [
                       { $eq: ["$initiator", currentUserId] },
                       { $eq: ["$recipient", "$$userId"] },
-                      { $eq: ["$engagementType", "invite"] },
                     ],
                   },
                 },
               },
-              { $limit: 1 },
             ],
-            as: "inviteEngagement",
+            as: "engagements",
           },
         },
-        // Check if viewProfile engagement exists
+        // Extract engagement types from consolidated lookup
         {
-          $lookup: {
-            from: "engagements",
-            let: { userId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ["$initiator", currentUserId] },
-                      { $eq: ["$recipient", "$$userId"] },
-                      { $eq: ["$engagementType", "viewProfile"] },
-                    ],
-                  },
-                },
+          $addFields: {
+            inviteEngagement: {
+              $filter: {
+                input: "$engagements",
+                as: "e",
+                cond: { $eq: ["$$e.engagementType", "invite"] },
               },
-              { $limit: 1 },
-            ],
-            as: "viewProfileEngagement",
-          },
-        },
-        // Check if contactUnlock engagement exists
-        {
-          $lookup: {
-            from: "engagements",
-            let: { userId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ["$initiator", currentUserId] },
-                      { $eq: ["$recipient", "$$userId"] },
-                      { $eq: ["$engagementType", "contactUnlock"] },
-                    ],
-                  },
-                },
+            },
+            viewProfileEngagement: {
+              $filter: {
+                input: "$engagements",
+                as: "e",
+                cond: { $eq: ["$$e.engagementType", "viewProfile"] },
               },
-              { $limit: 1 },
-            ],
-            as: "contactUnlockEngagement",
-          },
-        },
-        // Check if saveProfile engagement exists
-        {
-          $lookup: {
-            from: "engagements",
-            let: { userId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ["$initiator", currentUserId] },
-                      { $eq: ["$recipient", "$$userId"] },
-                      { $eq: ["$engagementType", "saveProfile"] },
-                    ],
-                  },
-                },
+            },
+            contactUnlockEngagement: {
+              $filter: {
+                input: "$engagements",
+                as: "e",
+                cond: { $eq: ["$$e.engagementType", "contactUnlock"] },
               },
-              { $limit: 1 },
-            ],
-            as: "saveProfileEngagement",
+            },
+            saveProfileEngagement: {
+              $filter: {
+                input: "$engagements",
+                as: "e",
+                cond: { $eq: ["$$e.engagementType", "saveProfile"] },
+              },
+            },
           },
         },
         {
@@ -730,24 +805,6 @@ export class UserController {
             },
           },
         },
-        // Add filter stage based on engagementType query parameter
-        ...(engagementType
-          ? [
-              {
-                $match:
-                  engagementType === "invite"
-                    ? { inviteEngagement: { $ne: [] } }
-                    : engagementType === "viewprofile"
-                      ? { viewProfileEngagement: { $ne: [] } }
-                      : engagementType === "contactunlock"
-                        ? { contactUnlockEngagement: { $ne: [] } }
-                        : engagementType === "saveprofile" ||
-                            engagementType === "saved"
-                          ? { saveProfileEngagement: { $ne: [] } }
-                          : {},
-              },
-            ]
-          : []),
         {
           $lookup: {
             from: "enrolledplans",
@@ -826,18 +883,49 @@ export class UserController {
             },
           },
         },
-        // Sort: Early Access Badge first, then Premium users, then by profile completion
+        // ✅ Clean up internal fields before sorting
         {
-          $sort: {
-            hasEarlyAccessBadge: -1, // Early access badge holders first
-            hasPremiumPlan: -1, // Then premium users
-            profileCompletion: -1, // Then by profile completion
-            createdAt: -1, // Then by newest
+          $project: {
+            engagements: 0,
+            inviteEngagement: 0,
+            viewProfileEngagement: 0,
+            contactUnlockEngagement: 0,
+            saveProfileEngagement: 0,
+            latestEnrollment: 0,
           },
         },
       ];
 
-      const result = await userService.getAll(restQuery, pipeline);
+      if (!engagementType) {
+        // Avoid expensive lookups before pagination.
+        normalizedQuery.countMode = "matchOnly";
+        const result = await userService.getAll(normalizedQuery, {
+          afterPagination: enrichmentStages,
+        });
+        return res
+          .status(200)
+          .json(new ApiResponse(200, result, "Users fetched successfully"));
+      }
+
+      // Engagement filter depends on lookup-computed arrays, so keep full pipeline path.
+      const pipeline: any[] = [
+        ...enrichmentStages.slice(0, 4),
+        {
+          $match:
+            engagementType === "invite"
+              ? { inviteEngagement: { $ne: [] } }
+              : engagementType === "viewprofile"
+                ? { viewProfileEngagement: { $ne: [] } }
+                : engagementType === "contactunlock"
+                  ? { contactUnlockEngagement: { $ne: [] } }
+                  : engagementType === "saveprofile" || engagementType === "saved"
+                    ? { saveProfileEngagement: { $ne: [] } }
+                    : {},
+        },
+        ...enrichmentStages.slice(4),
+      ];
+
+      const result = await userService.getAll(normalizedQuery, pipeline);
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Users fetched successfully"));

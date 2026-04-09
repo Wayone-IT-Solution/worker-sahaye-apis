@@ -1,17 +1,43 @@
 import mongoose from "mongoose";
 import { toBoolean } from "validator";
+import { logger } from "../config/logger";
 
 const { ObjectId } = mongoose.Types;
 
+const isEmptyValue = (val: any): boolean =>
+  val === null || val === undefined || val === "";
+
+const parsePositiveInt = (value: any, fallback: number): number => {
+  const parsed = Number.parseInt(String(value), 10);
+  if (Number.isNaN(parsed) || parsed < 1) return fallback;
+  return parsed;
+};
+
+const toDebugBoolean = (value: any): boolean => {
+  if (typeof value === "boolean") return value;
+  if (isEmptyValue(value)) return false;
+  return toBoolean(String(value));
+};
+
+const safeJSONStringify = (value: unknown): string => {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+};
+
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const getStageName = (stage: Record<string, any>): string =>
+  Object.keys(stage ?? {})[0] || "unknown";
+
 /**
- * � OPTIMIZED: Build MongoDB aggregation pipeline
- * ✅ Removed $facet overhead
- * ✅ Parallel counting for pagination
- * ✅ Efficient $eq instead of $regex for exact matches
- * ✅ Batch filter processing
+ * Build the MongoDB aggregation pipeline based on query filters
  * @param {Record<string, any>} query - Query filters with pagination, search, projection, sort
  * @param {Array|Object} additionalStages - Optional extra aggregation stages
- * @returns {Object} - { basePipeline, matchStage, options }
+ * @returns {Object} - { pipeline, matchStage, options }
  */
 export const getPipeline = (
   query: Record<string, any>,
@@ -44,10 +70,12 @@ export const getPipeline = (
     page = 1,
     limit = 10,
     pagination = "true",
+    countMode = "auto", // 'auto' | 'matchOnly'
 
     search = "",
     searchkey = "",
     searchOperator = "or", // 'or' | 'and'
+    searchMode = "contains", // 'contains' | 'prefix' | 'exact'
 
     // Sorting
     multiSort = "", // "field1:asc,field2:desc"
@@ -61,18 +89,49 @@ export const getPipeline = (
     // Special filters
     exists = "",
     notExists = "",
+    applyCollation = "true",
+    debug = "false",
+    debugPipeline = "false",
+    requestId = "",
+    traceId = "",
 
     ...filters
   } = query;
 
-  const pageNumber = Math.max(parseInt(page, 10), 1);
-  const limitNumber = Math.max(parseInt(limit, 10), 1);
+  const pageNumber = parsePositiveInt(page, 1);
+  const limitNumber = parsePositiveInt(limit, 10);
+  const usePagination = toBoolean(String(pagination));
   const basePipeline: any[] = [];
+  const dataPipelineStages: any[] = [];
   const match: Record<string, any> = {};
+  const normalizeStages = (stages: any): any[] => {
+    if (Array.isArray(stages)) return stages;
+    if (stages && typeof stages === "object") return [stages];
+    return [];
+  };
+  const hasStructuredAdditionalStages =
+    Boolean(additionalStages) &&
+    !Array.isArray(additionalStages) &&
+    typeof additionalStages === "object" &&
+    (Object.prototype.hasOwnProperty.call(additionalStages, "beforePagination") ||
+      Object.prototype.hasOwnProperty.call(additionalStages, "afterPagination"));
+  const beforePaginationStages = hasStructuredAdditionalStages
+    ? normalizeStages((additionalStages as any).beforePagination)
+    : normalizeStages(additionalStages);
+  const afterPaginationStages = hasStructuredAdditionalStages
+    ? normalizeStages((additionalStages as any).afterPagination)
+    : [];
 
-  // ==========================================
-  // 🔧 HELPER FUNCTIONS
-  // ==========================================
+  const debugEnabled =
+    toDebugBoolean(debugPipeline) ||
+    toDebugBoolean(debug) ||
+    toDebugBoolean(process.env.COMMON_SERVICE_DEBUG);
+  const traceRef = String(traceId || requestId || "n/a");
+  const logDebug = (message: string, payload?: Record<string, unknown>) => {
+    if (!debugEnabled) return;
+    const suffix = payload ? ` | ${safeJSONStringify(payload)}` : "";
+    logger.info(`[CommonService:getPipeline][trace:${traceRef}] ${message}${suffix}`);
+  };
 
   /**
    * Safely convert to ObjectId if valid
@@ -94,7 +153,7 @@ export const getPipeline = (
    * Check if value is truly empty (null, undefined, empty string)
    */
   const isEmpty = (val: any): boolean => {
-    return val === null || val === undefined || val === "";
+    return isEmptyValue(val);
   };
 
   /**
@@ -224,7 +283,7 @@ export const getPipeline = (
   };
 
   // ==========================================
-  // 🔍 BUILD MATCH STAGE (legacy filters)
+  // BUILD MATCH STAGE (legacy filters)
   // ==========================================
 
   const legacyFilters = {
@@ -264,43 +323,114 @@ export const getPipeline = (
   if (Object.keys(match).length) basePipeline.push({ $match: match });
 
   // ==========================================
-  // 🔗 ADDITIONAL STAGES (Lookups, etc.)
+  // ADDITIONAL STAGES (Lookups, etc.)
   // ==========================================
-  if (Array.isArray(additionalStages)) basePipeline.push(...additionalStages);
-  else if (additionalStages && typeof additionalStages === "object")
-    basePipeline.push(additionalStages);
+  if (beforePaginationStages.length) {
+    basePipeline.push(...beforePaginationStages);
+  }
 
   // ==========================================
-  // 🔎 ADVANCED SEARCH
+  // ADVANCED SEARCH
   // ==========================================
   if (search && searchkey) {
+    const parseSearchValues = (searchParam: any): string[] => {
+      if (Array.isArray(searchParam)) {
+        return searchParam
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+      }
+      const normalizedValue = String(searchParam).trim();
+      return normalizedValue ? [normalizedValue] : [];
+    };
+    const searchValues = parseSearchValues(search);
+    const normalizedSearchOperator =
+      String(searchOperator).toLowerCase() === "and" ? "and" : "or";
+    const normalizedSearchMode = ["contains", "prefix", "exact"].includes(
+      String(searchMode).toLowerCase()
+    )
+      ? String(searchMode).toLowerCase()
+      : "contains";
+
     // Handle searchkey as either string or array (from duplicate query params)
     let keysArray: string[] = [];
-    
+
     if (Array.isArray(searchkey)) {
-      // Multiple searchkey params - flatten and deduplicate
-      keysArray = searchkey
-        .map((k: string) => String(k).trim())
-        .filter(Boolean);
+      keysArray = searchkey.reduce((acc: string[], keyPart: string) => {
+        String(keyPart)
+          .split(",")
+          .forEach((keyToken) => {
+            const token = keyToken.trim();
+            if (token) acc.push(token);
+          });
+        return acc;
+      }, []);
     } else if (typeof searchkey === "string") {
-      // Single searchkey param - split by comma
       keysArray = searchkey
         .split(",")
         .map((k: string) => k.trim())
         .filter(Boolean);
     }
 
-    if (keysArray.length > 0) {
-      const searchConditions = keysArray.map((k: string) => ({
-        [k]: { $regex: search, $options: "i" },
-      }));
+    keysArray = Array.from(new Set(keysArray));
+
+    if (keysArray.length > 0 && searchValues.length > 0) {
+      const hasExplicitSearchOperator =
+        Object.prototype.hasOwnProperty.call(query, "searchOperator") &&
+        !isEmpty(query.searchOperator);
+      const pairedSearchMode =
+        searchValues.length > 1 && searchValues.length === keysArray.length;
+      const effectiveSearchOperator =
+        !hasExplicitSearchOperator && pairedSearchMode
+          ? "and"
+          : normalizedSearchOperator;
+
+      const buildSearchRegex = (rawValue: string): RegExp => {
+        let regexPattern = escapeRegex(rawValue);
+        if (normalizedSearchMode === "prefix") regexPattern = `^${regexPattern}`;
+        if (normalizedSearchMode === "exact") regexPattern = `^${regexPattern}$`;
+        return new RegExp(regexPattern, "i");
+      };
+
+      let searchConditions: Record<string, any>[] = [];
+      if (pairedSearchMode) {
+        searchConditions = keysArray.map((key: string, index: number) => ({
+          [key]: buildSearchRegex(searchValues[index]),
+        }));
+      } else if (searchValues.length === 1) {
+        searchConditions = keysArray.map((key: string) => ({
+          [key]: buildSearchRegex(searchValues[0]),
+        }));
+      } else if (keysArray.length === 1) {
+        searchConditions = searchValues.map((value: string) => ({
+          [keysArray[0]]: buildSearchRegex(value),
+        }));
+      } else {
+        searchConditions = keysArray.map((key: string, index: number) => ({
+          [key]:
+            buildSearchRegex(
+              searchValues[index] ?? searchValues[0] ?? ""
+            ),
+        }));
+      }
 
       const searchQuery =
-        searchOperator === "and"
+        effectiveSearchOperator === "and"
           ? { $and: searchConditions }
           : { $or: searchConditions };
 
       basePipeline.push({ $match: searchQuery });
+      logDebug("Added search match stage", {
+        searchValues,
+        searchOperator: effectiveSearchOperator,
+        searchMode: normalizedSearchMode,
+        searchKeys: keysArray,
+        pairedSearchMode,
+      });
+    } else {
+      logDebug("Skipped search match stage due to invalid search/searchkey", {
+        search,
+        searchkey,
+      });
     }
   }
 
@@ -339,8 +469,14 @@ export const getPipeline = (
     else basePipeline[firstMatchIndex] = { $match: match };
   }
 
+  logDebug("Prepared match filters", {
+    matchKeys: Object.keys(match),
+    dynamicFilterKeys: Object.keys(filters),
+    hasDateRange: Boolean(startDate || endDate),
+  });
+
   // ==========================================
-  // 📋 PROJECTION
+  // PROJECTION
   // ==========================================
   if (fields || exclude) {
     const projectFields: any = {};
@@ -362,103 +498,117 @@ export const getPipeline = (
     }
 
     if (Object.keys(projectFields).length > 0) {
-      basePipeline.push({ $project: projectFields });
+      dataPipelineStages.push({ $project: projectFields });
     }
   }
 
   // ==========================================
-  // 📊 SORTING
+  // SORTING
   // ==========================================
+  const hasSortInAdditionalStages = beforePaginationStages.some(
+    (stage) => stage && typeof stage === "object" && stage.$sort
+  );
+  const hasExplicitSort =
+    (Object.prototype.hasOwnProperty.call(query, "multiSort") &&
+      !isEmpty(query.multiSort)) ||
+    (Object.prototype.hasOwnProperty.call(query, "sortDir") &&
+      !isEmpty(query.sortDir)) ||
+    (Object.prototype.hasOwnProperty.call(query, "sortKey") &&
+      !isEmpty(query.sortKey));
+  const shouldApplyInternalSort = hasExplicitSort || !hasSortInAdditionalStages;
   const sortStage: Record<string, 1 | -1> = {};
 
-  // Multi-field sorting: "price:asc,createdAt:desc"
-  if (multiSort) {
-    multiSort.split(",").forEach((s: string) => {
-      const [field, direction] = s.trim().split(":");
-      if (field) {
-        sortStage[field] = direction === "asc" ? 1 : -1;
+  if (shouldApplyInternalSort) {
+    // Multi-field sorting: "price:asc,createdAt:desc"
+    if (multiSort) {
+      multiSort.split(",").forEach((s: string) => {
+        const [field, direction] = s.trim().split(":");
+        if (field) {
+          sortStage[field] = direction === "asc" ? 1 : -1;
+        }
+      });
+    } else {
+      // Single field sorting
+      // Handle both numeric (1, -1) and string ("asc", "desc") formats
+      let sortDirection: 1 | -1 = -1;
+      if (sortDir === "asc" || sortDir === "1" || sortDir === 1) {
+        sortDirection = 1;
+      } else if (sortDir === "desc" || sortDir === "-1" || sortDir === -1) {
+        sortDirection = -1;
       }
-    });
-  } else {
-    // Single field sorting
-    // Handle both numeric (1, -1) and string ("asc", "desc") formats
-    let sortDirection: 1 | -1 = -1;
-    if (sortDir === "asc" || sortDir === "1" || sortDir === 1) {
-      sortDirection = 1;
-    } else if (sortDir === "desc" || sortDir === "-1" || sortDir === -1) {
-      sortDirection = -1;
+      sortStage[sortKey] = sortDirection;
     }
-    sortStage[sortKey] = sortDirection;
   }
 
   if (Object.keys(sortStage).length > 0) {
-    basePipeline.push({ $sort: sortStage });
+    dataPipelineStages.push({ $sort: sortStage });
   }
 
   // ==========================================
-  // 📄 PAGINATION
+  // PAGINATION
   // ==========================================
   let pipeline: any[] = [];
+  let countPipeline: any[] = [];
 
-  if (toBoolean(pagination.toString())) {
+  if (usePagination) {
     pipeline = [
       ...basePipeline,
-      {
-        $facet: {
-          data: [
-            { $skip: (pageNumber - 1) * limitNumber },
-            { $limit: limitNumber },
-          ],
-          metadata: [
-            { $count: "total" },
-            {
-              $addFields: {
-                page: pageNumber,
-                limit: limitNumber,
-                totalPages: {
-                  $ceil: { $divide: ["$total", limitNumber] },
-                },
-              },
-            },
-          ],
-        },
-      },
-      {
-        $project: {
-          data: 1,
-          total: { $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0] },
-          totalCount: {
-            $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0],
-          },
-          page: { $ifNull: [{ $arrayElemAt: ["$metadata.page", 0] }, 1] },
-          limit: {
-            $ifNull: [{ $arrayElemAt: ["$metadata.limit", 0] }, limitNumber],
-          },
-          totalPages: {
-            $ifNull: [{ $arrayElemAt: ["$metadata.totalPages", 0] }, 0],
-          },
-        },
-      },
+      ...dataPipelineStages,
+      { $skip: (pageNumber - 1) * limitNumber },
+      { $limit: limitNumber },
+      ...afterPaginationStages,
     ];
+    const normalizedCountMode = String(countMode).toLowerCase();
+    if (normalizedCountMode === "matchonly" || normalizedCountMode === "match_only") {
+      const matchOnlyStages = basePipeline.filter(
+        (stage) => stage && typeof stage === "object" && stage.$match
+      );
+      countPipeline = [
+        ...(matchOnlyStages.length ? matchOnlyStages : []),
+        { $count: "total" },
+      ];
+    } else {
+      countPipeline = [...basePipeline, { $count: "total" }];
+    }
   } else {
-    pipeline = [...basePipeline];
+    pipeline = [...basePipeline, ...dataPipelineStages, ...afterPaginationStages];
   }
 
   // ==========================================
-  // 🎯 RETURN PIPELINE
+  // RETURN PIPELINE
   // ==========================================
+  const options: Record<string, any> = {
+    allowDiskUse: true,
+  };
+
+  if (toBoolean(String(applyCollation))) {
+    options.collation = { locale: "en", strength: 2 };
+  }
+
+  logDebug("Generated pipeline", {
+    pagination: usePagination,
+    hasAdditionalStages:
+      beforePaginationStages.length > 0 || afterPaginationStages.length > 0,
+    sortAppliedInternally: shouldApplyInternalSort,
+    countMode: String(countMode),
+    baseStages: basePipeline.map((stage) => getStageName(stage)),
+    dataStages: dataPipelineStages.map((stage) => getStageName(stage)),
+    afterPaginationStages: afterPaginationStages.map((stage) => getStageName(stage)),
+    countStages: countPipeline.map((stage) => getStageName(stage)),
+    finalStages: pipeline.map((stage) => getStageName(stage)),
+    optionKeys: Object.keys(options),
+  });
+
   return {
     pipeline,
+    countPipeline,
     matchStage: match,
-    options: {
-      collation: { locale: "en", strength: 2 },
-      allowDiskUse: true,
-    },
+    options,
   };
 };
 
 /**
- * 🟢 Format the result with pagination info
+ * Format the result with pagination info
  * @param {number} pageNumber - Current page number
  * @param {number} limitNumber - Number of items per page
  * @param {number} totalResults - Total number of items
@@ -483,7 +633,7 @@ export const paginationResult = (
 };
 
 /**
- * 🟢 Convert a string to a valid MongoDB ObjectId
+ * Convert a string to a valid MongoDB ObjectId
  * @param {string} id - The string to convert
  * @returns {ObjectId | null} - The ObjectId or null if invalid
  */
@@ -499,7 +649,7 @@ export const convertToObjectId = (
 };
 
 /**
- * 🟢 Check if a string is a valid MongoDB ObjectId
+ * Check if a string is a valid MongoDB ObjectId
  * @param {string} id - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
@@ -512,7 +662,7 @@ export const isValidObjectId = (id: string): boolean => {
 };
 
 /**
- * 🟢 Check if a string is a valid UUID
+ * Check if a string is a valid UUID
  * @param {string} uuid - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
@@ -523,7 +673,7 @@ export const isValidUUID = (uuid: string): boolean => {
 };
 
 /**
- * 🟢 Check if a string is a valid email
+ * Check if a string is a valid email
  * @param {string} email - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
@@ -533,7 +683,7 @@ export const isValidEmail = (email: string): boolean => {
 };
 
 /**
- * 🟢 Check if a string is a valid URL
+ * Check if a string is a valid URL
  * @param {string} url - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
@@ -543,22 +693,22 @@ export const isValidURL = (url: string): boolean => {
 };
 
 /**
- * 🟢 Check if a string is a valid phone number
+ * Check if a string is a valid phone number
  * @param {string} phone - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
 export const isValidPhoneNumber = (phone: string): boolean => {
-  const phoneRegex = /^\+?[1-9]\d{1,14}$/; // E.164 format
+  const phoneRegex = /^\+?[1-9]\d{1,14}$/;
   return phoneRegex.test(phone);
 };
 
 /**
- * 🟢 Check if a string is a valid date
+ * Check if a string is a valid date
  * @param {string} date - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
 export const isValidDate = (date: string): boolean => {
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(date)) return false;
 
   const parsedDate = new Date(date);
@@ -566,27 +716,27 @@ export const isValidDate = (date: string): boolean => {
 };
 
 /**
- * 🟢 Check if a string is a valid time
+ * Check if a string is a valid time
  * @param {string} time - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
 export const isValidTime = (time: string): boolean => {
-  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
   return timeRegex.test(time);
 };
 
 /**
- * 🟢 Check if a string is a valid datetime
+ * Check if a string is a valid datetime
  * @param {string} datetime - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */
 export const isValidDateTime = (datetime: string): boolean => {
-  const datetimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/; // ISO 8601 format
+  const datetimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
   return datetimeRegex.test(datetime);
 };
 
 /**
- * 🟢 Check if a string is a valid JSON
+ * Check if a string is a valid JSON
  * @param {string} jsonString - The string to check
  * @returns {boolean} - True if valid, false otherwise
  */

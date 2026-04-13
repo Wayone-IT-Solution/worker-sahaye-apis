@@ -207,7 +207,8 @@ export class SubscriptionplanController {
         'features',
         'whatYouGet',
         'whatYouMiss',
-        'paymentTagline'
+        'paymentTagline',
+        'matrixRows'
       ];
 
       // Parse stringified JSON fields
@@ -265,6 +266,8 @@ export class SubscriptionplanController {
     next: NextFunction
   ) {
     try {
+      const isDetailed = String(req.query.isDetailed || "").toLowerCase() === "true";
+
       // Support filtering by userType, planType, status
       const query: any = {};
       if (req.query.userType) query.userType = req.query.userType;
@@ -279,6 +282,12 @@ export class SubscriptionplanController {
       query.limit = req.query.limit || 10;
 
       const result = await subscriptionPlanService.getAll(query);
+
+      const toSummaryPlan = (plan: any) => {
+        if (isDetailed || !plan || typeof plan !== "object") return plan;
+        const { matrixRows, ...rest } = plan;
+        return rest;
+      };
 
       // Sort plans by planType in ascending order: FREE → BASIC → PREMIUM → GROWTH → ENTERPRISE → PROFESSIONAL
       const planTypeOrder = {
@@ -299,7 +308,13 @@ export class SubscriptionplanController {
         });
         return res
           .status(200)
-          .json(new ApiResponse(200, result, "Subscription plans fetched successfully"));
+          .json(
+            new ApiResponse(
+              200,
+              result.map((item: any) => toSummaryPlan(item)),
+              "Subscription plans fetched successfully",
+            ),
+          );
       } else if (result && typeof result === 'object' && 'result' in result && Array.isArray(result.result)) {
         result.result.sort((a: any, b: any) => {
           const orderA = planTypeOrder[a.planType as PlanType] || 999;
@@ -308,12 +323,27 @@ export class SubscriptionplanController {
         });
         return res
           .status(200)
-          .json(new ApiResponse(200, { ...result, result: result.result }, "Subscription plans fetched successfully"));
+          .json(
+            new ApiResponse(
+              200,
+              {
+                ...result,
+                result: result.result.map((item: any) => toSummaryPlan(item)),
+              },
+              "Subscription plans fetched successfully",
+            ),
+          );
       }
 
       return res
         .status(200)
-        .json(new ApiResponse(200, result, "Subscription plans fetched successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            toSummaryPlan(result),
+            "Subscription plans fetched successfully",
+          ),
+        );
     } catch (err) {
       next(err);
     }
@@ -356,7 +386,8 @@ export class SubscriptionplanController {
         'features',
         'whatYouGet',
         'whatYouMiss',
-        'paymentTagline'
+        'paymentTagline',
+        'matrixRows'
       ];
 
       // Parse stringified JSON fields

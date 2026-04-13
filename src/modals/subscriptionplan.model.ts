@@ -133,6 +133,7 @@ export interface ISubscriptionPlan extends Document {
   // number = monthly limit
   // null = unlimited
   planImage?: string; // Image URL/path for this plan type (one image per plan type, not per duration)
+  matrixRows?: any[]; // Editable subscription matrix rows for admin table
 }
 
 const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -295,6 +296,10 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       type: [String],
       default: [],
       // Array of features/benefits user is missing compared to higher plans
+    },
+    matrixRows: {
+      type: [Schema.Types.Mixed],
+      default: [],
     },
   },
   { timestamps: true },

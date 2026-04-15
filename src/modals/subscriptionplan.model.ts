@@ -84,6 +84,11 @@ export interface ISubscriptionPlan extends Document {
   billingCycle: BillingCycle;
   whatYouGet?: string[]; // Array of features/benefits user gets in this plan
   whatYouMiss?: string[]; // Array of features/benefits user is missing compared to higher plans
+  planBenefitsMatrix?: {
+    worker?: Record<string, any>;
+    employer?: Record<string, any>;
+    contractor?: Record<string, any>;
+  };
   monthlyJobListingLimit?: number | null;
   // Job Post Limits
   agencyJobPostLimits?: {
@@ -296,6 +301,12 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       type: [String],
       default: [],
       // Array of features/benefits user is missing compared to higher plans
+    },
+    planBenefitsMatrix: {
+      type: Schema.Types.Mixed,
+      default: {},
+      // Extended section-wise benefits matrix for worker/employer/contractor plans.
+      // Kept as mixed to support flexible product-driven additions without migrations.
     },
     matrixRows: {
       type: [Schema.Types.Mixed],

@@ -207,6 +207,7 @@ export class SubscriptionplanController {
         'features',
         'whatYouGet',
         'whatYouMiss',
+        'planBenefitsMatrix',
         'paymentTagline',
         'matrixRows'
       ];
@@ -386,6 +387,7 @@ export class SubscriptionplanController {
         'features',
         'whatYouGet',
         'whatYouMiss',
+        'planBenefitsMatrix',
         'paymentTagline',
         'matrixRows'
       ];

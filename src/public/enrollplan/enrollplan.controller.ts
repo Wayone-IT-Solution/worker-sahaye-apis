@@ -568,6 +568,7 @@ export class EnrollPlanController {
             "userDetails.email": 1,
             "userDetails.mobile": 1,
             "userDetails.fullName": 1,
+            "userDetails.userKey": 1,
             "planDetails.planType": 1,
             "planDetails.userType": 1,
             "planDetails.basePrice": 1,

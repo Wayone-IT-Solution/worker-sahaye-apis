@@ -391,4 +391,170 @@ export class BadgeBundleController {
             return res.status(500).json(new ApiError(500, error.message || "Failed to fetch assigned bundles"));
         }
     }
+
+    // Bulk assign bundle badges to multiple users
+    static async assignBundleToUsersBulk(req: Request, res: Response) {
+        try {
+            const { userIds, bundleId } = req.body || {};
+
+            if (!Array.isArray(userIds) || userIds.length === 0 || !bundleId) {
+                return res.status(400).json(
+                    new ApiError(400, "userIds (array) and bundleId are required")
+                );
+            }
+
+            // Validate bundleId format
+            if (!Types.ObjectId.isValid(bundleId)) {
+                return res.status(400).json(new ApiError(400, "Invalid bundleId"));
+            }
+
+            // De-duplicate and clean userIds
+            const uniqueUserIds = Array.from(
+                new Set(
+                    userIds
+                        .map((value: any) => String(value || "").trim())
+                        .filter((value: string) => Boolean(value))
+                )
+            );
+
+            if (!uniqueUserIds.length) {
+                return res.status(400).json(new ApiError(400, "No valid userIds were provided"));
+            }
+
+            // Fetch bundle details and users in parallel
+            const [bundle, users] = await Promise.all([
+                BadgeBundle.findById(bundleId).populate("badges").lean(),
+                User.find({ _id: { $in: uniqueUserIds } }).select("_id userType fullName").lean(),
+            ]);
+
+            if (!bundle) {
+                return res.status(404).json(new ApiError(404, "Bundle not found"));
+            }
+
+            if (!bundle.isActive) {
+                return res.status(400).json(new ApiError(400, "Bundle is inactive"));
+            }
+
+            const userMap = new Map(
+                users.map((entry: any) => [String(entry._id), entry])
+            );
+
+            const successes: Array<{ userId: string; userName?: string; totalAssigned?: number }> = [];
+            const failed: Array<{ userId: string; message: string }> = [];
+
+            // Process each user
+            for (const userId of uniqueUserIds) {
+                try {
+                    const user = userMap.get(userId);
+
+                    if (!user) {
+                        failed.push({
+                            userId,
+                            message: "User not found",
+                        });
+                        continue;
+                    }
+
+                    // Check if bundle is allowed for user's type
+                    if (!Array.isArray(bundle.userTypes) || !bundle.userTypes.includes(user.userType as any)) {
+                        failed.push({
+                            userId,
+                            message: `Bundle is not allowed for userType ${user.userType}`,
+                        });
+                        continue;
+                    }
+
+                    const badges = Array.isArray(bundle.badges) ? bundle.badges : [];
+                    if (!badges.length) {
+                        failed.push({
+                            userId,
+                            message: "No badges found in this bundle",
+                        });
+                        continue;
+                    }
+
+                    // Filter assignable badges
+                    const assignableBadges = badges.filter((badge: any) => {
+                        const badgeUserTypes = Array.isArray(badge?.userTypes) ? badge.userTypes : [];
+                        const isAllowedForUserType = badgeUserTypes.includes(user.userType);
+                        return badge?.isActive && isAllowedForUserType;
+                    });
+
+                    if (!assignableBadges.length) {
+                        failed.push({
+                            userId,
+                            message: "No eligible active badges found in this bundle for the user type",
+                        });
+                        continue;
+                    }
+
+                    // Assign badges
+                    let assignedCount = 0;
+                    for (const badgeRaw of assignableBadges) {
+                        const badge: any = badgeRaw as any;
+                        const existing = await CandidateBrandingBadge.findOne({
+                            user: user._id,
+                            badge: badge.name,
+                        });
+
+                        if (existing) {
+                            existing.status = "active";
+                            existing.earnedBy = "manual";
+                            existing.assignedAt = new Date();
+                            existing.metaData = {
+                                ...(existing.metaData || {}),
+                                bundleId: bundle._id,
+                                bundleName: bundle.name,
+                                assignedVia: "bundle",
+                            };
+                            await existing.save();
+                            assignedCount++;
+                        } else {
+                            await CandidateBrandingBadge.create({
+                                user: user._id,
+                                badge: badge.name,
+                                status: "active",
+                                earnedBy: "manual",
+                                assignedAt: new Date(),
+                                metaData: {
+                                    bundleId: bundle._id,
+                                    bundleName: bundle.name,
+                                    assignedVia: "bundle",
+                                },
+                            });
+                            assignedCount++;
+                        }
+                    }
+
+                    successes.push({
+                        userId,
+                        userName: user.fullName,
+                        totalAssigned: assignedCount,
+                    });
+                } catch (userError: any) {
+                    failed.push({
+                        userId,
+                        message: userError.message || "Failed to assign bundle to user",
+                    });
+                }
+            }
+
+            const responseStatus = failed.length > 0 ? 207 : 200;
+            return res.status(responseStatus).json(
+                new ApiResponse(responseStatus, {
+                    bundleId: bundle._id,
+                    bundleName: bundle.name,
+                    requestedCount: uniqueUserIds.length,
+                    successCount: successes.length,
+                    failedCount: failed.length,
+                    successes,
+                    failed,
+                }, "Bulk bundle assignment processed")
+            );
+        } catch (error: any) {
+            return res.status(500).json(
+                new ApiError(500, error.message || "Failed to perform bulk bundle assignment")
+            );
+        }
+    }
 }

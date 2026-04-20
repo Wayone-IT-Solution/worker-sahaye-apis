@@ -66,7 +66,7 @@ export enum PlanStatus {
 
 export interface ISubscriptionPlan extends Document {
   name: string;
-  features: any[];
+  features?: any[];
   createdAt: Date;
   updatedAt: Date;
   priority: number;

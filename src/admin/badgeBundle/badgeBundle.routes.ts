@@ -36,6 +36,12 @@ router.post(
   BadgeBundleController.assignBundleToUser
 );
 router.post(
+  "/assign-bulk",
+  authenticateToken,
+  isAdmin,
+  BadgeBundleController.assignBundleToUsersBulk
+);
+router.post(
   "/unassign",
   authenticateToken,
   isAdmin,

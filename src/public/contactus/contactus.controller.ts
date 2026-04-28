@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { NextFunction, Request, Response } from "express";
+import { config } from "../../config/config";
 import { CommonService } from "../../services/common.services";
+import { sendEmail } from "../../utils/emailService";
 import {
   ContactAs,
   ContactSource,
@@ -14,6 +16,7 @@ import {
 } from "../../modals/contactus.model";
 
 const contactUsService = new CommonService(ContactUs);
+const CONTACT_NOTIFICATION_TO = "workersahay@gmail.com";
 
 const toTrimmedString = (value: any) => String(value ?? "").trim();
 
@@ -184,6 +187,65 @@ const normalizeStatus = (value: any): ContactUsStatus | null => {
   return map[normalized] ?? null;
 };
 
+const formatList = (values: unknown): string => {
+  if (!Array.isArray(values) || values.length === 0) return "N/A";
+  return values.map((value) => toTrimmedString(value)).filter(Boolean).join(", ") || "N/A";
+};
+
+const escapeHtml = (value: unknown): string =>
+  toTrimmedString(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const buildContactEmailHtml = (record: any) => {
+  const rows = [
+    ["Full Name", record.fullName],
+    ["Mobile Number", record.mobileNumber],
+    ["Email", record.email],
+    ["City", record.city],
+    ["State", record.state],
+    ["Company", record.company || "N/A"],
+    ["Contacting As", record.contactAs],
+    ["Contacting As Other", record.contactAsOther || "N/A"],
+    ["Industry Type", record.industryType],
+    ["Industry Other", record.industryOther || "N/A"],
+    ["Services Required", formatList(record.servicesRequired)],
+    ["Service Other", record.serviceOther || "N/A"],
+    ["Requirement Details", record.requirementDetails || "N/A"],
+    ["Urgency", record.urgency],
+    ["Sources", formatList(record.sources)],
+    ["Source Other", record.sourceOther || "N/A"],
+    ["Consent To Contact", record.consentToContact ? "Yes" : "No"],
+    ["Status", record.status],
+    ["Submitted At", record.createdAt ? new Date(record.createdAt).toLocaleString("en-IN") : "N/A"],
+    ["IP Address", record.meta?.ip || "N/A"],
+    ["User Agent", record.meta?.userAgent || "N/A"],
+    ["Referrer", record.meta?.referrer || "N/A"],
+  ];
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+      <h2 style="margin: 0 0 16px;">New website contact enquiry</h2>
+      <p style="margin: 0 0 20px;">A new contact form submission was received from the Worker Sahay website.</p>
+      <table cellpadding="10" cellspacing="0" border="0" style="border-collapse: collapse; width: 100%; max-width: 720px;">
+        ${rows
+          .map(
+            ([label, value]) => `
+              <tr>
+                <td style="border: 1px solid #e5e7eb; background: #f9fafb; width: 220px; font-weight: bold;">${label}</td>
+                <td style="border: 1px solid #e5e7eb;">${escapeHtml(value) || "N/A"}</td>
+              </tr>
+            `,
+          )
+          .join("")}
+      </table>
+    </div>
+  `;
+};
+
 export class ContactUsController {
   static async createContactUs(req: Request, res: Response, next: NextFunction) {
     try {
@@ -291,6 +353,29 @@ export class ContactUsController {
       if (sources.includes(ContactSource.OTHER)) payload.sourceOther = sourceOther;
 
       const result = await contactUsService.create(payload);
+
+      try {
+        await sendEmail({
+          to: CONTACT_NOTIFICATION_TO,
+          from: {
+            name: "Worker Sahay Contact Form",
+            email: config.email.user,
+          },
+          subject: `New website contact enquiry from ${result.fullName}`,
+          text: [
+            `New website contact enquiry from ${result.fullName}`,
+            `Mobile: ${result.mobileNumber}`,
+            `Email: ${result.email}`,
+            `City: ${result.city}`,
+            `State: ${result.state}`,
+            `Urgency: ${result.urgency}`,
+          ].join("\n"),
+          html: buildContactEmailHtml(result),
+        });
+      } catch (mailError) {
+        console.log("Contact enquiry email notification failed:", mailError);
+      }
+
       return res
         .status(201)
         .json(new ApiResponse(201, result, "Enquiry submitted successfully"));
@@ -372,4 +457,3 @@ export class ContactUsController {
     }
   }
 }
-

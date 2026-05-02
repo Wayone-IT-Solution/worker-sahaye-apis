@@ -48,6 +48,7 @@ import serviceLocationRoutes from "../admin/servicelocation/servicelocation.rout
 import subIndustryRoutes from "../admin/subindustry/subindustry.routes";
 import minimumWagesRoutes from "../admin/minimumwages/minimumwages.routes";
 import innerCircleBadgeRoutes from "../admin/innercirclebadge/innercirclebadge.routes";
+import transactionRoutes from "../admin/transaction/transaction.routes";
 import departmentRoutes from "../admin/department/department.routes";
 import skillsRoutes from "../admin/skills/skills.routes";
 import educationRoutes from "../admin/education/education.routes";
@@ -162,6 +163,7 @@ router.use("/supportservice", supportServiceRoutes);
 router.use("/servicelocation", serviceLocationRoutes);
 router.use("/subscriptionplan", subscriptionPlanRoutes);
 router.use("/projectbasedhiring", projectBasedHiringRoutes);
+router.use("/transactions", transactionRoutes);
 
 router.use("/job", jobRoutes);
 router.use("/user", userRoutes);

@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { razorpay } from "../../config/razorpay";
 import { BadgeBundle, UserType } from "../../modals/badgeBundle.model";
 import { Subscription } from "../../modals/subscription.model";
+import { Transaction, TransactionType, TransactionStatus, PaymentGateway } from "../../modals/transaction.model";
 import mongoose from "mongoose";
 
 interface AuthRequest extends Request {
@@ -169,6 +170,24 @@ export class PaymentController {
           status: "active",
         });
 
+        // Create transaction record for free plan
+        try {
+          await Transaction.create({
+            user: userId,
+            transactionType: TransactionType.BADGE_BUNDLE,
+            itemId: bundleId,
+            itemName: bundle.name,
+            amount: 0,
+            currency: "INR",
+            status: TransactionStatus.SUCCESS,
+            paymentGateway: PaymentGateway.FREE,
+            transactionDate: new Date(),
+          });
+          console.log("createOrder - free plan transaction record created");
+        } catch (transactionError) {
+          console.error("createOrder - failed to create free plan transaction record:", transactionError);
+        }
+
         return res.json({
           success: true,
           message: "Free plan activated successfully",
@@ -314,6 +333,27 @@ export class PaymentController {
       console.log("verifyPayment - creating subscription with:", createPayload);
       const created = await Subscription.create(createPayload);
       console.log("verifyPayment - subscription created:", created._id);
+
+      // Create transaction record
+      try {
+        await Transaction.create({
+          user: userId,
+          transactionType: TransactionType.BADGE_BUNDLE,
+          itemId: bundleId,
+          itemName: bundle.name,
+          amount: bundle.fee,
+          currency: "INR",
+          status: TransactionStatus.SUCCESS,
+          paymentGateway: PaymentGateway.RAZORPAY,
+          paymentId: razorpay_payment_id,
+          orderId: razorpay_order_id,
+          transactionDate: new Date(),
+        });
+        console.log("verifyPayment - transaction record created");
+      } catch (transactionError) {
+        console.error("verifyPayment - failed to create transaction record:", transactionError);
+        // Don't fail the payment if transaction logging fails
+      }
 
       return res.json({
         success: true,

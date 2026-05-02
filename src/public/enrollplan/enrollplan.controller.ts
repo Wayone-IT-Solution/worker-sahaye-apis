@@ -10,6 +10,7 @@ import {
   PlanType,
   PlanStatus,
 } from "../../modals/subscriptionplan.model";
+import { Transaction, TransactionType, TransactionStatus, PaymentGateway } from "../../modals/transaction.model";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
 import { Request, Response, NextFunction } from "express";
@@ -167,6 +168,26 @@ export class EnrollPlanController {
     }
 
     await syncUserPremiumFlag(userId);
+
+    // Create transaction record for admin assignment
+    try {
+      const planName = planDetails?.displayName || planDetails?.planType || "Subscription Plan";
+      await Transaction.create({
+        user: userId,
+        transactionType: TransactionType.SUBSCRIPTION_PLAN,
+        itemId: planId,
+        itemName: planName,
+        amount: payload.finalAmount,
+        currency: "INR",
+        status: TransactionStatus.SUCCESS,
+        paymentGateway: PaymentGateway.ADMIN_ASSIGN,
+        paymentId: payload.paymentDetails.paymentId,
+        transactionDate: new Date(),
+      });
+      console.log("assignPlanToUser - admin assignment transaction record created");
+    } catch (transactionError) {
+      console.error("assignPlanToUser - failed to create admin assignment transaction record:", transactionError);
+    }
 
     return {
       success: true,
@@ -409,6 +430,30 @@ export class EnrollPlanController {
               });
             }
 
+            // Create transaction record for re-enrollment
+            try {
+              const transactionData: any = {
+                user,
+                transactionType: TransactionType.SUBSCRIPTION_PLAN,
+                itemId: plan,
+                itemName: planDetails?.displayName || planDetails?.planType || "Subscription Plan",
+                amount: finalAmount,
+                currency: "INR",
+                status: isFree ? TransactionStatus.SUCCESS : TransactionStatus.PENDING,
+                paymentGateway: isFree ? PaymentGateway.FREE : PaymentGateway.RAZORPAY,
+                transactionDate: new Date(),
+              };
+
+              if (isFree) {
+                transactionData.paymentId = `free_${Date.now()}`;
+              }
+
+              await Transaction.create(transactionData);
+              console.log("createEnrollPlan - re-enrollment transaction record created");
+            } catch (transactionError) {
+              console.error("createEnrollPlan - failed to create re-enrollment transaction record:", transactionError);
+            }
+
             return res
               .status(200)
               .json(
@@ -506,6 +551,31 @@ export class EnrollPlanController {
         return res
           .status(400)
           .json(new ApiError(400, "Enrollment creation failed"));
+      }
+
+      // Create transaction record
+      try {
+        const transactionData: any = {
+          user,
+          transactionType: TransactionType.SUBSCRIPTION_PLAN,
+          itemId: plan,
+          itemName: planDetails?.displayName || planDetails?.planType || "Subscription Plan",
+          amount: finalAmount,
+          currency: "INR",
+          status: isFree ? TransactionStatus.SUCCESS : TransactionStatus.PENDING,
+          paymentGateway: isFree ? PaymentGateway.FREE : PaymentGateway.RAZORPAY, // Default to Razorpay for paid plans
+          transactionDate: new Date(),
+        };
+
+        if (isFree) {
+          transactionData.paymentId = `free_${Date.now()}`;
+        }
+
+        await Transaction.create(transactionData);
+        console.log("createEnrollPlan - transaction record created");
+      } catch (transactionError) {
+        console.error("createEnrollPlan - failed to create transaction record:", transactionError);
+        // Don't fail the enrollment if transaction logging fails
       }
 
       return res
@@ -686,6 +756,27 @@ export class EnrollPlanController {
               hasPremiumPlan: true,
             });
           }
+
+          // Update transaction status to SUCCESS
+          try {
+            await Transaction.findOneAndUpdate(
+              {
+                user: enrollment.user,
+                transactionType: TransactionType.SUBSCRIPTION_PLAN,
+                itemId: enrollment.plan,
+                status: TransactionStatus.PENDING,
+              },
+              {
+                status: TransactionStatus.SUCCESS,
+                paymentId,
+                orderId: paymentId, // Assuming paymentId can serve as orderId
+                transactionDate: new Date(),
+              }
+            );
+            console.log("updatePaymentStatus - transaction updated to SUCCESS");
+          } catch (transactionError) {
+            console.error("updatePaymentStatus - failed to update transaction:", transactionError);
+          }
           break;
         case PlanPaymentStatus.REFUNDED:
           enrollment.status = PlanEnrollmentStatus.REFUNDED;
@@ -694,10 +785,48 @@ export class EnrollPlanController {
             hasPremiumPlan: false,
           });
           await refundPlanPointsIfNeeded(enrollment);
+
+          // Update transaction status to REFUNDED
+          try {
+            await Transaction.findOneAndUpdate(
+              {
+                user: enrollment.user,
+                transactionType: TransactionType.SUBSCRIPTION_PLAN,
+                itemId: enrollment.plan,
+              },
+              {
+                status: TransactionStatus.REFUNDED,
+                refundId: paymentId,
+                refundAmount: enrollment.finalAmount,
+                refundedAt: new Date(),
+              }
+            );
+            console.log("updatePaymentStatus - transaction updated to REFUNDED");
+          } catch (transactionError) {
+            console.error("updatePaymentStatus - failed to update transaction:", transactionError);
+          }
           break;
         case PlanPaymentStatus.FAILED:
           enrollment.status = PlanEnrollmentStatus.FAILED;
           await refundPlanPointsIfNeeded(enrollment);
+
+          // Update transaction status to FAILED
+          try {
+            await Transaction.findOneAndUpdate(
+              {
+                user: enrollment.user,
+                transactionType: TransactionType.SUBSCRIPTION_PLAN,
+                itemId: enrollment.plan,
+                status: TransactionStatus.PENDING,
+              },
+              {
+                status: TransactionStatus.FAILED,
+              }
+            );
+            console.log("updatePaymentStatus - transaction updated to FAILED");
+          } catch (transactionError) {
+            console.error("updatePaymentStatus - failed to update transaction:", transactionError);
+          }
           break;
         default:
           enrollment.status = PlanEnrollmentStatus.PENDING;

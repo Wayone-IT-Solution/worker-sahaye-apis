@@ -11,7 +11,6 @@ import FileUpload, { FileTag } from "../../modals/fileupload.model";
 import { User } from "../../modals/user.model";
 import {
   EnrolledPlan,
-  PlanEnrollmentStatus,
 } from "../../modals/enrollplan.model";
 import { Enrollment } from "../../modals/enrollment.model";
 import { Engagement } from "../../modals/engagement.model";
@@ -26,6 +25,7 @@ import {
   ConnectionStatus,
 } from "../../modals/connection.model";
 import { Booking } from "../../modals/booking.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 import { GratuityRecord } from "../../modals/gratuityrecord.model";
 import LoanSupport from "../../modals/loansupport.model";
 import { Quotation, QuotationStatus } from "../../modals/quotation.model";
@@ -468,13 +468,7 @@ export class AdminController {
         })
           .sort({ createdAt: -1 })
           .lean(),
-        EnrolledPlan.findOne({
-          user: userObjectId,
-          status: PlanEnrollmentStatus.ACTIVE,
-        })
-          .sort({ enrolledAt: -1 })
-          .populate("plan")
-          .lean(),
+        UserSubscriptionService.getHighestPriorityPlan(userId),
         Enrollment.find({ user: userObjectId })
           .sort({ createdAt: -1 })
           .limit(30)

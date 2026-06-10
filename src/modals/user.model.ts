@@ -444,16 +444,10 @@ export const checkUserHasActivePremiumPlan = async (
 ): Promise<boolean> => {
   try {
     // Import here to avoid circular dependency
-    const {
-      EnrolledPlan,
-      PlanEnrollmentStatus,
-    } = require("./enrollplan.model");
     const { PlanType } = require("./subscriptionplan.model");
+    const { UserSubscriptionService } = require("../services/userSubscription.service");
 
-    const activeEnrollment = await EnrolledPlan.findOne({
-      user: userId,
-      status: PlanEnrollmentStatus.ACTIVE,
-    }).populate("plan", "planType");
+    const activeEnrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
     if (!activeEnrollment) return false;
 

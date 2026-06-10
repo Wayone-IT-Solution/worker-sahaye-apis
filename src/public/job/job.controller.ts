@@ -420,10 +420,19 @@ export class JobController {
         }
       }
 
+      const isAdminUser = currentUser?.role === "admin";
+
       // Build match stage dynamically
-      const matchStage: any = {
-        status: "open",
-      };
+      const matchStage: any = {};
+
+      const statusFilters = req.query.status ? toArray(req.query.status) : [];
+      if (statusFilters.length === 1 && statusFilters[0] !== "all") {
+        matchStage.status = statusFilters[0];
+      } else if (statusFilters.length > 1) {
+        matchStage.status = { $in: statusFilters.filter((status) => status !== "all") };
+      } else if (!isAdminUser) {
+        matchStage.status = "open";
+      }
 
       // Filter by category
       if (category) {
@@ -569,7 +578,12 @@ export class JobController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "enrolledplans",
@@ -924,7 +938,12 @@ export class JobController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "fileuploads",
@@ -1057,7 +1076,12 @@ export class JobController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "fileuploads",
@@ -1324,7 +1348,12 @@ export class JobController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "fileuploads",
@@ -1423,7 +1452,12 @@ export class JobController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "fileuploads",
@@ -2188,7 +2222,12 @@ export class JobController {
             as: "userDetails",
           },
         },
-        { $unwind: "$userDetails" },
+        {
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "enrolledplans",

@@ -9,6 +9,7 @@ import { PlanType } from "../../modals/subscriptionplan.model";
 import { Booking } from "../../modals/booking.model";
 import { Slot } from "../../modals/slot.model";
 import SupportService from "../../modals/supportservice.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const PersonalAssistantService = new CommonService(PersonalAssistant);
 
@@ -213,10 +214,7 @@ export class PersonalAssistantController {
       }
 
       // Get user's active subscription plan
-      const enrolledPlan = await EnrolledPlan.findOne({
-        user: userId,
-        status: "active",
-      }).populate("plan");
+      const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
       // If no active plan, return FREE plan benefits
       if (!enrolledPlan) {
@@ -319,10 +317,7 @@ export class PersonalAssistantController {
       }
 
       // Get user's active subscription plan
-      const enrolledPlan = await EnrolledPlan.findOne({
-        user: userId,
-        status: "active",
-      }).populate("plan");
+      const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
       // Determine pricing and benefits based on plan
       let discountPercentage = 0;
@@ -916,5 +911,4 @@ export class PersonalAssistantController {
     }
   }
 }
-
 

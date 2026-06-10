@@ -2,6 +2,7 @@ import { Router } from "express";
 import { UserController } from "./user.controller";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { invalidateCacheAfterSuccess } from "../../middlewares/cacheMiddleware";
 import {
   getAllNotifications,
   getNotificationStats,
@@ -11,20 +12,20 @@ import {
 const userRouter = Router();
 
 // Public routes
-userRouter.post("/", asyncHandler(UserController.createUser));
+userRouter.post("/", invalidateCacheAfterSuccess("User", { logLabel: "user-create" }), asyncHandler(UserController.createUser));
 userRouter.get("/filters", asyncHandler(UserController.getUserFilters));
-userRouter.delete("/", authenticateToken, asyncHandler(UserController.deleteUserById));
+userRouter.delete("/", authenticateToken, invalidateCacheAfterSuccess("User", { logLabel: "user-delete-self" }), asyncHandler(UserController.deleteUserById));
 userRouter.get("/otp/all", asyncHandler(UserController.getAllOtps));
 userRouter.post("/send-otp", asyncHandler(UserController.generateOtp));
 userRouter.post("/admin/send-otp", asyncHandler(UserController.generateAdminOtp));
 userRouter.post("/verify-otp", asyncHandler(UserController.verifyOtp));
 userRouter.post("/admin/verify-otp", asyncHandler(UserController.verifyAdminOtp));
 userRouter.post("/verify-email-otp", asyncHandler(UserController.verifyEmailOtp));
-userRouter.put("/", authenticateToken, asyncHandler(UserController.updateUser));
+userRouter.put("/", authenticateToken, invalidateCacheAfterSuccess("User", { logLabel: "user-update-self" }), asyncHandler(UserController.updateUser));
 
 // Admin: Early Access Badge Management
-userRouter.post("/admin/early-access/:userId", asyncHandler(UserController.grantEarlyAccessBadge));
-userRouter.delete("/admin/early-access/:userId", asyncHandler(UserController.revokeEarlyAccessBadge));
+userRouter.post("/admin/early-access/:userId", invalidateCacheAfterSuccess("User", { logLabel: "user-early-access-grant" }), asyncHandler(UserController.grantEarlyAccessBadge));
+userRouter.delete("/admin/early-access/:userId", invalidateCacheAfterSuccess("User", { logLabel: "user-early-access-revoke" }), asyncHandler(UserController.revokeEarlyAccessBadge));
 userRouter.get("/admin/early-access", asyncHandler(UserController.getEarlyAccessBadgeUsers));
 
 // Get candidate branding eligibility based on subscription plan
@@ -45,6 +46,7 @@ userRouter.patch(
   "/admin/status/:id",
   authenticateToken,
   isAdmin,
+  invalidateCacheAfterSuccess("User", { logLabel: "user-status-update" }),
   asyncHandler(UserController.updateUserStatusByAdmin)
 );
 userRouter.post(

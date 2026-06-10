@@ -12,6 +12,7 @@ import {
   s3UploaderMiddleware,
 } from "../../middlewares/s3FileUploadMiddleware";
 import { enforceJobListingLimit } from "../../middlewares/jobListingLimitMiddleware";
+import { cacheGetResponse, invalidateCacheAfterSuccess } from "../../middlewares/cacheMiddleware";
 
 const {
   createJob,
@@ -48,9 +49,9 @@ router
     allowAllExcept("admin", "worker", "agent"),
     asyncHandler(getJobListingUsage)
   )
-  .get("/cities", asyncHandler(getJobCities))
-  .get("/contractor/list", authenticateToken, asyncHandler(getAllContractorJobs))
-  .get("/", authenticateToken, asyncHandler(getAllJobs))
+  .get("/cities", cacheGetResponse("JobCities", { logLabel: "job-cities" }), asyncHandler(getJobCities))
+  .get("/contractor/list", authenticateToken, cacheGetResponse("JobContractorList", { varyByUser: true, logLabel: "job-contractor-list" }), asyncHandler(getAllContractorJobs))
+  .get("/", authenticateToken, cacheGetResponse("JobList", { varyByUser: true, logLabel: "job-list" }), asyncHandler(getAllJobs))
   .get(
     "/:id",
     (req, res, next) => {
@@ -68,16 +69,18 @@ router
     authenticateToken,
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("jobposting"),
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-update" }),
     asyncHandler(updateJobById)
   )
-  .delete("/:id", authenticateToken, asyncHandler(deleteJobById))
-  .get("/user-wise/list", authenticateToken, asyncHandler(getAllUserWiseJobs))
-  .get("/user-wise/list/:id", authenticateToken, asyncHandler(getJobById))
+  .delete("/:id", authenticateToken, invalidateCacheAfterSuccess("Job", { logLabel: "job-delete" }), asyncHandler(deleteJobById))
+  .get("/user-wise/list", authenticateToken, cacheGetResponse("JobUserWiseList", { varyByUser: true, logLabel: "job-user-wise-list" }), asyncHandler(getAllUserWiseJobs))
+  .get("/user-wise/list/:id", authenticateToken, cacheGetResponse("JobUserWiseById", { varyByUser: true, logLabel: "job-user-wise-by-id" }), asyncHandler(getJobById))
   .post(
     "/document",
     authenticateToken,
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("jobposting"),
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-document-upload" }),
     asyncHandler(uploadJobUpdated)
   )
   .post(
@@ -86,6 +89,7 @@ router
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("jobposting"),
     asyncHandler(enforceJobListingLimit),
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-user-wise-create" }),
     asyncHandler(createJob)
   )
   .put(
@@ -93,9 +97,10 @@ router
     authenticateToken,
     dynamicUpload([{ name: "imageUrl", maxCount: 1 }]),
     s3UploaderMiddleware("jobposting"),
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-user-wise-update" }),
     asyncHandler(updateJobById)
   )
-  .delete("/user-wise/list/:id", authenticateToken, asyncHandler(deleteJobById))
+  .delete("/user-wise/list/:id", authenticateToken, invalidateCacheAfterSuccess("Job", { logLabel: "job-user-wise-delete" }), asyncHandler(deleteJobById))
   .put(
     "/add-comment/:id",
     authenticateToken,
@@ -106,6 +111,7 @@ router
     "/update-status/:id",
     authenticateToken,
     isAdmin,
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-status-update" }),
     asyncHandler(updateJobStatus)
   )
   .patch(
@@ -117,6 +123,7 @@ router
     "/admin/bulk/:ownerId",
     authenticateToken,
     isAdmin,
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-bulk-create" }),
     asyncHandler(createBulkJobsForOwner)
   )
   .post(
@@ -124,12 +131,14 @@ router
     authenticateToken,
     allowAllExcept("admin", "worker", "agent"),
     asyncHandler(enforceJobListingLimit),
+    invalidateCacheAfterSuccess("Job", { logLabel: "job-create" }),
     asyncHandler(createJob)
   )
   .get(
     "/suggested-jobs/list",
     authenticateToken,
     isWorker,
+    cacheGetResponse("JobSuggestedList", { varyByUser: true, logLabel: "job-suggested-list" }),
     asyncHandler(getAllSuggestedJobsByUser)
   );
 

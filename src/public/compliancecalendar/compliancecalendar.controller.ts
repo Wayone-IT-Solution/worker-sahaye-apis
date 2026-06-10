@@ -10,8 +10,8 @@ import {
 } from "../../modals/compliancecalendarstatus.model";
 import { ComplianceCalendarReminder } from "../../modals/compliancecalendarreminder.model";
 import { deleteFromS3 } from "../../config/s3Uploader";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const complianceCalendarService = new CommonService(ComplianceCalendar);
 const complianceStatusService = new CommonService(ComplianceCalendarStatus);
@@ -267,7 +267,7 @@ export class PublicComplianceCalendarController {
       const { channels = ["IN_APP"] } = req.body;
 
       // Enforce subscription plan: only GROWTH or ENTERPRISE can set reminders
-      const enrolled = await EnrolledPlan.findOne({ user: employerId, status: PlanEnrollmentStatus.ACTIVE }).populate<{ plan: ISubscriptionPlan }>("plan");
+      const enrolled = await UserSubscriptionService.getHighestPriorityPlan(employerId);
       const planType = (enrolled?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
       if (!enrolled || !(planType === PlanType.GROWTH || planType === PlanType.ENTERPRISE)) {
         return res.status(403).json(new ApiError(403, "Your subscription plan does not allow setting compliance reminders"));

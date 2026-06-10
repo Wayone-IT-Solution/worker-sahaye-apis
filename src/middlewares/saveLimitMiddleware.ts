@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { Types } from "mongoose";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../modals/enrollplan.model";
 import { SaveItem, SaveItemType } from "../modals/saveitems.model";
 import { PlanType } from "../modals/subscriptionplan.model";
 import ApiError from "../utils/ApiError";
+import { UserSubscriptionService } from "../services/userSubscription.service";
 
 
 /**
@@ -19,9 +19,7 @@ export const checkSaveLimit = async (req: Request, res: Response, next: NextFunc
     }
 
     // 1. Get Active Plan
-    const enrolled = await EnrolledPlan.findOne({ user: userId, status: PlanEnrollmentStatus.ACTIVE })
-      .populate("plan")
-      .lean();
+    const enrolled = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
     const plan = enrolled?.plan as any;
     const isActive = !!(enrolled && enrolled.expiredAt && new Date(enrolled.expiredAt) > new Date());

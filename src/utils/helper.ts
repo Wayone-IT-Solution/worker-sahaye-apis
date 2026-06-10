@@ -94,6 +94,7 @@ export const getPipeline = (
     debugPipeline = "false",
     requestId = "",
     traceId = "",
+    isCached = "true",
 
     ...filters
   } = query;

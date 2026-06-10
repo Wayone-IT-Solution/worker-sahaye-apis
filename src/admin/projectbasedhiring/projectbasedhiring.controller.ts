@@ -8,17 +8,14 @@ import { CommonService } from "../../services/common.services";
 import { sendSingleNotification } from "../../services/notification.service";
 import { ProjectBasedHiring, ProjectHiringStatus } from "../../modals/projectbasedhiring.model";
 import { VirtualHR } from "../../modals/virtualhr.model";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const projectBasedHiringService = new CommonService(ProjectBasedHiring);
 
 // Helper function to check if user can request project-based hiring service
 const checkProjectBasedHiringServiceEligibility = async (userId: string) => {
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: PlanEnrollmentStatus.ACTIVE,
-  }).populate("plan");
+  const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   if (!enrolledPlan) {
     return {

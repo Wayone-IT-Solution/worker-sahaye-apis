@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from "express";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { CommonService } from "../../services/common.services";
 import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const PlanFeatureMappingService = new CommonService(PlanFeatureMapping);
 
@@ -30,7 +31,7 @@ export class PlanFeatureMappingController {
   static async getAmountByUserType(req: Request, res: Response) {
     try {
       const { id: userId } = (req as any).user;
-      const enrolledPlan = await EnrolledPlan.findOne({ user: userId, status: "active" });
+      const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
       const planId = enrolledPlan?.plan;
 
       let amount = 549;

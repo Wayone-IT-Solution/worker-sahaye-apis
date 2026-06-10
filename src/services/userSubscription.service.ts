@@ -18,6 +18,17 @@ const PLAN_PRIORITY: Record<PlanType, number> = {
     [PlanType.FREE]: 0,
 };
 
+const resolvePlanRank = (plan: ISubscriptionPlan | undefined | null): number => {
+    if (!plan) return -1;
+
+    const numericPriority = Number(plan.priority);
+    if (!Number.isNaN(numericPriority)) {
+        return numericPriority;
+    }
+
+    return PLAN_PRIORITY[plan.planType] ?? -1;
+};
+
 export class UserSubscriptionService {
     /**
      * Get the highest priority active plan for a user
@@ -46,12 +57,12 @@ export class UserSubscriptionService {
             return null;
         }
 
-        // Sort by priority and return the highest
+        // Sort by numeric plan priority first, then fallback to plan type order
         const sorted = validEnrollments.sort((a, b) => {
             const planA = a.plan as ISubscriptionPlan;
             const planB = b.plan as ISubscriptionPlan;
-            const priorityA = PLAN_PRIORITY[planA.planType] || 0;
-            const priorityB = PLAN_PRIORITY[planB.planType] || 0;
+            const priorityA = resolvePlanRank(planA);
+            const priorityB = resolvePlanRank(planB);
             return priorityB - priorityA; // Descending order
         });
 

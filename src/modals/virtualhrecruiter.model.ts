@@ -23,7 +23,7 @@ export interface IVirtualHrRecruiter extends Document {
 
   userId: Types.ObjectId;
   expectedStartDate: Date;
-  serviceType: "Virtual HR Recruiter";
+  serviceType: string;
   jobDescriptionUrl?: string;
   assignedBy?: Types.ObjectId;
   cancellationReason?: string;
@@ -32,8 +32,8 @@ export interface IVirtualHrRecruiter extends Document {
   duration: { from: Date; to: Date };
   workingHours: { from: string; to: string };
   preferredContactHours: { from: string; to: string };
-  designation: "Executive" | "Manager" | "Lead" | string;
-  role: "Campus Recruitment" | "Executive Search" | "Bulk Recruitment" | string;
+  designation:  string;
+  role: string;
   communicationMode: "Google Meet" | "Phone Call" | "WhatsApp" | "Zoom" | string;
 }
 
@@ -59,17 +59,14 @@ const VirtualHrRecruiterSchema = new Schema<IVirtualHrRecruiter>(
     },
     serviceType: {
       type: String,
-      enum: ["Virtual HR Recruiter"],
       default: "Virtual HR Recruiter",
     },
     designation: {
       type: String,
-      enum: ["Executive", "Manager", "Lead"],
       required: true,
     },
     role: {
       type: String,
-      enum: ["Campus Recruitment", "Executive Search", "Bulk Recruitment"],
       required: true,
     },
     location: { type: String, required: true },
@@ -93,7 +90,6 @@ const VirtualHrRecruiterSchema = new Schema<IVirtualHrRecruiter>(
     },
     communicationMode: {
       type: String,
-      enum: ["Google Meet", "Phone Call", "WhatsApp", "Zoom"],
       required: true,
     },
     jobDescriptionUrl: { type: String },

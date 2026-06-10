@@ -9,11 +9,11 @@ import {
   CommunityMember,
 } from "../../modals/communitymember.model";
 import { User } from "../../modals/user.model";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import { ForumPost } from "../../modals/forumpost.model";
 import { ForumComment } from "../../modals/forumcomment.model";
 import { Community, CommunityPrivacy } from "../../modals/community.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const CommunityMemberService = new CommonService(CommunityMember);
 
@@ -77,10 +77,7 @@ export const resetStats = async (communityId: string) => {
 // Helper function to check community participation eligibility based on subscription plan
 const getCommunityParticipationEligibility = async (userId: string) => {
   // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: PlanEnrollmentStatus.ACTIVE,
-  }).populate("plan");
+  const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, user is on FREE plan - can view but not participate
   if (!enrolledPlan) {

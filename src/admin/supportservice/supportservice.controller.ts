@@ -1,9 +1,9 @@
 import { PipelineStage } from "mongoose";
 import { Request, Response } from "express";
-import { EnrolledPlan } from "../../modals/enrollplan.model";
 import SupportService from "../../modals/supportservice.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import { buildPaginationResponse } from "../../utils/queryBuilder";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 // Helper function to get subscription-based access flags for a user and service
 const getServiceAccessFlags = async (
@@ -27,58 +27,14 @@ const getServiceAccessFlags = async (
   }
 
   try {
-    // Get user's active subscription plans - find first valid non-null plan enrollment
-    const enrolledPlans = await EnrolledPlan.find({
-      user: userId,
-      status: "active",
-    })
-      .populate("plan")
-      .sort({ enrolledAt: -1 });
+    const enrolled = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
-    console.log("Found enrolled plans count:", enrolledPlans.length);
-    if (enrolledPlans.length === 0) {
+    if (!enrolled) {
       console.log("No enrolled plans found");
       return defaultAccess;
     }
 
-    // Find the first valid plan that hasn't expired and has plan data
-    let planType = null;
-    for (let i = 0; i < enrolledPlans.length; i++) {
-      const enrolled = enrolledPlans[i];
-      const enrolledObj = enrolled.toObject ? enrolled.toObject() : enrolled;
-
-      // console.log(`Checking enrollment ${i}:`, {
-      //   hasEnrolled: !!enrolledObj,
-      //   hasPlan: !!enrolledObj?.plan,
-      //   hasExpiredAt: !!enrolledObj?.expiredAt,
-      //   expiredAt: enrolledObj?.expiredAt,
-      //   planData: enrolledObj?.plan
-      //     ? {
-      //         name: (enrolledObj.plan as any).name,
-      //         planType: (enrolledObj.plan as any).planType,
-      //       }
-      //     : null,
-      // });
-
-      if (
-        enrolledObj &&
-        enrolledObj.plan &&
-        enrolledObj.expiredAt &&
-        new Date(enrolledObj.expiredAt) > new Date()
-      ) {
-        planType = (enrolledObj.plan as any).planType;
-        console.log(`✓ Found valid planType: ${planType} at index ${i}`);
-        break;
-      }
-    }
-
-    // If no active plan found, return FREE plan access
-    if (!planType) {
-      console.log(
-        "No valid plan found after checking all enrollments, returning default access",
-      );
-      return defaultAccess;
-    }
+    const planType = (enrolled.plan as any).planType;
 
     // Define access levels based on plan type and service type
     const accessMap: Record<
@@ -784,3 +740,4 @@ export const searchSupportServices = async (req: Request, res: Response) => {
     });
   }
 };
+

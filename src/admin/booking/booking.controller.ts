@@ -12,11 +12,12 @@ import { PlanFeatureMapping } from "../../modals/planfeaturemapping.model";
 import {  PlanType } from "../../modals/subscriptionplan.model";
 import SupportService from "../../modals/supportservice.model";
 import ServiceLocation from "../../modals/servicelocation.model";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 
 const bookingService = new CommonService(Booking);
 
 const exactAmount = async (userId: any) => {
-  const enrolledPlan = await EnrolledPlan.findOne({ user: userId, status: "active" });
+  const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
   const planId = enrolledPlan?.plan;
   let amount = 549;
   if (planId) {
@@ -507,10 +508,7 @@ export const getServiceCallStatus = async (req: Request, res: Response) => {
     }
 
     // Check if user has active basic or premium subscription
-    const enrolledPlan = await EnrolledPlan.findOne({
-      user: userId,
-      status: "active",
-    }).populate("plan");
+    const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
     const activePlanTypes = [PlanType.BASIC, PlanType.PREMIUM];
     const hasActiveSubscription = enrolledPlan && activePlanTypes.includes((enrolledPlan.plan as any).planType);

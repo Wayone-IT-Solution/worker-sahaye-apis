@@ -3,6 +3,13 @@ import ApiError from "../utils/ApiError";
 import { getPipeline } from "../utils/helper";
 import { Model, Document, UpdateQuery } from "mongoose";
 import { logger } from "../config/logger";
+import {
+  cache,
+  invalidateModelCache,
+  getModelCacheVersion,
+  registerModelCacheKey,
+} from "../config/cache";
+import crypto from "crypto";
 
 const parsePositiveInt = (value: any, fallback: number): number => {
   const parsed = Number.parseInt(String(value), 10);
@@ -45,10 +52,58 @@ const NON_FILTER_QUERY_KEYS = new Set([
   "debugPipeline",
   "requestId",
   "traceId",
+  "isCached",
 ]);
 
 const getFilterKeys = (query: Record<string, any>): string[] =>
   Object.keys(query ?? {}).filter((key) => !NON_FILTER_QUERY_KEYS.has(key));
+
+const NON_CACHE_KEYS = new Set([
+  "debug",
+  "debugPipeline",
+  "requestId",
+  "traceId",
+  "isCached",
+]);
+
+const stripCacheControls = (query: Record<string, any>) => {
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (NON_CACHE_KEYS.has(key)) continue;
+    cleaned[key] = value;
+  }
+  return cleaned;
+};
+
+const stableSortValue = (value: any): any => {
+  if (Array.isArray(value)) return value.map((item) => stableSortValue(item));
+  if (!value || typeof value !== "object" || value instanceof Date) return value;
+
+  return Object.keys(value)
+    .sort()
+    .reduce((acc: Record<string, any>, key: string) => {
+      acc[key] = stableSortValue(value[key]);
+      return acc;
+    }, {});
+};
+
+const buildCacheKey = (
+  modelName: string,
+  query: Record<string, any>,
+  optionsToBeExtract?: any
+): string => {
+  const cachePayload = {
+    modelName,
+    version: getModelCacheVersion(modelName),
+    query: stableSortValue(stripCacheControls(query)),
+    options: stableSortValue(optionsToBeExtract ?? null),
+  };
+
+  return crypto
+    .createHash("sha1")
+    .update(JSON.stringify(cachePayload))
+    .digest("hex");
+};
 
 const getStageNames = (pipeline: any[]): string[] =>
   (pipeline ?? []).map((stage: Record<string, any>) => Object.keys(stage ?? {})[0] || "unknown");
@@ -63,6 +118,7 @@ export class CommonService<T extends Document> {
   async create(data: Partial<T>) {
     try {
       const created = await this.model.create(data);
+      invalidateModelCache(this.model.modelName);
       return created;
     } catch (error: any) {
       throw error;
@@ -92,20 +148,45 @@ export class CommonService<T extends Document> {
   async getAll(query: any = {}, optionsToBeExtract?: any) {
     const modelName = this.model.modelName || "UnknownModel";
     const traceRef = String(query?.traceId || query?.requestId || "n/a");
+    const usePagination = toBoolean(String(query.pagination ?? "true"));
+    const page = parsePositiveInt(query.page, 1);
+    const limit = parsePositiveInt(query.limit, 10);
     const debugEnabled =
       toDebugBoolean(query?.debugPipeline) ||
       toDebugBoolean(query?.debug) ||
       toDebugBoolean(process.env.COMMON_SERVICE_DEBUG);
     const startedAt = process.hrtime.bigint();
+    const useCache = query?.isCached === undefined ? true : toBoolean(String(query.isCached));
+    const cacheKey = buildCacheKey(modelName, query, optionsToBeExtract);
 
     try {
+      if (useCache) {
+        const cachedResult = cache.get<any>(cacheKey);
+        if (cachedResult) {
+          if (debugEnabled) {
+            logger.info(
+              `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Cache hit | ${safeJSONStringify({
+                cacheKey,
+                version: getModelCacheVersion(modelName),
+              })}`
+            );
+          }
+
+          if (usePagination) {
+            return {
+              ...cachedResult,
+              isCached: true,
+            };
+          }
+
+          return cachedResult;
+        }
+      }
+
       const { pipeline, options, countPipeline } = getPipeline(
         query,
         optionsToBeExtract
       );
-      const usePagination = toBoolean(String(query.pagination ?? "true"));
-      const page = parsePositiveInt(query.page, 1);
-      const limit = parsePositiveInt(query.limit, 10);
 
       if (debugEnabled) {
         logger.info(
@@ -114,6 +195,7 @@ export class CommonService<T extends Document> {
             page,
             limit,
             filterKeys: getFilterKeys(query),
+            cacheEnabled: useCache,
             search: query?.search ?? "",
             searchkey: query?.searchkey ?? "",
             searchOperator: query?.searchOperator ?? "or",
@@ -137,6 +219,7 @@ export class CommonService<T extends Document> {
 
       let data: any[];
       let totalItems: number = 0;
+      let totalPages: number = 0;
 
       if (usePagination) {
         const effectiveCountPipeline =
@@ -177,7 +260,7 @@ export class CommonService<T extends Document> {
 
       // Handle pagination
       if (usePagination) {
-        const totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 0;
+        totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 0;
 
         if (debugEnabled) {
           logger.info(
@@ -207,6 +290,7 @@ export class CommonService<T extends Document> {
             currentPage: page,
             itemsPerPage: limit,
           },
+          isCached: false,
         };
       }
 
@@ -218,6 +302,47 @@ export class CommonService<T extends Document> {
             totalDurationMs: Number(totalDurationMs.toFixed(2)),
           })}`
         );
+      }
+
+      if (useCache) {
+        cache.set(
+          cacheKey,
+          usePagination
+            ? {
+                result: data,
+                pagination: {
+                  totalItems,
+                  totalPages,
+                  currentPage: page,
+                  itemsPerPage: limit,
+                },
+                isCached: false,
+              }
+            : data
+        );
+        registerModelCacheKey(modelName, cacheKey);
+
+        if (debugEnabled) {
+          logger.info(
+            `[CommonService:getAll][model:${modelName}][trace:${traceRef}] Cache store | ${safeJSONStringify({
+              cacheKey,
+              version: getModelCacheVersion(modelName),
+            })}`
+          );
+        }
+      }
+
+      if (usePagination) {
+        return {
+          result: data,
+          pagination: {
+            totalItems,
+            totalPages,
+            currentPage: page,
+            itemsPerPage: limit,
+          },
+          isCached: false,
+        };
       }
 
       return data;
@@ -238,6 +363,7 @@ export class CommonService<T extends Document> {
         runValidators: true,
       });
       if (!updated) throw new Error("Record not found for update");
+      invalidateModelCache(this.model.modelName);
       return updated;
     } catch (error) {
       throw error;
@@ -248,6 +374,7 @@ export class CommonService<T extends Document> {
     try {
       const deleted = await this.model.findByIdAndDelete(id);
       if (!deleted) throw new Error("Record not found for delete");
+      invalidateModelCache(this.model.modelName);
       return deleted;
     } catch (error) {
       throw error;

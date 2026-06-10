@@ -3,6 +3,7 @@ import { Feature } from "../modals/feature.model";
 import { Request, Response, NextFunction } from "express";
 import { EnrolledPlan } from "../modals/enrollplan.model";
 import { SubscriptionPlan } from "../modals/subscriptionplan.model";
+import { UserSubscriptionService } from "../services/userSubscription.service";
 
 /**
  * Fetches feature _id list for a given planId
@@ -12,7 +13,7 @@ export const getFeatureIdsByPlanId = async (
 ): Promise<mongoose.Types.ObjectId[]> => {
   const plan = await SubscriptionPlan.findById(planId).populate("features", "_id");
   if (!plan) return [];
-  return plan.features.map((f: any) => f._id);
+  return Array.isArray(plan.features) ? plan.features.map((f: any) => f._id) : [];
 };
 
 /**
@@ -34,7 +35,7 @@ export const authorizeFeature =
         }
 
         // Fetch user's enrolled plan
-        const enrolledPlan = await EnrolledPlan.findOne({ user: user.id, status: "active" });
+        const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(user.id);
         if (!enrolledPlan?.plan) {
           return res.status(403).json({
             status: false,

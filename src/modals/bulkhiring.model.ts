@@ -1,12 +1,6 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-export enum JobOpeningTime {
-  WEEKLY = "Weekly",
-  MONTHLY = "Monthly",
-  QUARTERLY = "Quarterly",
-  YEARLY = "Yearly",
-  URGENT = "Urgent",
-}
+
 
 export enum BulkHiringStatus {
   PENDING = "Pending",
@@ -29,7 +23,7 @@ export interface IBulkHiringRequest extends Document {
   totalHiringAmount: number;
   preferredContactDate: Date;
   preferredContactTime: string;
-  jobOpeningTime: JobOpeningTime;
+  jobOpeningTime: string;
   budget: { from: number; to: number };
 
   // Assignment workflow
@@ -86,7 +80,6 @@ const BulkHiringRequestSchema = new Schema<IBulkHiringRequest>(
     },
     jobOpeningTime: {
       type: String,
-      enum: Object.values(JobOpeningTime),
       required: true,
     },
     budget: {

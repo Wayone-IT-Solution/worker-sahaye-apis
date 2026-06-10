@@ -7,6 +7,7 @@ import { NextFunction, Request, Response } from "express";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
 import { PlanType } from "../../modals/subscriptionplan.model";
 import { CommonService } from "../../services/common.services";
+import { UserSubscriptionService } from "../../services/userSubscription.service";
 import {
   getRecentReviews,
   getReviewStats,
@@ -468,10 +469,7 @@ const getCourseAccessBenefits = async (userId: string | null) => {
   }
 
   // Get user's active subscription plan
-  const enrolledPlan = await EnrolledPlan.findOne({
-    user: userId,
-    status: "active",
-  }).populate("plan");
+  const enrolledPlan = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
   // If no active plan, return FREE plan benefits
   if (!enrolledPlan || !enrolledPlan.plan) {

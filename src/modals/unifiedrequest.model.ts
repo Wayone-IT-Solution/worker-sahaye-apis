@@ -54,7 +54,7 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     contactPerson: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
     mobileNumber: {
@@ -76,7 +76,7 @@ const UnifiedServiceRequestSchema = new Schema<IUnifiedServiceRequest>(
     },
     briefDescription: {
       type: String,
-      required: true,
+      // required: true,
       maxlength: 1000,
     },
     field: {

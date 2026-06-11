@@ -30,7 +30,7 @@ export const enforceJobListingLimit = async (req: Request, res: Response, next: 
     const enrollment = await UserSubscriptionService.getHighestPriorityPlan(userId);
 
     if (!enrollment) {
-      return res.status(403).json(new ApiError(403, "Active subscription required to post jobs. Please subscribe to a plan first."));
+      return res.status(403).json(new ApiError(403, "An active subscription is required to create and publish job postings, Please buy a subscription plan to continue job postings."));
     }
 
     if (enrollment.expiredAt && new Date(enrollment.expiredAt) < new Date()) {

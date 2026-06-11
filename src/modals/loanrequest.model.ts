@@ -2,6 +2,13 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export interface ILoanRequest extends Document {
   loanCategory:
+    | "Housing Loan"
+    | "Education Loan"
+    | "Medical Loan"
+    | "Personal Loan"
+    | "Car Loan"
+    | "Bike Loan"
+    | "Marriage Loan"
     | "housing"
     | "education"
     | "medical"
@@ -52,6 +59,13 @@ const LoanRequestSchema: Schema<ILoanRequest> = new Schema(
     loanCategory: {
       type: String,
       enum: [
+        "Housing Loan",
+        "Education Loan",
+        "Medical Loan",
+        "Personal Loan",
+        "Car Loan",
+        "Bike Loan",
+        "Marriage Loan",
         "housing",
         "education",
         "medical",

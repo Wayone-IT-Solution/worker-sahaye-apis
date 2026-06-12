@@ -12,12 +12,19 @@ import {
   CommunityMember,
 } from "../../modals/communitymember.model";
 import { resetStats } from "../communitymember/communitymember.controller";
-import { EnrolledPlan, PlanEnrollmentStatus } from "../../modals/enrollplan.model";
-import { ISubscriptionPlan, PlanType } from "../../modals/subscriptionplan.model";
+import {
+  EnrolledPlan,
+  PlanEnrollmentStatus,
+} from "../../modals/enrollplan.model";
+import {
+  ISubscriptionPlan,
+  PlanType,
+} from "../../modals/subscriptionplan.model";
+import { Community, CommunityPrivacy } from "../../modals/community.model";
 
 const hiringPatterns: RegExp[] = [
-  /h[!1i¡]*r[!1i¡]*[e3a@u][!1i¡]*[n9gq]/i,                       // hiring, h1ring, h!ring, h¡ring
-  /recru[i1!¡][t+]{1,2}[me3]n[t+]{0,1}/i,                        // recruitment, recru1tment, recru!tment
+  /h[!1i¡]*r[!1i¡]*[e3a@u][!1i¡]*[n9gq]/i, // hiring, h1ring, h!ring, h¡ring
+  /recru[i1!¡][t+]{1,2}[me3]n[t+]{0,1}/i, // recruitment, recru1tment, recru!tment
   /apply\s+(now|today)?/i,
   /job\s+(opening|opportunity|alert|role|description)/i,
   /career\s+(opportunity|fair)/i,
@@ -34,7 +41,7 @@ const hiringPatterns: RegExp[] = [
   /staffing|freelancer\s+needed|get\s+hired/i,
   /\btalent\s+acquisition\b/i,
   /experienced\s+candidates?|fresher\s+welcome/i,
-  /send\s+(your\s+)?resume/i
+  /send\s+(your\s+)?resume/i,
 ];
 const ForumPostService = new CommonService(ForumPost);
 
@@ -48,46 +55,77 @@ export class ForumPostController {
   static async createForumPost(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { attachments } = req.body;
       const { id: user, role: userType } = (req as any).user;
 
       if (userType === UserType.WORKER) {
-        if (attachments && attachments.length > 0) {
-          attachments.map(async (file: any) => {
-            await extractImageUrl(file);
-          });
-        }
         return res
           .status(403)
           .json(new ApiError(403, "Workers cannot create forum posts"));
       }
 
       if (!req.body.community) {
-        if (attachments && attachments.length > 0) {
-          attachments.map(async (file: any) => {
-            await extractImageUrl(file);
-          });
-        }
         return res
           .status(400)
           .json(new ApiError(400, "Community ID is required"));
       }
 
-      const communityMember = await CommunityMember.findOne({
+      const communityDoc = await Community.findById(req.body.community).select(
+        "_id privacy status",
+      );
+      if (!communityDoc) {
+        return res.status(404).json(new ApiError(404, "Community not found"));
+      }
+
+      let communityMember = await CommunityMember.findOne({
         user: user,
-        status: "joined",
-        userType: userType,
         community: req.body.community,
+        status: MemberStatus.JOINED,
       });
+
       if (!communityMember) {
-        if (attachments && attachments.length > 0) {
-          attachments.map(async (file: any) => {
-            await extractImageUrl(file);
-          });
+        const existingMembership = await CommunityMember.findOne({
+          user,
+          community: req.body.community,
+        });
+
+        if (
+          existingMembership &&
+          existingMembership.status === MemberStatus.BLOCKED
+        ) {
+          return res
+            .status(403)
+            .json(new ApiError(403, "User is blocked from the community"));
         }
+
+        if (
+          communityDoc.privacy === CommunityPrivacy.PUBLIC &&
+          (!existingMembership ||
+            existingMembership.status === MemberStatus.REMOVED ||
+            existingMembership.status === MemberStatus.PENDING ||
+            existingMembership.status === MemberStatus.INVITED)
+        ) {
+          communityMember =
+            existingMembership ??
+            new CommunityMember({
+              user,
+              userType,
+              community: req.body.community,
+            });
+
+          communityMember.userType = userType;
+          communityMember.status = MemberStatus.JOINED;
+          communityMember.joinedAt = new Date();
+          communityMember.joinSource =
+            existingMembership?.joinSource ?? undefined;
+          await communityMember.save();
+        }
+      }
+
+      if (!communityMember) {
         return res
           .status(400)
           .json(new ApiError(400, "User is not a member of the community"));
@@ -95,16 +133,26 @@ export class ForumPostController {
 
       // If contractor, enforce subscription plan: only GROWTH or ENTERPRISE can post
       if (userType === UserType.CONTRACTOR || userType === UserType.EMPLOYER) {
-        const { UserSubscriptionService } = require("../../services/userSubscription.service");
-        const enrollment = await UserSubscriptionService.getHighestPriorityPlan(user);
-        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)?.planType as PlanType | undefined;
-        if (!enrollment || planType === PlanType.FREE || planType === PlanType.BASIC) {
-          if (attachments && attachments.length > 0) {
-            attachments.map(async (file: any) => {
-              await extractImageUrl(file);
-            });
-          }
-          return res.status(403).json(new ApiError(403, "Your subscription plan does not allow creating forum posts"));
+        const {
+          UserSubscriptionService,
+        } = require("../../services/userSubscription.service");
+        const enrollment =
+          await UserSubscriptionService.getHighestPriorityPlan(user);
+        const planType = (enrollment?.plan as ISubscriptionPlan | undefined)
+          ?.planType as PlanType | undefined;
+        if (
+          !enrollment ||
+          planType === PlanType.FREE ||
+          planType === PlanType.BASIC
+        ) {
+          return res
+            .status(403)
+            .json(
+              new ApiError(
+                403,
+                "Your current subscription does not include forum posting access. Upgrade to a Growth or Enterprise plan to create and share forum posts.",
+              ),
+            );
         }
       }
 
@@ -116,32 +164,30 @@ export class ForumPostController {
         createdAt: { $gte: todayStart, $lte: todayEnd },
       });
       if (alreadyPosted) {
-        if (attachments && attachments.length > 0) {
-          attachments.map(async (file: any) => {
-            await extractImageUrl(file);
-          });
-        }
         return res
           .status(429)
-          .json(new ApiError(429, "You can only create one forum post per day."));
+          .json(
+            new ApiError(429, "You can only create one forum post per day."),
+          );
       }
 
       const handleValidation = (
         title: string,
         content: string,
-        tags: string[]
+        tags: string[],
       ): boolean => {
-        const combined = `${title} ${content} ${Array.isArray(tags) ? tags.join(" ") : tags}`.toLowerCase();
+        const combined =
+          `${title} ${content} ${Array.isArray(tags) ? tags.join(" ") : tags}`.toLowerCase();
         return hiringPatterns.some((pattern) => pattern.test(combined));
       };
 
-      const { title, content, tags, community } = req.body;
-      const isBlocked = handleValidation(title, content, tags)
+      const { title, content, tags, community: communityId } = req.body;
+      const isBlocked = handleValidation(title, content, tags);
       const data: any = {
         tags: typeof tags === "string" ? tags.split(",") : tags,
         title,
         content,
-        community,
+        community: communityId,
         attachments: attachments?.map((file: any, index: number) => ({
           order: index,
           url: file.url,
@@ -151,7 +197,7 @@ export class ForumPostController {
         status: isBlocked ? "hiring_content" : "active",
       };
       const result = await ForumPostService.create(data);
-      await resetStats(community.toString());
+      await resetStats(String(communityId));
       if (!result)
         return res
           .status(400)
@@ -167,18 +213,13 @@ export class ForumPostController {
   static async createaForumPostByAdmin(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { attachments } = req.body;
       const { id: user } = (req as any).user;
 
       if (!req.body.community) {
-        if (attachments && attachments.length > 0) {
-          attachments.map(async (file: any) => {
-            await extractImageUrl(file);
-          });
-        }
         return res
           .status(400)
           .json(new ApiError(400, "Community ID is required"));
@@ -216,7 +257,7 @@ export class ForumPostController {
   static async getAllForumPosts(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       if (!req.params.id)
@@ -229,7 +270,6 @@ export class ForumPostController {
           community: req.params.id,
           user: (req as any).user.id,
           status: MemberStatus.JOINED,
-          userType: (req as any).user.role,
         });
         if (!communityMember)
           return res
@@ -240,7 +280,9 @@ export class ForumPostController {
       const pipeline = [
         {
           $addFields: {
-            isAdminPost: { $cond: [{ $ifNull: ["$postedByAdmin", false] }, true, false] },
+            isAdminPost: {
+              $cond: [{ $ifNull: ["$postedByAdmin", false] }, true, false],
+            },
           },
         },
         {
@@ -371,7 +413,7 @@ export class ForumPostController {
           ...req.query,
           community: req.params.id,
         },
-        pipeline
+        pipeline,
       );
       return res
         .status(200)
@@ -384,7 +426,7 @@ export class ForumPostController {
   static async getAllGeneralForumPosts(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const now = new Date();
@@ -412,7 +454,9 @@ export class ForumPostController {
         // Add isAdminPost flag
         {
           $addFields: {
-            isAdminPost: { $cond: [{ $ifNull: ["$postedByAdmin", false] }, true, false] },
+            isAdminPost: {
+              $cond: [{ $ifNull: ["$postedByAdmin", false] }, true, false],
+            },
           },
         },
 
@@ -436,7 +480,12 @@ export class ForumPostController {
             as: "creatorMemberDetails",
           },
         },
-        { $unwind: { path: "$creatorMemberDetails", preserveNullAndEmptyArrays: true } },
+        {
+          $unwind: {
+            path: "$creatorMemberDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
 
         // Lookup user (for user posts)
         {
@@ -447,7 +496,12 @@ export class ForumPostController {
             as: "creatorUserDetails",
           },
         },
-        { $unwind: { path: "$creatorUserDetails", preserveNullAndEmptyArrays: true } },
+        {
+          $unwind: {
+            path: "$creatorUserDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
 
         // Decide effectiveUserId only for user posts
         {
@@ -543,7 +597,7 @@ export class ForumPostController {
             totalItems: total > 0 ? total - 1 : 0,
             totalPages: Math.ceil((total - 1) / limit),
           },
-        })
+        }),
       );
     } catch (err) {
       next(err);
@@ -553,7 +607,7 @@ export class ForumPostController {
   static async getForumPostById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const result = await ForumPostService.getById(req.params.postId);
@@ -567,11 +621,7 @@ export class ForumPostController {
     }
   }
 
-  static async getAllPosts(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) {
+  static async getAllPosts(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: user, role } = (req as any).user;
       const pipeline = [
@@ -589,7 +639,9 @@ export class ForumPostController {
         // Add isAdminPost flag
         {
           $addFields: {
-            isAdminPost: { $cond: [{ $ifNull: ["$postedByAdmin", false] }, true, false] },
+            isAdminPost: {
+              $cond: [{ $ifNull: ["$postedByAdmin", false] }, true, false],
+            },
           },
         },
 
@@ -668,7 +720,10 @@ export class ForumPostController {
           },
         },
       ];
-      const result = await ForumPostService.getAll({ ...req.query, ...(role === "admin" ? {} : { createdBy: user }) }, pipeline);
+      const result = await ForumPostService.getAll(
+        { ...req.query, ...(role === "admin" ? {} : { createdBy: user }) },
+        pipeline,
+      );
       return res
         .status(200)
         .json(new ApiResponse(200, result, "Data fetched successfully"));
@@ -726,13 +781,13 @@ export class ForumPostController {
         },
 
         // Step 2: Apply filter for non-admins (inside pipeline)
-        ...([
+        ...[
           {
             $match: {
               "memberDetails.user": new mongoose.Types.ObjectId(user),
             },
           },
-        ]),
+        ],
 
         // Add creator details
         {
@@ -779,7 +834,7 @@ export class ForumPostController {
   static async removeForumPostById(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) {
     try {
       const { postId } = req.params;
@@ -796,7 +851,9 @@ export class ForumPostController {
         if (!post.postedByAdmin || post.postedByAdmin.toString() !== userId) {
           return res
             .status(403)
-            .json(new ApiError(403, "You are not authorized to delete this post"));
+            .json(
+              new ApiError(403, "You are not authorized to delete this post"),
+            );
         }
       } else {
         // Must be a joined community member and the post creator
@@ -806,17 +863,24 @@ export class ForumPostController {
           community: post.community,
         });
 
-        if (!communityMember || post.createdBy?.toString() !== communityMember._id?.toString()) {
+        if (
+          !communityMember ||
+          post.createdBy?.toString() !== communityMember._id?.toString()
+        ) {
           return res
             .status(403)
-            .json(new ApiError(403, "You are not authorized to delete this post"));
+            .json(
+              new ApiError(403, "You are not authorized to delete this post"),
+            );
         }
       }
 
       // Delete attached files from S3
       if (post.attachments && post.attachments.length > 0) {
         await Promise.all(
-          post.attachments.map((attachment: any) => deleteFromS3(attachment.s3Key))
+          post.attachments.map((attachment: any) =>
+            deleteFromS3(attachment.s3Key),
+          ),
         );
       }
 
@@ -826,7 +890,9 @@ export class ForumPostController {
 
       return res
         .status(200)
-        .json(new ApiResponse(200, deletedPost, "Forum post deleted successfully"));
+        .json(
+          new ApiResponse(200, deletedPost, "Forum post deleted successfully"),
+        );
     } catch (err) {
       next(err);
     }

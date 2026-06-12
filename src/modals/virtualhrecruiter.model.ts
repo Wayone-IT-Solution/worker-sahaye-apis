@@ -9,6 +9,7 @@ export enum VirtualHrRecruiterStatus {
 }
 
 export interface IVirtualHrRecruiter extends Document {
+  name?: string;
   email: string;
   createdAt: Date;
   updatedAt: Date;
@@ -19,6 +20,7 @@ export interface IVirtualHrRecruiter extends Document {
   completedAt?: Date;
   companyName: string;
   mobileNumber: string;
+  mobile?: string;
   contactPerson: string;
 
   userId: Types.ObjectId;
@@ -39,8 +41,10 @@ export interface IVirtualHrRecruiter extends Document {
 
 const VirtualHrRecruiterSchema = new Schema<IVirtualHrRecruiter>(
   {
+    name: { type: String, trim: true },
     companyName: { type: String, required: true, trim: true },
     contactPerson: { type: String, required: true, trim: true },
+    mobile: { type: String, trim: true },
     mobileNumber: {
       type: String,
       required: true,
@@ -113,6 +117,13 @@ const VirtualHrRecruiterSchema = new Schema<IVirtualHrRecruiter>(
   },
   { timestamps: true }
 );
+
+VirtualHrRecruiterSchema.pre("validate", function (next) {
+  if (!this.mobile && this.mobileNumber) {
+    this.mobile = this.mobileNumber;
+  }
+  next();
+});
 
 export const VirtualHrRecruiter = mongoose.model<IVirtualHrRecruiter>(
   "VirtualHrRecruiter",

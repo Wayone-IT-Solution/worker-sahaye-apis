@@ -7,6 +7,7 @@ export enum UserType {
   WORKER = "worker",
   EMPLOYER = "employer",
   CONTRACTOR = "contractor",
+  ADMIN = "admin",
 }
 
 export enum UserStatus {

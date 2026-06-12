@@ -40,6 +40,17 @@ import Industry, { IndustryStatus } from "../../modals/industry.model";
 const otpService = new CommonService(Otp);
 const userService = new CommonService(User);
 
+type UserPreferencesPayload = {
+  jobAlerts?: boolean;
+  notifications?: {
+    sms?: boolean;
+    push?: boolean;
+    email?: boolean;
+    frequency?: "immediate" | "daily" | "weekly";
+  };
+  preferredLanguage?: string;
+};
+
 // Helper function to get candidate branding eligibility based on subscription plan
 const getCandidateBrandingEligibility = async (userId: string | null) => {
   // Default eligibility for FREE plan (no subscription)
@@ -185,6 +196,23 @@ export class UserController {
   private static normalizeUserProfileResponse(user: any) {
     const plainUser =
       typeof user?.toObject === "function" ? user.toObject() : { ...user };
+
+    const preferences = plainUser.preferences ?? {};
+    const notifications = preferences.notifications ?? {};
+    const preferredLanguage =
+      preferences.preferredLanguage ?? plainUser.preferredLanguage ?? "en";
+
+    plainUser.preferences = {
+      jobAlerts: preferences.jobAlerts ?? true,
+      notifications: {
+        sms: notifications.sms ?? false,
+        push: notifications.push ?? true,
+        email: notifications.email ?? false,
+        frequency: notifications.frequency ?? "daily",
+      },
+      preferredLanguage,
+    };
+    plainUser.preferredLanguage = preferredLanguage;
 
     if (plainUser.panNumber == null && plainUser.userPan != null) {
       plainUser.panNumber = plainUser.userPan;
@@ -478,7 +506,6 @@ export class UserController {
         profile,
         fullName,
         dateOfBirth,
-        preferences,
         relocate,
         email,
         mobile,
@@ -499,12 +526,32 @@ export class UserController {
         return res.status(404).json(new ApiError(404, "User not found"));
       }
 
+      const currentPreferences: UserPreferencesPayload = currentUser.preferences
+        ? { ...currentUser.preferences }
+        : {};
+      const incomingPreferences: UserPreferencesPayload =
+        req.body?.preferences && typeof req.body.preferences === "object"
+          ? (req.body.preferences as UserPreferencesPayload)
+          : {};
+      const preferredLanguage =
+        req.body?.preferredLanguage ?? incomingPreferences.preferredLanguage;
+
       const data: any = {
         gender,
         profile,
         fullName,
         dateOfBirth,
-        preferences, // Get the entire preferences object as sent from frontend
+        preferences: {
+          ...currentPreferences,
+          ...incomingPreferences,
+          notifications: {
+            ...(currentPreferences.notifications ?? {}),
+            ...(incomingPreferences.notifications ?? {}),
+          },
+          ...(preferredLanguage !== undefined
+            ? { preferredLanguage }
+            : {}),
+        },
         relocate,
         workerCategory,
         ...(resolvedIndustryId ? { industry: resolvedIndustryId } : {}),
@@ -553,7 +600,13 @@ export class UserController {
         data.isMobileVerified = false;
       }
 
-      const result = await userService.updateById(id, data);
+      Object.entries(data).forEach(([key, value]) => {
+        if (typeof value !== "undefined") {
+          (currentUser as any).set(key, value);
+        }
+      });
+
+      const result = await currentUser.save();
       result.profileCompletion = calculateProfileCompletion(result);
 
       // Update fast responder score if it's a worker
@@ -1031,6 +1084,7 @@ export class UserController {
   static async generateOtp(req: Request, res: Response, next: NextFunction) {
     try {
       const { mobile, email, userType } = req.body;
+      console.log("Generate OTP request received with:", { mobile, email, userType });
 
       if (!mobile && !email) {
         return res.status(400).json({
@@ -1039,8 +1093,9 @@ export class UserController {
         });
       }
       const user = await User.findOne(
-        mobile ? { mobile, userType } : { email, userType },
+        mobile ? { mobile, userType } : { email },
       );
+      console.log(user)
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -1071,6 +1126,7 @@ export class UserController {
       );
       if (email) {
         // Send OTP via email
+        console.log(`Sending OTP ${otpCode} to email ${email}`);
         await sendEmail({
           to: email,
           from: { name: "Worker Sahay" }, // optional, fallback to config.email.from
@@ -1499,7 +1555,6 @@ export class UserController {
         ...(endorsement ? endorsement.toObject() : {}),
       };
 
-      delete responseData?.preferences;
       return res
         .status(200)
         .json(new ApiResponse(200, responseData, "User fetched successfully"));
@@ -1528,6 +1583,11 @@ export class UserController {
         ...UserController.normalizeUserProfileResponse(user),
         profilePicUrl: profilePic?.url || null,
       };
+
+      responseData.preferredLanguage =
+        responseData?.preferences?.preferredLanguage ??
+        responseData?.preferredLanguage ??
+        "en";
       return res
         .status(200)
         .json(new ApiResponse(200, responseData, "User fetched successfully"));

@@ -235,15 +235,45 @@ export const getAllSlotsByDate = async (request: Request, response: Response) =>
     let startDate: any;
     let endDate: any;
 
+    const parseDateInput = (value: any): Date | null => {
+      if (!value) return null;
+
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value;
+      }
+
+      const raw = String(value).trim();
+      if (!raw) return null;
+
+      // Support ISO format: YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const parsed = new Date(raw);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+
+      // Support legacy format: DD/MM/YYYY
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+        const [day, month, year] = raw.split("/");
+        const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+
+      const parsed = new Date(raw);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
     // If date is provided, fetch slots for that specific date
     // If not, fetch slots from today onwards
     if (date) {
-      // Parse date in DD/MM/YYYY format
-      const [day, month, year] = date.split("/");
-      startDate = new Date(year, month - 1, day);
+      const parsedDate = parseDateInput(date);
+      if (!parsedDate) {
+        return response.status(400).json(new ApiError(400, "Invalid date format"));
+      }
+
+      startDate = new Date(parsedDate);
       startDate.setHours(0, 0, 0, 0);
 
-      endDate = new Date(year, month - 1, day);
+      endDate = new Date(parsedDate);
       endDate.setHours(23, 59, 59, 999);
     } else {
       // No date provided - return slots from today onwards (next 30 days)
@@ -269,7 +299,10 @@ export const getAllSlotsByDate = async (request: Request, response: Response) =>
         const filteredSlots = slot.timeslots.filter(
           (ts) => ts.date >= startDate && ts.date < endDate
         );
-        return { user: slot.user, slots: filteredSlots };
+        return {
+          user: slot.user,
+          slots: filteredSlots,
+        };
       })
       .filter((s) => s.slots.length > 0);
 

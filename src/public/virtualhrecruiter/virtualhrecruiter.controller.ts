@@ -22,11 +22,20 @@ export class VirtualHrRecruiterController {
     try {
       const { id: userId, role } = (req as any).user;
       const jobDescriptionUrl = req?.body?.jobDescriptionUrl?.[0]?.url;
+      const companyName = String(req?.body?.companyName ?? "").trim();
+      const contactPerson = String(req?.body?.contactPerson ?? "").trim();
+      const requestedName = String(req?.body?.name ?? "").trim();
+      const baseName =
+        requestedName || companyName || contactPerson || "virtual-hr-recruiter";
+      const generatedName = `${baseName}-${userId}-${Date.now()}`;
+      const mobileNumber = String(req?.body?.mobileNumber ?? req?.body?.mobile ?? "").trim();
 
       // ✅ Only "employer" or "contractor" allowed
       if (!["employer", "contractor"].includes(role?.toLowerCase())) {
-        const s3Key = jobDescriptionUrl.split(".com/")[1];
-        await deleteFromS3(s3Key);
+        if (jobDescriptionUrl) {
+          const s3Key = jobDescriptionUrl.split(".com/")[1];
+          await deleteFromS3(s3Key);
+        }
         return res
           .status(403)
           .json(
@@ -60,7 +69,11 @@ export class VirtualHrRecruiterController {
 
       // ✅ Create new Virtual HR Recruiter request
       const result = await virtualHrRecruiterService.create({
-        ...req.body, userId, jobDescriptionUrl
+        ...req.body,
+        name: generatedName,
+        mobile: mobileNumber,
+        userId,
+        jobDescriptionUrl,
       });
 
       if (!result) {
@@ -162,6 +175,7 @@ export class VirtualHrRecruiterController {
     try {
       const id = req.params.id;
       const document = req?.body?.jobDescriptionUrl?.[0]?.url;
+      const mobileNumber = String(req?.body?.mobileNumber ?? "").trim();
 
       if (!mongoose.Types.ObjectId.isValid(id))
         return res.status(400).json(new ApiError(400, "Invalid Virtual HR Recruiter ID"));
@@ -188,7 +202,11 @@ export class VirtualHrRecruiterController {
       if (req?.body?.jobDescriptionUrl && record.jobDescriptionUrl) {
         jobDescriptionUrl = await extractImageUrl(req?.body?.jobDescriptionUrl, record.jobDescriptionUrl as string);
       }
-      const result = await virtualHrRecruiterService.updateById(id, { ...req.body, jobDescriptionUrl: jobDescriptionUrl || document });
+      const result = await virtualHrRecruiterService.updateById(id, {
+        ...req.body,
+        mobile: mobileNumber || record.mobile,
+        jobDescriptionUrl: jobDescriptionUrl || document,
+      });
       if (!result) {
         return res
           .status(400)

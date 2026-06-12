@@ -59,6 +59,27 @@ const refundPlanPointsIfNeeded = async (enrollment: any) => {
   }
 };
 
+const deactivateOtherActiveEnrollments = async (
+  userId: string,
+  keepEnrollmentId?: string
+) => {
+  const filter: Record<string, any> = {
+    user: userId,
+    status: PlanEnrollmentStatus.ACTIVE,
+  };
+
+  if (keepEnrollmentId) {
+    filter._id = { $ne: keepEnrollmentId };
+  }
+
+  await EnrolledPlan.updateMany(filter, {
+    $set: {
+      status: PlanEnrollmentStatus.EXPIRED,
+      expiredAt: new Date(),
+    },
+  });
+};
+
 const syncUserPremiumFlag = async (userId: string) => {
   const activeEnrollments = await EnrolledPlan.find({
     user: userId,
@@ -167,6 +188,7 @@ export class EnrollPlanController {
       result = await enrollPlanService.create(payload);
     }
 
+    await deactivateOtherActiveEnrollments(userId, String(result._id));
     await syncUserPremiumFlag(userId);
 
     // Create transaction record for admin assignment
@@ -424,11 +446,7 @@ export class EnrollPlanController {
 
             await exists.save();
 
-            if (!isFree) {
-              await User.findByIdAndUpdate(user, {
-                hasPremiumPlan: true,
-              });
-            }
+            await syncUserPremiumFlag(user);
 
             // Create transaction record for re-enrollment
             try {
@@ -537,12 +555,6 @@ export class EnrollPlanController {
         );
         result.expiredAt = expiredAt;
         await result.save();
-
-        if (!isFree) {
-          await User.findByIdAndUpdate(user, {
-            hasPremiumPlan: true,
-          });
-        }
       }
       if (!result) {
         if (pointsRedeemed > 0) {
@@ -552,6 +564,12 @@ export class EnrollPlanController {
           .status(400)
           .json(new ApiError(400, "Enrollment creation failed"));
       }
+
+      if (isFree) {
+        await deactivateOtherActiveEnrollments(user, String(result._id));
+      }
+
+      await syncUserPremiumFlag(user);
 
       // Create transaction record
       try {
@@ -750,12 +768,6 @@ export class EnrollPlanController {
       switch (status) {
         case PlanPaymentStatus.SUCCESS:
           enrollment.status = PlanEnrollmentStatus.ACTIVE;
-          const plan = await SubscriptionPlan.findById(enrollment.plan);
-          if (plan && plan.planType !== PlanType.FREE) {
-            await User.findByIdAndUpdate(user, {
-              hasPremiumPlan: true,
-            });
-          }
 
           // Update transaction status to SUCCESS
           try {
@@ -781,9 +793,6 @@ export class EnrollPlanController {
         case PlanPaymentStatus.REFUNDED:
           enrollment.status = PlanEnrollmentStatus.REFUNDED;
           enrollment.refundedAt = new Date();
-          await User.findByIdAndUpdate(user, {
-            hasPremiumPlan: false,
-          });
           await refundPlanPointsIfNeeded(enrollment);
 
           // Update transaction status to REFUNDED
@@ -832,6 +841,13 @@ export class EnrollPlanController {
           enrollment.status = PlanEnrollmentStatus.PENDING;
       }
       await enrollment.save();
+
+      if (status === PlanPaymentStatus.SUCCESS) {
+        await deactivateOtherActiveEnrollments(user, String(enrollment._id));
+      }
+
+      await syncUserPremiumFlag(user);
+
       return res
         .status(200)
         .json(

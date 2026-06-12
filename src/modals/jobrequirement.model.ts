@@ -37,7 +37,7 @@ export interface IJobRequirement extends Document {
   status: JobRequirementStatus;
   assignedTo?: Types.ObjectId;
   workingHours: { from: string; to: string };
-  employmentType: "Full-Time" | "Part-Time" | "Contractual" | "Freelance" | string;
+  employmentType:  string;
 }
 
 const JobRequirementSchema = new Schema<IJobRequirement>(
@@ -76,7 +76,6 @@ const JobRequirementSchema = new Schema<IJobRequirement>(
     },
     employmentType: {
       type: String,
-      enum: ["Full-Time", "Part-Time", "Contractual", "Freelance"],
       required: true,
     },
     preferredLocation: {

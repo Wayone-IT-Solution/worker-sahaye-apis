@@ -2,6 +2,7 @@ import express from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { EnrollmentController } from "./enrollment.controller";
 import { authenticateToken, isAdmin } from "../../middlewares/authMiddleware";
+import { dynamicUpload, s3UploaderMiddleware } from "../../middlewares/s3FileUploadMiddleware";
 
 const {
   createEnrollment,
@@ -47,6 +48,14 @@ router
     authenticateToken,
     isAdmin,
     asyncHandler(issueCertificateByAdmin)
+  )
+  .post(
+    "/admin/:id/upload-certificate",
+    authenticateToken,
+    isAdmin,
+    dynamicUpload([{ name: "file", maxCount: 1 }]),
+    s3UploaderMiddleware("certificates"),
+    asyncHandler(EnrollmentController.uploadCertificateByAdmin)
   )
   .get("/:id", authenticateToken, asyncHandler(getEnrollmentById)) // Get specific enrollment
   .post(

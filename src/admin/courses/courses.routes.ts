@@ -21,7 +21,6 @@ const {
 const {
   createLesson,
   getAllLesson,
-  markAsStarted,
   getLessonById,
   markAsCompleted,
   updateLessonById,
@@ -91,11 +90,6 @@ router.get(
   "/:id/lesson",
   authenticateToken,
   asyncHandler(getLessonsByCourseId),
-);
-router.patch(
-  "/mark-as-started",
-  authenticateToken,
-  asyncHandler(markAsStarted),
 );
 router.patch(
   "/mark-as-completed",

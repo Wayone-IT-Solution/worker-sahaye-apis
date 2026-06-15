@@ -180,27 +180,7 @@ export class LessonController {
             )
           );
 
-      // Check if already completed
-      const existingEntry = await TimeEntry.findOne({
-        user: userId,
-        course: courseId,
-        lesson: lessonId,
-        status: TimeEntryStatus.COMPLETED,
-      });
-
-      if (existingEntry) {
-        return res
-          .status(409)
-          .json(
-            new ApiResponse(
-              409,
-              existingEntry,
-              "Lesson already marked as completed."
-            )
-          );
-      }
-
-      // Fetch or create the entry
+      // Fetch any existing entry for this lesson and user
       let entry = await TimeEntry.findOne({
         user: userId,
         course: courseId,
@@ -208,7 +188,9 @@ export class LessonController {
       });
 
       const now = new Date();
-      if (!entry) {
+      if (entry && entry.status === TimeEntryStatus.COMPLETED) {
+        // Idempotent success for already completed lessons
+      } else if (!entry) {
         entry = new TimeEntry({
           user: userId,
           timeSpent: 0,
@@ -231,6 +213,20 @@ export class LessonController {
       }
 
       await entry.save();
+
+      // Update Enrollment lesson progress metadata
+      const existingProgressItem = (enrollment.lessonProgress || []).find(
+        (item: any) => String(item.lesson) === String(lessonId),
+      );
+
+      if (existingProgressItem) {
+        existingProgressItem.isCompleted = true;
+      } else {
+        enrollment.lessonProgress = [
+          ...(enrollment.lessonProgress || []),
+          { lesson: lessonId, isCompleted: true },
+        ];
+      }
 
       // Update Enrollment progress
       const totalLessons = await Lesson.countDocuments({ course: courseId });

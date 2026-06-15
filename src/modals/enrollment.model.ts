@@ -22,13 +22,22 @@ export enum PaymentStatus {
   REFUNDED = "refunded",
 }
 
+export interface ILessonProgress {
+  lesson: Types.ObjectId;
+  isCompleted: boolean;
+}
+
 export interface IEnrollment extends Document {
   enrolledAt: Date;
   refundedAt?: Date;
   progress?: number;
+  lessonProgress?: ILessonProgress[];
   certificateIssuedAt?: Date;
   certificateIssuedBy?: Types.ObjectId;
   certificateIssuedFor?: Types.ObjectId;
+  certificateFileUrl?: string;
+  certificateFileS3Key?: string;
+  certificateFileMimeType?: string;
   certificateStatus?: "pending" | "issued";
   adminRemark?: string;
   adminRemarkUpdatedAt?: Date;
@@ -70,7 +79,7 @@ const PaymentDetailsSchema = new Schema(
   { _id: false }
 );
 
-const EnrollmentSchema = new Schema<IEnrollment>(
+const EnrollmentSchema = new Schema<any>(
   {
     appliedCoupon: {},
     adminRemark: { type: String, trim: true, maxlength: 2000 },
@@ -79,6 +88,9 @@ const EnrollmentSchema = new Schema<IEnrollment>(
     certificateIssuedAt: { type: Date },
     certificateIssuedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
     certificateIssuedFor: { type: Schema.Types.ObjectId, ref: "User" },
+    certificateFileUrl: { type: String },
+    certificateFileS3Key: { type: String },
+    certificateFileMimeType: { type: String },
     certificateStatus: {
       type: String,
       default: "pending",
@@ -101,6 +113,19 @@ const EnrollmentSchema = new Schema<IEnrollment>(
       type: String,
       default: EnrollmentStatus.PENDING,
       enum: Object.values(EnrollmentStatus),
+    },
+    lessonProgress: {
+      type: [
+        {
+          lesson: {
+            type: Schema.Types.ObjectId,
+            ref: "Lesson",
+            required: true,
+          },
+          isCompleted: { type: Boolean, default: false },
+        },
+      ],
+      default: [],
     },
   },
   { timestamps: true }

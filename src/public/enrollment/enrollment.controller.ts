@@ -8,7 +8,7 @@ import {
   PaymentGateway,
   EnrollmentStatus,
 } from "../../modals/enrollment.model";
-import { Course } from "../../modals/courses.model";
+import { Course, Lesson } from "../../modals/courses.model";
 import { User } from "../../modals/user.model";
 import { CommonService } from "../../services/common.services";
 import { EnrolledPlan } from "../../modals/enrollplan.model";
@@ -382,6 +382,17 @@ export class EnrollmentController {
         },
       };
 
+      // Initialize lessonProgress with all lessons for this course (isCompleted: false)
+      try {
+        const lessons = await Lesson.find({ course: courseId }).select("_id");
+        payload.lessonProgress = (lessons || []).map((l: any) => ({
+          lesson: l._id,
+          isCompleted: false,
+        }));
+      } catch (err) {
+        payload.lessonProgress = [];
+      }
+
       let result;
       let statusCode = 201;
       let message = "Course assigned successfully";
@@ -550,6 +561,17 @@ export class EnrollmentController {
         status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
       };
 
+      // Initialize lessonProgress for new enrollment so frontend can track per-lesson completion
+      try {
+        const lessons = await Lesson.find({ course }).select("_id");
+        data.lessonProgress = (lessons || []).map((l: any) => ({
+          lesson: l._id,
+          isCompleted: false,
+        }));
+      } catch (err) {
+        data.lessonProgress = [];
+      }
+
       // Add instant payment success if free
       if (isFree) {
         data.paymentDetails = {
@@ -638,6 +660,9 @@ export class EnrollmentController {
             paymentDetails: 1,
             certificateStatus: 1,
             certificateIssuedAt: 1,
+            certificateFileUrl: 1,
+            certificateFileS3Key: 1,
+            certificateFileMimeType: 1,
             adminRemark: 1,
             adminRemarkUpdatedAt: 1,
             "userDetails.email": 1,
@@ -1311,6 +1336,56 @@ export class EnrollmentController {
             certificateStatus: enrollment.certificateStatus,
           },
           "Certificate issued successfully for enrolled participant."
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async uploadCertificateByAdmin(
+    req: any,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const enrollmentId = String(req.params.id || "").trim();
+      if (!mongoose.Types.ObjectId.isValid(enrollmentId)) {
+        return res.status(400).json(new ApiError(400, "Invalid enrollment id"));
+      }
+
+      const enrollment = await Enrollment.findById(enrollmentId);
+      if (!enrollment) {
+        return res.status(404).json(new ApiError(404, "Enrollment not found"));
+      }
+
+      // Expecting s3UploaderMiddleware to have populated req.body.file
+      const uploaded = Array.isArray(req.body?.file) ? req.body.file[0] : null;
+      if (!uploaded || !uploaded.url) {
+        return res
+          .status(400)
+          .json(new ApiError(400, "No file uploaded or upload failed"));
+      }
+
+      // Save file info on enrollment
+      (enrollment as any).certificateFileUrl = uploaded.url;
+      try {
+        (enrollment as any).certificateFileS3Key = String(uploaded.url || "").split(".com/")[1] || "";
+      } catch (err) {
+        (enrollment as any).certificateFileS3Key = "";
+      }
+      (enrollment as any).certificateFileMimeType = uploaded.mimetype || uploaded.mimeType || "";
+
+      await enrollment.save();
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            enrollmentId: enrollment._id,
+            certificateFileUrl: (enrollment as any).certificateFileUrl,
+          },
+          "Certificate file uploaded and linked to enrollment."
         )
       );
     } catch (err) {

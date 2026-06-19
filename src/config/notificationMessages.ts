@@ -146,6 +146,17 @@ export const NotificationMessages: Record<
     }),
   },
 
+  "service-request-created": {
+    sender: (ctx) => ({
+      title: `New ${ctx?.serviceName || "service"} request`,
+      message: `${ctx?.requesterName || "A user"} submitted a ${ctx?.serviceName || "service"} request for ${ctx?.companyName || "the company"}.`,
+    }),
+    receiver: (ctx) => ({
+      title: `${ctx?.serviceName || "Service"} request submitted`,
+      message: `Your ${ctx?.serviceName || "service"} request for ${ctx?.companyName || "the company"} has been received.`,
+    }),
+  },
+
   "job-status-update": {
     sender: (ctx) => ({
       title: `Job marked as "${ctx?.status}"`,

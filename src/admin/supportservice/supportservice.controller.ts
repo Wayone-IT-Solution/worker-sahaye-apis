@@ -160,6 +160,35 @@ const SUPPORT_SERVICE_SEARCH_FIELDS = {
   status: ["status"],
 };
 
+const PLACEHOLDER_CONTENT_PATTERN =
+  /\b(asdf+|dummy\s*text|sample\s*text|lorem\s+ipsum|placeholder)\b/i;
+
+const hasPlaceholderContent = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(hasPlaceholderContent);
+  if (typeof value !== "string") return false;
+  return PLACEHOLDER_CONTENT_PATTERN.test(value.trim());
+};
+
+const validateSupportServiceCopy = ({
+  title,
+  subtitle,
+  description,
+}: {
+  title?: unknown;
+  subtitle?: unknown;
+  description?: unknown;
+}) => {
+  if (
+    hasPlaceholderContent(title) ||
+    hasPlaceholderContent(subtitle) ||
+    hasPlaceholderContent(description)
+  ) {
+    return "Support service content cannot contain placeholder text.";
+  }
+
+  return null;
+};
+
 // Create a new support service
 export const createSupportService = async (req: Request, res: Response) => {
   try {
@@ -178,6 +207,14 @@ export const createSupportService = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "Description must be an array with at least one point",
+      });
+    }
+
+    const contentError = validateSupportServiceCopy({ title, subtitle, description });
+    if (contentError) {
+      return res.status(400).json({
+        success: false,
+        message: contentError,
       });
     }
 
@@ -579,6 +616,14 @@ export const updateSupportService = async (req: Request, res: Response) => {
       });
     }
 
+    const contentError = validateSupportServiceCopy({ title, subtitle, description });
+    if (contentError) {
+      return res.status(400).json({
+        success: false,
+        message: contentError,
+      });
+    }
+
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
     if (subtitle !== undefined) updateData.subtitle = subtitle;
@@ -740,4 +785,3 @@ export const searchSupportServices = async (req: Request, res: Response) => {
     });
   }
 };
-

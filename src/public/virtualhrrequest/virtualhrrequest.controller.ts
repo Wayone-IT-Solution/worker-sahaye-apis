@@ -10,6 +10,12 @@ import { CommonService } from "../../services/common.services";
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { VirtualHRRequest, VirtualHRRequestStatus } from "../../modals/virtualhrrequest.model";
+import {
+  applyRequesterProfileDefaults,
+  normalizeDottedPayload,
+  sendServiceRequestCreatedNotifications,
+  validateVirtualHrDates,
+} from "../../utils/virtualHrRequest.helpers";
 
 const virtualHRRequestService = new CommonService(VirtualHRRequest);
 
@@ -21,18 +27,21 @@ export class VirtualHRRequestController {
   ) {
     try {
       const { id: userId, role } = (req as any).user;
-      const jobDescriptionUrl = req?.body?.jobDescriptionUrl?.[0]?.url;
+      const requestBody = normalizeDottedPayload(req.body);
+      const jobDescriptionUrl = requestBody?.jobDescriptionUrl?.[0]?.url;
 
-      // ✅ Only "employer" or "contractor" allowed
-      if (!["employer", "contractor"].includes(role?.toLowerCase())) {
-        const s3Key = jobDescriptionUrl.split(".com/")[1];
-        await deleteFromS3(s3Key);
+      // ✅ Only authenticated platform requesters can create Virtual HR requests
+      if (!["worker", "employer", "contractor"].includes(role?.toLowerCase())) {
+        if (jobDescriptionUrl) {
+          const s3Key = jobDescriptionUrl.split(".com/")[1];
+          if (s3Key) await deleteFromS3(s3Key);
+        }
         return res
           .status(403)
           .json(
             new ApiError(
               403,
-              "Only employers or contractors can create Virtual HR requests."
+              "Only workers, employers, or contractors can create Virtual HR requests."
             )
           );
       }
@@ -47,7 +56,7 @@ export class VirtualHRRequestController {
       if (existing) {
         if (jobDescriptionUrl) {
           const s3Key = jobDescriptionUrl.split(".com/")[1];
-          await deleteFromS3(s3Key);
+          if (s3Key) await deleteFromS3(s3Key);
         }
         return res.status(200).json(
           new ApiResponse(
@@ -58,9 +67,16 @@ export class VirtualHRRequestController {
         );
       }
 
+      const userDetails = await User.findById(userId).lean();
+      const payload = applyRequesterProfileDefaults(requestBody, userDetails);
+      const dateError = validateVirtualHrDates(payload);
+      if (dateError) {
+        return res.status(400).json(new ApiError(400, dateError));
+      }
+
       // ✅ Create new Virtual HR request
       const result = await virtualHRRequestService.create({
-        ...req.body, userId, jobDescriptionUrl
+        ...payload, userId, jobDescriptionUrl
       });
 
       if (!result) {
@@ -68,6 +84,14 @@ export class VirtualHRRequestController {
           .status(400)
           .json(new ApiError(400, "Failed to create Virtual HR request"));
       }
+
+      await sendServiceRequestCreatedNotifications({
+        userId,
+        user: userDetails,
+        userRole: role,
+        request: result,
+        serviceName: "Virtual HR",
+      });
 
       return res
         .status(201)
@@ -161,7 +185,8 @@ export class VirtualHRRequestController {
   ) {
     try {
       const id = req.params.id;
-      const document = req?.body?.jobDescriptionUrl?.[0]?.url;
+      const requestBody = normalizeDottedPayload(req.body);
+      const document = requestBody?.jobDescriptionUrl?.[0]?.url;
 
       if (!mongoose.Types.ObjectId.isValid(id))
         return res.status(400).json(new ApiError(400, "Invalid police verification doc ID"));
@@ -184,11 +209,16 @@ export class VirtualHRRequestController {
         );
       }
 
-      let jobDescriptionUrl;
-      if (req?.body?.jobDescriptionUrl && record.jobDescriptionUrl) {
-        jobDescriptionUrl = await extractImageUrl(req?.body?.jobDescriptionUrl, record.jobDescriptionUrl as string);
+      const dateError = validateVirtualHrDates(requestBody);
+      if (dateError) {
+        return res.status(400).json(new ApiError(400, dateError));
       }
-      const result = await virtualHRRequestService.updateById(id, { ...req.body, jobDescriptionUrl: jobDescriptionUrl || document });
+
+      let jobDescriptionUrl;
+      if (requestBody?.jobDescriptionUrl && record.jobDescriptionUrl) {
+        jobDescriptionUrl = await extractImageUrl(requestBody?.jobDescriptionUrl, record.jobDescriptionUrl as string);
+      }
+      const result = await virtualHRRequestService.updateById(id, { ...requestBody, jobDescriptionUrl: jobDescriptionUrl || document });
       if (!result) {
         return res
           .status(400)

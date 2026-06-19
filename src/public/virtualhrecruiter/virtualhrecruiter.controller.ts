@@ -10,6 +10,12 @@ import { CommonService } from "../../services/common.services";
 import { extractImageUrl } from "../../admin/community/community.controller";
 import { sendSingleNotification } from "../../services/notification.service";
 import { VirtualHrRecruiter, VirtualHrRecruiterStatus } from "../../modals/virtualhrecruiter.model";
+import {
+  applyRequesterProfileDefaults,
+  normalizeDottedPayload,
+  sendServiceRequestCreatedNotifications,
+  validateVirtualHrDates,
+} from "../../utils/virtualHrRequest.helpers";
 
 const virtualHrRecruiterService = new CommonService(VirtualHrRecruiter);
 
@@ -21,27 +27,21 @@ export class VirtualHrRecruiterController {
   ) {
     try {
       const { id: userId, role } = (req as any).user;
-      const jobDescriptionUrl = req?.body?.jobDescriptionUrl?.[0]?.url;
-      const companyName = String(req?.body?.companyName ?? "").trim();
-      const contactPerson = String(req?.body?.contactPerson ?? "").trim();
-      const requestedName = String(req?.body?.name ?? "").trim();
-      const baseName =
-        requestedName || companyName || contactPerson || "virtual-hr-recruiter";
-      const generatedName = `${baseName}-${userId}-${Date.now()}`;
-      const mobileNumber = String(req?.body?.mobileNumber ?? req?.body?.mobile ?? "").trim();
+      const requestBody = normalizeDottedPayload(req.body);
+      const jobDescriptionUrl = requestBody?.jobDescriptionUrl?.[0]?.url;
 
-      // ✅ Only "employer" or "contractor" allowed
-      if (!["employer", "contractor"].includes(role?.toLowerCase())) {
+      // ✅ Only authenticated platform requesters can create Virtual HR Recruiter requests
+      if (!["worker", "employer", "contractor"].includes(role?.toLowerCase())) {
         if (jobDescriptionUrl) {
           const s3Key = jobDescriptionUrl.split(".com/")[1];
-          await deleteFromS3(s3Key);
+          if (s3Key) await deleteFromS3(s3Key);
         }
         return res
           .status(403)
           .json(
             new ApiError(
               403,
-              "Only employers or contractors can create Virtual HR Recruiter requests."
+              "Only workers, employers, or contractors can create Virtual HR Recruiter requests."
             )
           );
       }
@@ -56,7 +56,7 @@ export class VirtualHrRecruiterController {
       if (existing) {
         if (jobDescriptionUrl) {
           const s3Key = jobDescriptionUrl.split(".com/")[1];
-          await deleteFromS3(s3Key);
+          if (s3Key) await deleteFromS3(s3Key);
         }
         return res.status(200).json(
           new ApiResponse(
@@ -67,10 +67,26 @@ export class VirtualHrRecruiterController {
         );
       }
 
+      const userDetails = await User.findById(userId).lean();
+      const payload = applyRequesterProfileDefaults(requestBody, userDetails);
+      const dateError = validateVirtualHrDates(payload);
+      if (dateError) {
+        return res.status(400).json(new ApiError(400, dateError));
+      }
+
+      const companyName = String(payload.companyName ?? "").trim();
+      const contactPerson = String(payload.contactPerson ?? "").trim();
+      const requestedName = String(payload.name ?? "").trim();
+      const baseName =
+        requestedName || companyName || contactPerson || "virtual-hr-recruiter";
+      const generatedName = `${baseName}-${userId}-${Date.now()}`;
+      const mobileNumber = String(payload.mobileNumber ?? payload.mobile ?? "").trim();
+
       // ✅ Create new Virtual HR Recruiter request
       const result = await virtualHrRecruiterService.create({
-        ...req.body,
+        ...payload,
         name: generatedName,
+        mobileNumber,
         mobile: mobileNumber,
         userId,
         jobDescriptionUrl,
@@ -81,6 +97,14 @@ export class VirtualHrRecruiterController {
           .status(400)
           .json(new ApiError(400, "Failed to create Virtual HR Recruiter request"));
       }
+
+      await sendServiceRequestCreatedNotifications({
+        userId,
+        user: userDetails,
+        userRole: role,
+        request: result,
+        serviceName: "Virtual HR Recruiter",
+      });
 
       return res
         .status(201)
@@ -174,8 +198,8 @@ export class VirtualHrRecruiterController {
   ) {
     try {
       const id = req.params.id;
-      const document = req?.body?.jobDescriptionUrl?.[0]?.url;
-      const mobileNumber = String(req?.body?.mobileNumber ?? "").trim();
+      const requestBody = normalizeDottedPayload(req.body);
+      const document = requestBody?.jobDescriptionUrl?.[0]?.url;
 
       if (!mongoose.Types.ObjectId.isValid(id))
         return res.status(400).json(new ApiError(400, "Invalid Virtual HR Recruiter ID"));
@@ -198,12 +222,21 @@ export class VirtualHrRecruiterController {
         );
       }
 
+      const dateError = validateVirtualHrDates(requestBody);
+      if (dateError) {
+        return res.status(400).json(new ApiError(400, dateError));
+      }
+
+      const mobileNumber = String(
+        requestBody?.mobileNumber ?? requestBody?.mobile ?? record.mobileNumber ?? record.mobile ?? ""
+      ).trim();
       let jobDescriptionUrl;
-      if (req?.body?.jobDescriptionUrl && record.jobDescriptionUrl) {
-        jobDescriptionUrl = await extractImageUrl(req?.body?.jobDescriptionUrl, record.jobDescriptionUrl as string);
+      if (requestBody?.jobDescriptionUrl && record.jobDescriptionUrl) {
+        jobDescriptionUrl = await extractImageUrl(requestBody?.jobDescriptionUrl, record.jobDescriptionUrl as string);
       }
       const result = await virtualHrRecruiterService.updateById(id, {
-        ...req.body,
+        ...requestBody,
+        mobileNumber,
         mobile: mobileNumber || record.mobile,
         jobDescriptionUrl: jobDescriptionUrl || document,
       });

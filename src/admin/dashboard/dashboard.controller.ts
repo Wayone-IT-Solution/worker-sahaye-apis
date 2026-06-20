@@ -1200,6 +1200,24 @@ export class DashboardController {
       const totalBadgeCurrent = badgeCurrent.reduce((a, b) => a + b, 0);
       const totalBadgePrevious = badgePrevious.reduce((a, b) => a + b, 0);
 
+      const combinedCurrent = Array.from({ length: 12 }, (_, index) =>
+        [
+          enrollmentCurrent[index] || 0,
+          enrolledPlanCurrent[index] || 0,
+          personalCurrent[index] || 0,
+          badgeCurrent[index] || 0,
+        ].reduce((sum, value) => sum + value, 0),
+      );
+
+      const combinedPrevious = Array.from({ length: 12 }, (_, index) =>
+        [
+          enrollmentPrevious[index] || 0,
+          enrolledPlanPrevious[index] || 0,
+          personalPrevious[index] || 0,
+          badgePrevious[index] || 0,
+        ].reduce((sum, value) => sum + value, 0),
+      );
+
       const totalCurrent =
         totalEnrollmentCurrent +
         totalEnrolledPlanCurrent +
@@ -1263,12 +1281,14 @@ export class DashboardController {
                 enrolledPlan: enrolledPlanCurrent,
                 personalAssistance: personalCurrent,
                 badge: badgeCurrent,
+                combined: combinedCurrent,
               },
               [previousYear]: {
                 enrollment: enrollmentPrevious,
                 enrolledPlan: enrolledPlanPrevious,
                 personalAssistance: personalPrevious,
                 badge: badgePrevious,
+                combined: combinedPrevious,
               },
             },
           },

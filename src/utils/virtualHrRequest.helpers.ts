@@ -152,43 +152,65 @@ export const sendServiceRequestCreatedNotifications = async ({
   request: Record<string, any>;
   serviceName: string;
 }) => {
-  const role = String(user?.userType || userRole).toLowerCase() as NotificationUserType;
-  const requesterName = user?.fullName || request.contactPerson || "User";
-  const context = {
-    serviceName,
-    requesterName,
-    companyName: request.companyName || "the company",
-    requestId: String(request._id || ""),
-  };
+  try {
+    const role = String(user?.userType || userRole).toLowerCase() as NotificationUserType;
+    const requesterName = user?.fullName || request.contactPerson || "User";
+    const context = {
+      serviceName,
+      requesterName,
+      companyName: request.companyName || "the company",
+      requestId: String(request._id || ""),
+    };
 
-  const sendJobs: Promise<any>[] = [
-    sendSingleNotification({
-      type: "service-request-created",
-      context,
-      toRole: role,
-      toUserId: userId,
-      fromUser: { id: userId, role },
-    }),
-  ];
+    console.log(`[Notification] Sending notifications for ${serviceName} request ${request._id} to user ${userId} and admins`);
 
-  const admins = await Admin.find({ status: true }).select("_id").lean();
-  admins.forEach((adminUser: any) => {
-    sendJobs.push(
+    const sendJobs: Promise<any>[] = [
       sendSingleNotification({
         type: "service-request-created",
-        direction: "sender",
         context,
-        toRole: NotificationUserType.ADMIN,
-        toUserId: String(adminUser._id),
+        toRole: role,
+        toUserId: userId,
         fromUser: { id: userId, role },
+      }).catch((err) => {
+        console.error(`[Notification] Failed to send notification to requester (${userId}):`, err.message);
+        throw err;
       }),
-    );
-  });
+    ];
 
-  const results = await Promise.allSettled(sendJobs);
-  results.forEach((result) => {
-    if (result.status === "rejected") {
-      console.log(`[Notification] Service request creation notice failed: ${result.reason?.message || result.reason}`);
+    const admins = await Admin.find({ status: true }).select("_id").lean();
+    console.log(`[Notification] Found ${admins.length} active admins to notify`);
+
+    admins.forEach((adminUser: any) => {
+      sendJobs.push(
+        sendSingleNotification({
+          type: "service-request-created",
+          direction: "sender",
+          context,
+          toRole: NotificationUserType.ADMIN,
+          toUserId: String(adminUser._id),
+          fromUser: { id: userId, role },
+        }).catch((err) => {
+          console.error(`[Notification] Failed to send notification to admin (${adminUser._id}):`, err.message);
+          throw err;
+        }),
+      );
+    });
+
+    const results = await Promise.allSettled(sendJobs);
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.filter((r) => r.status === "rejected").length;
+
+    console.log(`[Notification] ${serviceName} request notifications: ${succeeded} succeeded, ${failed} failed`);
+
+    if (failed > 0) {
+      const errors = results
+        .filter((r) => r.status === "rejected")
+        .map((r) => r.reason?.message || r.reason)
+        .join("; ");
+      console.error(`[Notification] Some notifications failed: ${errors}`);
     }
-  });
+  } catch (error: any) {
+    console.error(`[Notification] Critical error in sendServiceRequestCreatedNotifications:`, error.message);
+    // Don't throw - we don't want to fail the request creation if notifications fail
+  }
 };

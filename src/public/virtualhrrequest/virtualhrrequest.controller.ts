@@ -281,7 +281,8 @@ export class VirtualHRRequestController {
   ) {
     try {
       const requestId = req.params.id;
-      const { salesPersonTo } = req.body;
+      const requestBody = normalizeDottedPayload(req.body);
+      const { salesPersonTo, ...editableFields } = requestBody;
       const { id: adminId, role } = (req as any).user;
 
       if (
@@ -310,6 +311,11 @@ export class VirtualHRRequestController {
         );
       }
 
+      const dateError = validateVirtualHrDates(editableFields);
+      if (dateError) {
+        return res.status(400).json(new ApiError(400, dateError));
+      }
+
       // ✅ Verify that the employee (admin user) exists
       const employeeUser = await Admin.findById(salesPersonTo);
       if (!employeeUser) {
@@ -335,6 +341,7 @@ export class VirtualHRRequestController {
         }
       }
 
+      Object.assign(request, editableFields);
       // ✅ Assign to employee (admin user with support/sales/manager/operation head role)
       request.assignedTo = salesPersonTo;
       request.assignedBy = adminId;

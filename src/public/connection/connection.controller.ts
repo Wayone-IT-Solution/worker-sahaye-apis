@@ -260,6 +260,7 @@ export const createConnection = async (
       User.findById(recipient).select("fullName userType").lean(),
     ]);
     if (senderDoc && receiverDoc) {
+      console.log("Sending connection request update notification")
       await sendDualNotification({
         type: "connection-request-update",
         context: {

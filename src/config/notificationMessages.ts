@@ -825,4 +825,37 @@ export const NotificationMessages: Record<string, DualNotificationTemplate> = {
       message: `Your support ticket ${text(ctx?.ticketNumber, "")} is now marked as ${text(ctx?.status, "updated")}.`,
     }),
   },
+
+  "virtual-hr-created": {
+    sender: (ctx) => ({
+      title: "New Virtual HR Profile Created",
+      message: `A new Virtual HR profile has been created for ${text(ctx?.hrName, "the HR professional")}.`,
+    }),
+    receiver: (ctx) => ({
+      title: "Your Virtual HR Profile Created",
+      message: `Your Virtual HR profile has been successfully created. You can now start taking HR consultation requests from clients.`,
+    }),
+  },
+
+  "virtual-hr-request-created": {
+    sender: (ctx) => ({
+      title: "New Virtual HR Request Submitted",
+      message: `A new Virtual HR request has been submitted by ${text(ctx?.companyName, "the company")} with contact ${text(ctx?.contactPerson, "the contact person")}.`,
+    }),
+    receiver: (ctx) => ({
+      title: "Virtual HR Request Received",
+      message: `Your Virtual HR request for ${text(ctx?.companyName, "your company")} has been received. Our admin team will review it and assign it to an available HR consultant shortly.`,
+    }),
+  },
+
+  "virtual-hr-recruiter-created": {
+    sender: (ctx) => ({
+      title: "New Virtual HR Recruiter Request Submitted",
+      message: `A new Virtual HR Recruiter request has been submitted by ${text(ctx?.companyName, "the company")} with contact ${text(ctx?.contactPerson, "the contact person")}.`,
+    }),
+    receiver: (ctx) => ({
+      title: "Virtual HR Recruiter Request Received",
+      message: `Your Virtual HR Recruiter request for ${text(ctx?.companyName, "your company")} has been received. Our admin team will review it and assign it to an available recruiter shortly.`,
+    }),
+  },
 };

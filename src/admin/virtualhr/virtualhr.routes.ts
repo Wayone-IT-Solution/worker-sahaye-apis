@@ -18,6 +18,6 @@ router
   .get("/", authenticateToken, asyncHandler(getAllVirtualHRs))
   .get("/:id", authenticateToken, asyncHandler(getVirtualHRById))
   .put("/:id", authenticateToken, asyncHandler(updateVirtualHRById))
-  .delete("/:id", authenticateToken, asyncHandler(deleteVirtualHRById))
+  .delete("/:id", authenticateToken, asyncHandler(deleteVirtualHRById));
 
 export default router;

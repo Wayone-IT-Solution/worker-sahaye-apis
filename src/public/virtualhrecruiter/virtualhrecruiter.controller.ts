@@ -121,6 +121,7 @@ export class VirtualHrRecruiterController {
   ) {
     try {
       const { id: userId, role } = (req as any).user;
+      const normalizedRole = String(role || "").toLowerCase();
       const pipeline: any[] = [
         {
           $lookup: {
@@ -162,7 +163,7 @@ export class VirtualHrRecruiterController {
         },
       ];
 
-      const filters = { ...req.query, ...(role === "admin" ? {} : { userId }) };
+      const filters = { ...req.query, ...(normalizedRole === "admin" ? {} : { userId }) };
       const result = await virtualHrRecruiterService.getAll(filters, pipeline);
       return res
         .status(200)
@@ -302,7 +303,8 @@ export class VirtualHrRecruiterController {
   ) {
     try {
       const requestId = req.params.id;
-      const { salesPersonTo } = req.body;
+      const requestBody = normalizeDottedPayload(req.body);
+      const { salesPersonTo, ...editableFields } = requestBody;
       const { id: adminId, role } = (req as any).user;
 
       if (
@@ -331,6 +333,11 @@ export class VirtualHrRecruiterController {
         );
       }
 
+      const dateError = validateVirtualHrDates(editableFields);
+      if (dateError) {
+        return res.status(400).json(new ApiError(400, dateError));
+      }
+
       // ✅ Verify that the employee (admin user) exists
       const employeeUser = await Admin.findById(salesPersonTo);
       if (!employeeUser) {
@@ -356,6 +363,7 @@ export class VirtualHrRecruiterController {
         }
       }
 
+      Object.assign(request, editableFields);
       // ✅ Assign to employee (admin user with support/sales/manager/operation head role)
       request.assignedTo = salesPersonTo;
       request.assignedBy = adminId;

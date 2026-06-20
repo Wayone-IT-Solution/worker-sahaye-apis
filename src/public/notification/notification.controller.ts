@@ -3,7 +3,7 @@ import { UserType, Notification } from "../../modals/notification.model";
 import { User } from "../../modals/user.model";
 import ApiError from "../../utils/ApiError";
 import ApiResponse from "../../utils/ApiResponse";
-import { sendSingleNotification } from "../../services/notification.service";
+import { sendDualNotification } from "../../services/notification.service";
 import { asyncHandler } from "../../utils/asyncHandler";
 import mongoose from "mongoose";
 
@@ -70,14 +70,15 @@ export class NotificationController {
       }
 
       // Send notification to worker
-      await sendSingleNotification({
+      await sendDualNotification({
         type: "feedback-request",
-        toUserId: workerId,
-        toRole: UserType.WORKER,
-        fromUser: { id: senderId, role: senderRole },
-        direction: "receiver",
+        senderId,
+        senderRole,
+        receiverId: workerId,
+        receiverRole: UserType.WORKER,
         context: {
           senderName: sender.fullName,
+          senderRole,
           workerName: worker.fullName,
         },
       });
@@ -175,14 +176,15 @@ export class NotificationController {
 
       for (const worker of workers) {
         try {
-          await sendSingleNotification({
+          await sendDualNotification({
             type: "feedback-request",
-            toUserId: worker._id.toString(),
-            toRole: UserType.WORKER,
-            fromUser: { id: senderId, role: senderRole },
-            direction: "receiver",
+            senderId,
+            senderRole,
+            receiverId: worker._id.toString(),
+            receiverRole: UserType.WORKER,
             context: {
               senderName: sender.fullName,
+              senderRole,
               workerName: worker.fullName,
             },
           });

@@ -216,9 +216,9 @@ const userSchema = new Schema<IUser>(
       sparse: true, // Allows multiple users to have no FCM token
       validate: {
         validator: (val: string) => {
-          return !val || validator.isLength(val, { min: 10, max: 400 });
+          return !val || validator.isLength(val, { min: 10, max: 4096 });
         },
-        message: "FCM token must be between 10 and 400 characters",
+        message: "FCM token must be between 10 and 4096 characters",
       },
     },
     email: {

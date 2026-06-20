@@ -1,13 +1,8 @@
-import { NotificationMessages } from "./../config/notificationMessages";
-import {
-  UserType,
-  Notification,
-} from "../modals/notification.model";
-import mongoose, { Types } from "mongoose";
 import admin from "../utils/firebase";
 import { config } from "../config/config";
 import Admin from "../modals/admin.model";
 import Agent from "../modals/agent.model";
+import mongoose, { Types } from "mongoose";
 import { User } from "../modals/user.model";
 import { sendSMS } from "../utils/smsService";
 import ApiResponse from "../utils/ApiResponse";
@@ -15,6 +10,8 @@ import { sendEmail } from "../utils/emailService";
 import { paginationResult } from "../utils/helper";
 import { VirtualHR } from "../modals/virtualhr.model";
 import { Request, Response, NextFunction } from "express";
+import { UserType, Notification } from "../modals/notification.model";
+import { NotificationMessages } from "./../config/notificationMessages";
 
 interface SendNotificationOptions {
   type: string;
@@ -43,15 +40,37 @@ interface SingleNotifyOptions {
   fromUser?: { id: string; role: UserType };
 }
 
+const normalizeNotificationRole = (role?: UserType | string): UserType => {
+  const value = String(role || "")
+    .trim()
+    .toLowerCase();
+  if (value === "agency") return UserType.CONTRACTOR;
+  if (Object.values(UserType).includes(value as UserType)) {
+    return value as UserType;
+  }
+  throw new Error(`Unsupported notification role: ${role}`);
+};
+
+const isFirebasePushEnabled = () =>
+  config.notification.enabled &&
+  String(config.notification.provider || "").toLowerCase() === "firebase" &&
+  Boolean(admin?.apps?.length);
+
 export const NotificationService = {
   async send(
     options: SendNotificationOptions,
-    authUser?: { id: string; role: UserType }
+    authUser?: { id: string; role: UserType },
   ) {
     const { type, title, message, toRole, toUserId, fromUser } = options;
-    const sender = fromUser || authUser;
+    const rawSender = fromUser || authUser;
 
-    if (!sender) throw new Error("Sender information is missing.");
+    if (!rawSender) throw new Error("Sender information is missing.");
+
+    const sender = {
+      id: rawSender.id,
+      role: normalizeNotificationRole(rawSender.role),
+    };
+    const normalizedToRole = normalizeNotificationRole(toRole);
 
     let notification: any;
 
@@ -61,7 +80,7 @@ export const NotificationService = {
         type,
         title,
         message,
-        to: { user: new Types.ObjectId(toUserId), role: toRole },
+        to: { user: new Types.ObjectId(toUserId), role: normalizedToRole },
         from: { user: new Types.ObjectId(sender.id), role: sender.role },
       });
 
@@ -83,25 +102,28 @@ export const NotificationService = {
 
       // Fetch sender and recipient
       const [recipient, senderUser]: any = await Promise.all([
-        resolveUserByRole(toUserId, toRole),
+        resolveUserByRole(toUserId, normalizedToRole),
         resolveUserByRole(sender.id, sender.role),
       ]);
 
       if (!recipient) throw new Error(`Recipient not found: ${toUserId}`);
       if (!senderUser) throw new Error(`Sender not found: ${sender.id}`);
 
-      const isUserRole = ["worker", "contractor", "employer"].includes(toRole);
-      const preferences = isUserRole ? recipient?.preferences?.notifications || {} : {};
+      const isUserRole = ["worker", "contractor", "employer"].includes(
+        normalizedToRole,
+      );
+      const preferences = isUserRole
+        ? recipient?.preferences?.notifications || {}
+        : {};
       const smsAllowed = preferences.sms !== false;
       const pushAllowed = preferences.push !== false;
-      const emailAllowed =
-        isUserRole ? preferences.email !== false : true; // Always true for non-user roles
+      const emailAllowed = isUserRole ? preferences.email !== false : true; // Always true for non-user roles
 
       const tasks: Promise<any>[] = [];
       const { fcmToken, mobile, email }: any = recipient;
 
       // --- Push Notification ---
-      if (pushAllowed && fcmToken && admin) {
+      if (pushAllowed && fcmToken && isFirebasePushEnabled()) {
         tasks.push(
           admin
             .messaging()
@@ -120,9 +142,13 @@ export const NotificationService = {
             })
             .catch((err) => {
               console.log(
-                `[Notification Error] Push failed for userId=${toUserId}: ${err.message}`
+                `[Notification Error] Push failed for userId=${toUserId}: ${err.message}`,
               );
-            })
+            }),
+        );
+      } else if (pushAllowed && fcmToken && config.env === "development") {
+        console.log(
+          `[Notification] Push skipped for userId=${toUserId}; Firebase is not enabled or not initialized.`,
         );
       }
 
@@ -174,7 +200,7 @@ export const NotificationService = {
       if (!notification) throw err;
     }
     return notification;
-  }
+  },
 };
 
 export async function sendDualNotification({
@@ -238,7 +264,7 @@ export async function sendSingleNotification({
 export const getAllNotifications = async (
   req: Request & { user?: any },
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { user } = req;
@@ -252,15 +278,19 @@ export const getAllNotifications = async (
     const targetRole = queryUser ? queryRole : user?.role;
 
     // This is the fix
-    if (!rawUserId || typeof rawUserId !== "string" || !mongoose.isValidObjectId(rawUserId)) {
+    if (
+      !rawUserId ||
+      typeof rawUserId !== "string" ||
+      !mongoose.isValidObjectId(rawUserId)
+    ) {
       return res
         .status(400)
         .json(
           new ApiResponse(
             400,
             null,
-            `Invalid or missing user ID. Received: ${rawUserId}`
-          )
+            `Invalid or missing user ID. Received: ${rawUserId}`,
+          ),
         );
     }
 
@@ -462,18 +492,20 @@ export const getAllNotifications = async (
       pageNumber,
       limitNumber,
       total,
-      notifications
+      notifications,
     );
 
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        data,
-        notifications.length
-          ? "Notifications fetched successfully."
-          : "No notifications found."
-      )
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          data,
+          notifications.length
+            ? "Notifications fetched successfully."
+            : "No notifications found.",
+        ),
+      );
   } catch (error) {
     next(error);
   }
@@ -482,14 +514,16 @@ export const getAllNotifications = async (
 export const markNotificationRead = async (
   req: Request & { user?: any },
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id: userId, role } = req.user || {};
     const { notificationId, markAll } = req.query;
 
     if (!userId || !role)
-      return res.status(400).json(new ApiResponse(400, null, "Missing user information."));
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Missing user information."));
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
@@ -508,16 +542,18 @@ export const markNotificationRead = async (
             status: "read",
             readAt: new Date(),
           },
-        }
+        },
       );
 
-      return res.status(200).json(
-        new ApiResponse(
-          200,
-          { modifiedCount: result.modifiedCount },
-          `${result.modifiedCount} notifications marked as read.`
-        )
-      );
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            { modifiedCount: result.modifiedCount },
+            `${result.modifiedCount} notifications marked as read.`,
+          ),
+        );
     }
 
     // =====================
@@ -542,22 +578,30 @@ export const markNotificationRead = async (
           readAt: new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!updated) {
-      return res.status(404).json(
-        new ApiResponse(
-          404,
-          null,
-          "Notification not found or already marked as read."
-        )
-      );
+      return res
+        .status(404)
+        .json(
+          new ApiResponse(
+            404,
+            null,
+            "Notification not found or already marked as read.",
+          ),
+        );
     }
 
-    return res.status(200).json(
-      new ApiResponse(200, updated, "Notification marked as read successfully.")
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          updated,
+          "Notification marked as read successfully.",
+        ),
+      );
   } catch (error) {
     next(error);
   }
@@ -566,7 +610,7 @@ export const markNotificationRead = async (
 export const getNotificationStats = async (
   req: Request & { user?: any },
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { user } = req;
@@ -609,11 +653,17 @@ export const getNotificationStats = async (
         unread: 0,
         deleted: 0,
         total: 0,
-      }
+      },
     );
-    return res.status(200).json(
-      new ApiResponse(200, mapped, "Notification stats fetched successfully.")
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          mapped,
+          "Notification stats fetched successfully.",
+        ),
+      );
   } catch (error) {
     next(error);
   }
